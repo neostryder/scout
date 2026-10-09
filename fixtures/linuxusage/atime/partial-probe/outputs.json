@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 1,
+    "stdout": "/usr/bin/git\t1700000000\t1699900000\n",
+    "stderr": "stat: cannot stat /usr/bin/broken: No such file or directory\n"
+  },
+  "mounts": {
+    "exitCode": 0,
+    "stdout": "overlay / overlay rw,relatime,lowerdir=/layers,upperdir=/upper,workdir=/work 0 0\nproc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n",
+    "stderr": ""
+  }
+}

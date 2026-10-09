@@ -1,0 +1,4 @@
+{
+  "claude": { "exitCode": 0, "stdout": "C:/private/tool.exe\t1\t1\t2026-09-30T10:00:00.000Z\tclaude\ngit --token PRIVATE_VALUE\t1\t1\t2026-09-30T10:00:00.000Z\tclaude\ngit\t1\t2\t2026-09-30T10:00:00.000Z\tclaude\n", "stderr": "" },
+  "codex": { "exitCode": 1, "stdout": "", "stderr": "PRIVATE_VALUE C:/private/customer.txt" }
+}

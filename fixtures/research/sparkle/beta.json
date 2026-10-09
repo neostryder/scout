@@ -1,0 +1,31 @@
+{
+  "url": "https://example.test/appcast.xml",
+  "status": 200,
+  "body": "<?xml version=\"1.0\"?><rss version=\"2.0\" xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\"><channel><item><sparkle:version>100</sparkle:version><sparkle:shortVersionString>2.1.0</sparkle:shortVersionString></item><item><enclosure sparkle:version=\"101\" sparkle:shortVersionString=\"2.2.0-rc.1\"/><sparkle:channel>rc</sparkle:channel><sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion></item><item><enclosure sparkle:version=\"999\" sparkle:shortVersionString=\"9.0.0\"/><sparkle:channel>canary</sparkle:channel></item></channel></rss>",
+  "target": {
+    "id": 1,
+    "ecosystem": "bundle",
+    "key": "test.demo",
+    "name": "test.demo",
+    "tap": null,
+    "homepage": null,
+    "details": {
+      "sparkleFeed": "https://example.test/appcast.xml"
+    }
+  },
+  "expected": {
+    "status": "ok",
+    "answers": [
+      {
+        "channel": "stable",
+        "version": "2.1.0",
+        "installable": false
+      },
+      {
+        "channel": "beta",
+        "version": "2.2.0-rc.1",
+        "installable": false
+      }
+    ]
+  }
+}

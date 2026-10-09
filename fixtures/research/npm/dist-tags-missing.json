@@ -1,0 +1,17 @@
+{
+ "url": "https://registry.npmjs.org/-/package/no-such-package-scout-xyz/dist-tags",
+ "status": 404,
+ "body": "\"Not Found\"",
+ "target": {
+  "id": 6,
+  "ecosystem": "npm",
+  "key": "no-such-package-scout-xyz",
+  "name": "x",
+  "tap": null
+ },
+ "expected": {
+  "status": "notfound",
+  "answers": [],
+  "message": "the source does not list this package"
+ }
+}

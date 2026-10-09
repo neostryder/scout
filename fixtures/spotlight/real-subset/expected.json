@@ -1,0 +1,166 @@
+{
+ "origin": "spotlight",
+ "status": "ok",
+ "signals": [
+  {
+   "match": {
+    "path": "/Applications/1Password for Safari.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/1Password for Safari.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/1Password.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-23T19:29:52Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/1Password.app"
+   },
+   "kind": "use_count",
+   "value": "4",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/A Better Finder Rename 12.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/A Better Finder Rename 12.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Adguard.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-23T19:29:52Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Adguard.app"
+   },
+   "kind": "use_count",
+   "value": "5",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/BBEdit.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/BBEdit.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Carbon Copy Cloner.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-26T01:10:03Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Carbon Copy Cloner.app"
+   },
+   "kind": "use_count",
+   "value": "3",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Cloudflare WARP.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-23T19:29:50Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Cloudflare WARP.app"
+   },
+   "kind": "use_count",
+   "value": "4",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Safari.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-25T16:35:56Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Safari.app"
+   },
+   "kind": "use_count",
+   "value": "2",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Synergy.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-23T19:21:53Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Synergy.app"
+   },
+   "kind": "use_count",
+   "value": "5",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Tailscale.app"
+   },
+   "kind": "last_used",
+   "value": "2026-09-23T19:29:50Z",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Tailscale.app"
+   },
+   "kind": "use_count",
+   "value": "4",
+   "available": true
+  }
+ ]
+}

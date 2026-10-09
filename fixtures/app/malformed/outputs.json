@@ -1,0 +1,7 @@
+{
+ "apps": {
+  "exitCode": 0,
+  "stdout": "/Applications/1Password.app\tcom.1password.1password\t8.12.36\t8.12.36\t\nthis is not a tab separated row\n/Applications/Steam.app\tcom.valvesoftware.steam\t\t6.1\t\n",
+  "stderr": ""
+ }
+}

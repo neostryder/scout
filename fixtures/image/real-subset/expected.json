@@ -1,0 +1,140 @@
+{
+  "sourceKind": "image",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "image",
+      "key": "backend-webapp",
+      "name": "backend-webapp-1",
+      "kind": "image",
+      "version": "latest",
+      "location": "/Users/USER/services/webapp/backend/docker-compose.yml",
+      "digest": "sha256:1d0c101547b7f38a3e98296dda47e0eccf62c995b41f7c3734bef1ff8ff6bb39",
+      "details": {
+        "container": "backend-webapp-1",
+        "containerId": "683587f0159f",
+        "state": "running",
+        "project": "backend",
+        "service": "webapp",
+        "workingDir": "/Users/USER/services/webapp/backend",
+        "imageId": "sha256:1d0c101547b7f38a3e98296dda47e0eccf62c995b41f7c3734bef1ff8ff6bb39",
+        "tagKind": "built"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "ghcr.io/felddy/foundryvtt",
+      "name": "foundry-v14",
+      "kind": "image",
+      "version": "14.367",
+      "location": "/Users/USER/services/foundry-v14/docker-compose.yaml",
+      "digest": "sha256:5004a67fbbef8e3f5f82afb01c8dbe06626c57519cad541a59b1bdce3c2a97ac",
+      "details": {
+        "container": "foundry-v14",
+        "containerId": "6047e112c0a7",
+        "state": "running",
+        "project": "foundry-v14",
+        "service": "foundry-v14",
+        "workingDir": "/Users/USER/services/foundry-v14",
+        "imageId": "sha256:5004a67fbbef8e3f5f82afb01c8dbe06626c57519cad541a59b1bdce3c2a97ac",
+        "tagKind": "exact"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "ghcr.io/firecrawl/firecrawl",
+      "name": "firecrawl-api-1",
+      "kind": "image",
+      "version": "latest",
+      "location": "/Users/USER/services/firecrawl/docker-compose.yaml",
+      "digest": "sha256:1b223ef18d410f67615f32ccaa3dcedfc26af4286f096247bddca3b624545e63",
+      "details": {
+        "container": "firecrawl-api-1",
+        "containerId": "9fa7ce734631",
+        "state": "running",
+        "project": "firecrawl",
+        "service": "api",
+        "workingDir": "/Users/USER/services/firecrawl",
+        "imageId": "sha256:1b223ef18d410f67615f32ccaa3dcedfc26af4286f096247bddca3b624545e63",
+        "tagKind": "floating"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "foundationdb/foundationdb",
+      "name": "firecrawl-foundationdb-init-1",
+      "kind": "image",
+      "version": "7.3.63",
+      "location": "/Users/USER/services/firecrawl/docker-compose.yaml#firecrawl-foundationdb-init-1",
+      "digest": "sha256:df1a2310c6dbe0d56def526b73606cc8fd414ecc42c50fba2588f13292f82d48",
+      "details": {
+        "container": "firecrawl-foundationdb-init-1",
+        "containerId": "385ed859f28f",
+        "state": "exited",
+        "project": "firecrawl",
+        "service": "foundationdb-init",
+        "workingDir": "/Users/USER/services/firecrawl",
+        "imageId": "sha256:df1a2310c6dbe0d56def526b73606cc8fd414ecc42c50fba2588f13292f82d48",
+        "tagKind": "exact"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "redis",
+      "name": "firecrawl-redis-1",
+      "kind": "image",
+      "version": "alpine",
+      "location": "/Users/USER/services/firecrawl/docker-compose.yaml",
+      "digest": "sha256:e8eb6f2980c06c6a25c08f62cb2e00dc7d2fead9aa492cfdd8b54a42109ae0f2",
+      "details": {
+        "container": "firecrawl-redis-1",
+        "containerId": "5dd914b10de9",
+        "state": "running",
+        "project": "firecrawl",
+        "service": "redis",
+        "workingDir": "/Users/USER/services/firecrawl",
+        "imageId": "sha256:e8eb6f2980c06c6a25c08f62cb2e00dc7d2fead9aa492cfdd8b54a42109ae0f2",
+        "tagKind": "floating"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "foundationdb/foundationdb",
+      "name": "firecrawl-foundationdb-1",
+      "kind": "image",
+      "version": "7.3.63",
+      "location": "/Users/USER/services/firecrawl/docker-compose.yaml#firecrawl-foundationdb-1",
+      "digest": "sha256:df1a2310c6dbe0d56def526b73606cc8fd414ecc42c50fba2588f13292f82d48",
+      "details": {
+        "container": "firecrawl-foundationdb-1",
+        "containerId": "12aed3da9e58",
+        "state": "running",
+        "project": "firecrawl",
+        "service": "foundationdb",
+        "workingDir": "/Users/USER/services/firecrawl",
+        "imageId": "sha256:df1a2310c6dbe0d56def526b73606cc8fd414ecc42c50fba2588f13292f82d48",
+        "tagKind": "exact"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "ghcr.io/firecrawl/playwright-service",
+      "name": "firecrawl-playwright-service-1",
+      "kind": "image",
+      "version": "latest",
+      "location": "/Users/USER/services/firecrawl/docker-compose.yaml",
+      "digest": "sha256:0f462e0915631c77f9eb8117bbfa75dcce48ac999a6358ba97a262869ae9ace9",
+      "details": {
+        "container": "firecrawl-playwright-service-1",
+        "containerId": "8b3c8c57c09b",
+        "state": "running",
+        "project": "firecrawl",
+        "service": "playwright-service",
+        "workingDir": "/Users/USER/services/firecrawl",
+        "imageId": "sha256:0f462e0915631c77f9eb8117bbfa75dcce48ac999a6358ba97a262869ae9ace9",
+        "tagKind": "floating"
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "sourceKind": "projectsel",
+  "location": "",
+  "status": "ok",
+  "installs": [],
+  "selectors": [
+    { "file": "/c/Repositories/game-app/.nvmrc", "project": "/c/Repositories/game-app", "kind": "node", "tool": "node", "spec": "26" },
+    { "file": "/c/Repositories/docs-site/.nvmrc", "project": "/c/Repositories/docs-site", "kind": "node", "tool": "node", "spec": "24" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "result": {
+    "config": {
+      "ingress": [
+        { "hostname": "app.example.test", "service": "http://localhost:4870" },
+        { "service": "http_status:404" }
+      ]
+    }
+  }
+}

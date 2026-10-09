@@ -1,0 +1,7 @@
+{
+  "url": "https://example.test/tool",
+  "status": 200,
+  "body": "<html><head><script>const label = 'Download Version 99.0.0';</script><style>p:after { content: 'latest v98.0.0'; }</style></head><body><h1>Tool</h1><a>Download Version 2.4.0</a><!-- latest v97.0.0 --></body></html>",
+  "target": { "id": 1, "ecosystem": "binary", "key": "tool", "name": "Tool", "tap": null, "homepage": "https://example.test/tool", "details": {} },
+  "expected": { "status": "ok", "answers": [{ "channel": "stable", "version": "2.4.0", "advisory": true, "installable": false }] }
+}

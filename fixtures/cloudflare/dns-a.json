@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "result": [
+    { "type": "A", "name": "work.example.test", "content": "203.0.113.10", "proxied": true },
+    { "type": "A", "name": "direct.example.test", "content": "203.0.113.20", "proxied": true },
+    { "type": "A", "name": "Mail.Example.Test.", "content": "203.0.113.30", "proxied": false },
+    { "type": "TXT", "name": "work.example.test", "content": "dropped-txt", "proxied": false }
+  ],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 1 }
+}

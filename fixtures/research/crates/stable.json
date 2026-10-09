@@ -1,0 +1,24 @@
+{
+  "url": "https://crates.io/api/v1/crates/demo-crate",
+  "status": 200,
+  "body": "{\"crate\":{\"id\":\"demo-crate\",\"name\":\"demo-crate\",\"max_stable_version\":\"1.2.3\",\"max_version\":\"1.2.3\"}}",
+  "target": {
+    "id": 1,
+    "ecosystem": "cargo",
+    "key": "demo-crate",
+    "name": "demo-crate",
+    "tap": null,
+    "homepage": null,
+    "details": {}
+  },
+  "expected": {
+    "status": "ok",
+    "answers": [
+      {
+        "channel": "stable",
+        "version": "1.2.3",
+        "installable": false
+      }
+    ]
+  }
+}

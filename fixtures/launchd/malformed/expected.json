@@ -1,0 +1,38 @@
+{
+ "sourceKind": "launchd",
+ "location": "",
+ "status": "partial",
+ "installs": [
+  {
+   "ecosystem": "launchd",
+   "key": "AdGuardHome",
+   "name": "AdGuardHome",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchDaemons/AdGuardHome.plist",
+   "details": {
+    "domain": "daemon",
+    "program": "/Applications/AdGuardHome/AdGuardHome",
+    "runAtLoad": false,
+    "keepAlive": true,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.cloudflare.warp.updater",
+   "name": "com.cloudflare.warp.updater",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchDaemons/com.cloudflare.warp.updater.plist",
+   "details": {
+    "domain": "daemon",
+    "program": "/Applications/Cloudflare WARP.app/Contents/Resources/warp-updater",
+    "runAtLoad": false,
+    "keepAlive": false,
+    "disabled": false
+   }
+  }
+ ],
+ "message": "skipped 1 malformed line(s)"
+}

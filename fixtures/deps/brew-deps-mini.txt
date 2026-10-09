@@ -1,0 +1,111 @@
+abseil: 
+ada-url: fmt
+bash: gettext libunistring ncurses readline
+bat: ca-certificates libgit2 libssh2 oniguruma openssl@3
+brotli: 
+c-ares: 
+ca-certificates: 
+cairo: gettext libunistring libx11 libxau libxcb libxdmcp libxext libxrender lzo pixman xorgproto
+certifi: ca-certificates
+dav1d: 
+direnv: gettext libunistring ncurses readline
+eza: ca-certificates libgit2 libssh2 llhttp openssl@3
+fd: 
+ffmpeg: ca-certificates openssl@3 opus x264
+fmt: 
+fontconfig: gettext libunistring
+freetype: 
+fribidi: 
+fzf: 
+gcc: gmp lz4 mpfr xz zstd
+gettext: libunistring
+gh: 
+giflib: 
+git: gettext libunistring
+git-lfs: 
+glib: gettext libunistring
+gmp: 
+go: 
+graphite2: 
+harfbuzz: gettext icu4c@78 libunistring libx11 libxau libxcb libxdmcp libxext libxrender lzo pixman xorgproto
+hdrhistogram_c: 
+highway: 
+httpie: ca-certificates lz4 mpdecimal openssl@3 readline sqlite xz zstd
+icu4c@78: 
+iperf3: ca-certificates openssl@3
+isl: gmp
+jpeg-turbo: 
+jq: oniguruma
+just: 
+lame: 
+leptonica: lz4 openjpeg webp xz zstd
+libarchive: libb2 lz4 xz zstd
+libb2: 
+libdatrie: 
+libffi: 
+libgit2: ca-certificates libssh2 llhttp openssl@3
+libmpc: gmp mpfr
+libnghttp2: 
+libnghttp3: 
+libngtcp2: ca-certificates openssl@3
+libomp: 
+libpng: 
+libssh2: ca-certificates openssl@3
+libthai: libdatrie
+libtiff: lz4 xz zstd
+libtommath: 
+libunistring: 
+libuv: 
+libvpx: 
+libx11: libxau libxcb libxdmcp xorgproto
+libxau: xorgproto
+libxcb: libxau libxdmcp xorgproto
+libxdmcp: xorgproto
+libxext: libx11 libxau libxcb libxdmcp xorgproto
+libxrender: libx11 libxau libxcb libxdmcp xorgproto
+little-cms2: lz4 xz zstd
+llhttp: 
+lz4: 
+lzo: 
+merve: icu4c@78 simdutf
+mkcert: 
+mpdecimal: 
+mpfr: gmp
+nbytes: 
+ncurses: 
+node: abseil ada-url brotli c-ares ca-certificates fmt hdrhistogram_c highway icu4c@78 libffi libnghttp2 llhttp lz4 merve nbytes openssl@3 readline simdjson simdutf sqlite uvwasi xz zstd
+oniguruma: 
+openblas: gmp lz4 mpfr xz zstd
+openjpeg: lz4 xz zstd
+openssl@3: ca-certificates
+opus: 
+orbstack: 
+pango: gettext icu4c@78 libdatrie libthai libunistring libx11 libxau libxcb libxdmcp libxext libxrender lzo pixman xorgproto
+pcre2: 
+pipx: ca-certificates lz4 mpdecimal openssl@3 readline sqlite xz zstd
+pixman: 
+pnpm: 
+portkiller: 
+python@3.12: ca-certificates mpdecimal openssl@3 readline sqlite xz
+python@3.14: ca-certificates lz4 mpdecimal openssl@3 readline sqlite xz zstd
+r: ca-certificates gettext gmp libtommath libunistring libx11 libxau libxcb libxdmcp libxext libxrender lz4 lzo mpfr openssl@3 pixman readline xorgproto xz zstd
+readline: 
+ripgrep: 
+sdl2-compat: 
+sevenzip: 
+simdjson: 
+simdutf: icu4c@78
+sqlite: readline
+svt-av1: 
+tcl-tk: ca-certificates libtommath openssl@3
+tesseract: gettext icu4c@78 leptonica libb2 libdatrie libthai libunistring libx11 libxau libxcb libxdmcp libxext libxrender lz4 lzo openjpeg pixman webp xorgproto xz zstd
+tree: 
+uv: 
+uvwasi: 
+webp: lz4 xz zstd
+x264: 
+x265: 
+xorgproto: 
+xz: 
+yq: 
+zstd: lz4 xz

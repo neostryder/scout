@@ -1,0 +1,23 @@
+{
+  "origin": "linux-atime",
+  "status": "partial",
+  "signals": [
+    {
+      "match": {
+        "path": "/usr/bin/git"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/curl"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    }
+  ],
+  "message": "1 access time(s) precede modification time"
+}

@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "=== C:/Repositories/app/.nvmrc\r\n\uFEFF24\r\n=== C:/Repositories/app/package.json\r\n\uFEFF{\"packageManager\":\"yarn@4.9.0\",\"engines\":{\"node\":\">=24\"}}\r\n",
+    "stderr": ""
+  }
+}

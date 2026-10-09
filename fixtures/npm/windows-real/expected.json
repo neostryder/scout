@@ -1,0 +1,47 @@
+{
+  "sourceKind": "npm",
+  "location": "C:\\My Programs\\nvm4w\\nodejs\\node_modules",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "npm",
+      "key": "@github/copilot",
+      "name": "@github/copilot",
+      "kind": "package",
+      "version": "1.0.89",
+      "location": "C:\\My Programs\\nvm4w\\nodejs\\node_modules/@github/copilot"
+    },
+    {
+      "ecosystem": "npm",
+      "key": "@minimax-ai/code",
+      "name": "@minimax-ai/code",
+      "kind": "package",
+      "version": "0.5.4",
+      "location": "C:\\My Programs\\nvm4w\\nodejs\\node_modules/@minimax-ai/code"
+    },
+    {
+      "ecosystem": "npm",
+      "key": "@openai/codex",
+      "name": "@openai/codex",
+      "kind": "package",
+      "version": "0.156.1",
+      "location": "C:\\My Programs\\nvm4w\\nodejs\\node_modules/@openai/codex"
+    },
+    {
+      "ecosystem": "npm",
+      "key": "@pnpm/exe",
+      "name": "@pnpm/exe",
+      "kind": "package",
+      "version": "12.3.4",
+      "location": "C:\\My Programs\\nvm4w\\nodejs\\node_modules/@pnpm/exe"
+    },
+    {
+      "ecosystem": "npm",
+      "key": "npm",
+      "name": "npm",
+      "kind": "package",
+      "version": "11.19.0",
+      "location": "C:\\My Programs\\nvm4w\\nodejs\\node_modules/npm"
+    }
+  ]
+}

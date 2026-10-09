@@ -1,0 +1,7 @@
+{
+  "sourceKind": "pipx",
+  "location": "",
+  "status": "failed",
+  "installs": [],
+  "message": "pipx output is not valid JSON"
+}

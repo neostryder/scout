@@ -1,0 +1,24 @@
+{
+  "name": "scout",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Version tracker and updater for your own computers: inventories installs, tracks versions, and applies updates on request.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neostryder/scout.git"
+  },
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "pnpm -r test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^7.0.2"
+  }
+}

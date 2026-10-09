@@ -1,0 +1,7 @@
+{
+  "url": "https://endoflife.date/api/git.json",
+  "status": 404,
+  "body": "Not Found",
+  "target": { "id": 1, "ecosystem": "brew", "key": "git", "name": "Git", "tap": null, "homepage": null, "details": {} },
+  "expected": { "status": "notfound", "answers": [], "message": "the source does not list this package" }
+}

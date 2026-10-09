@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "[{\"Name\":\"Adguard Service\",\"DisplayName\":\"Adguard Service\",\"PathName\":\"\\\"C:\\\\Program Files\\\\AdGuard\\\\AdguardSvc.exe\\\"\",\"State\":\"Running\",\"StartMode\":\"Auto\"},{\"Name\":\"ALG\",\"DisplayName\":\"Application Layer Gateway Service\",\"PathName\":\"C:\\\\WINDOWS\\\\System32\\\\alg.exe\",\"State\":\"Stopped\",\"StartMode\":\"Manual\"},{\"Name\":\"LSM\",\"DisplayName\":\"LSM\",\"PathName\":null,\"State\":\"Running\",\"StartMode\":\"Unknown\"},{\"Name\":\"ADPSvc\",\"DisplayName\":\"Aggregated Data Platform Service\",\"PathName\":\"C:\\\\WINDOWS\\\\system32\\\\svchost.exe -k LocalServiceAndNoImpersonation -p\",\"State\":\"Stopped\",\"StartMode\":\"Manual\"},{\"Name\":\"AdobeARMservice\",\"DisplayName\":\"Adobe Acrobat Update Service\",\"PathName\":\"\\\"C:\\\\Program Files (x86)\\\\Common Files\\\\Adobe\\\\ARM\\\\1.0\\\\armsvc.exe\\\"\",\"State\":\"Running\",\"StartMode\":\"Auto\"}]",
+    "stderr": ""
+  }
+}

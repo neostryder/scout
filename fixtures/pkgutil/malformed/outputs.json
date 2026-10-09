@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 0,
+  "stdout": "com.barebones.bbedit\t15.5.0\t/\tApplications\ncom.example.broken\ncom.google.pkg.Keystone\t1.3.19.240\t/\t\n",
+  "stderr": ""
+ }
+}

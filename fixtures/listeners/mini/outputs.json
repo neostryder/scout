@@ -1,0 +1,7 @@
+{
+  "listeners": {
+    "exitCode": 0,
+    "stdout": "p1095\ncrapportd\nf11\nn*:49157\nf12\nn*:49157\np1343\ncControlCenter\nf10\nn*:7000\nf11\nn*:7000\nf12\nn*:5000\nf13\nn*:5000\np1457\ncAgent\nf148\nn*:8090\np1464\ncsynergy-service\nf24\nn127.0.0.1:24803\nf26\nn*:24802\np3624\ncMusic\nf27\nn*:50809\nf28\nn*:50809\n---SCOUT-PS---\n 1095 /usr/libexec/rapportd\n 1343 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter\n 1457 /Users/USER/Library/Application Support/AgentDVR/AgentService.app/Contents/MacOS/Agent\n 1464 /Applications/Synergy.app/Contents/MacOS/synergy-service\n 3624 /System/Applications/Music.app/Contents/MacOS/Music\n",
+    "stderr": ""
+  }
+}

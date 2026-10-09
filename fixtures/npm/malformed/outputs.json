@@ -1,0 +1,12 @@
+{
+ "ls": {
+  "exitCode": 0,
+  "stdout": "{\"name\":\"lib\",\"dependencies\":{\"npm\":{\"version\":\"11.11.0\",\"overridden\":false},\"left-pad\":{\"required\":\"1.0.0\",\"missing\":true,\"problems\":[\"missing: left-pad@1.0.0\"]}}}\n",
+  "stderr": ""
+ },
+ "root": {
+  "exitCode": 0,
+  "stdout": "/opt/homebrew/lib/node_modules\n",
+  "stderr": ""
+ }
+}

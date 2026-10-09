@@ -1,0 +1,22 @@
+{
+  "sourceKind": "projectsel",
+  "location": "",
+  "status": "ok",
+  "installs": [],
+  "selectors": [
+    { "file": "/home/test/projects/app/.node-version", "project": "/home/test/projects/app", "kind": "node", "tool": "node", "spec": "v24.4.0" },
+    { "file": "/home/test/projects/app/.tool-versions", "project": "/home/test/projects/app", "kind": "node", "tool": "node", "spec": "24.4.0" },
+    { "file": "/home/test/projects/app/.tool-versions", "project": "/home/test/projects/app", "kind": "python", "tool": "python", "spec": "3.13.2" },
+    { "file": "/home/test/projects/app/.tool-versions", "project": "/home/test/projects/app", "kind": "rust", "tool": "rust", "spec": "stable" },
+    { "file": "/home/test/projects/app/.tool-versions", "project": "/home/test/projects/app", "kind": "go", "tool": "go", "spec": "1.24.1" },
+    { "file": "/home/test/projects/app/.tool-versions", "project": "/home/test/projects/app", "kind": "ruby", "tool": "ruby", "spec": "3.4.1" },
+    { "file": "/home/test/projects/app/.tool-versions", "project": "/home/test/projects/app", "kind": "packageManager", "tool": "pnpm", "spec": "10.4.0" },
+    { "file": "/home/test/projects/app/.python-version", "project": "/home/test/projects/app", "kind": "python", "tool": "python", "spec": "3.13.2" },
+    { "file": "/home/test/projects/rust-app/rust-toolchain", "project": "/home/test/projects/rust-app", "kind": "rust", "tool": "rust", "spec": "nightly-2026-09-01" },
+    { "file": "/home/test/projects/rust-toml/rust-toolchain.toml", "project": "/home/test/projects/rust-toml", "kind": "rust", "tool": "rust", "spec": "1.90.0" },
+    { "file": "/home/test/projects/legacy-toml/rust-toolchain", "project": "/home/test/projects/legacy-toml", "kind": "rust", "tool": "rust", "spec": "stable" },
+    { "file": "/home/test/projects/app/package.json", "project": "/home/test/projects/app", "kind": "packageManager", "tool": "pnpm", "spec": "10.4.0" },
+    { "file": "/home/test/projects/app/package.json", "project": "/home/test/projects/app", "kind": "engines", "tool": "node", "spec": ">=24 <27" },
+    { "file": "/home/test/projects/app/package.json", "project": "/home/test/projects/app", "kind": "engines", "tool": "npm", "spec": "^11" }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "sourceKind": "localbin",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/python3.14",
+      "name": "python3.14",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/python3.14",
+      "details": {
+        "linkTarget": "/Users/USER/.local/share/uv/python/cpython-3.14-macos-aarch64-none/bin/python3.14",
+        "directory": "local-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/uv",
+      "name": "uv",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/uv",
+      "details": {
+        "linkTarget": null,
+        "directory": "local-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/go/bin/gopls",
+      "name": "gopls",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/go/bin/gopls",
+      "details": {
+        "linkTarget": null,
+        "directory": "go-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/agent",
+      "name": "agent",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/agent",
+      "details": {
+        "linkTarget": "/Users/USER/.grok/bin/agent",
+        "directory": "local-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/ask.bak-luna-20260927",
+      "name": "ask.bak-luna-20260927",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/ask.bak-luna-20260927",
+      "details": {
+        "linkTarget": null,
+        "directory": "local-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/agent-acp",
+      "name": "agent-acp",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/agent-acp",
+      "details": {
+        "linkTarget": null,
+        "directory": "local-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/cua-driver",
+      "name": "cua-driver",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/cua-driver",
+      "details": {
+        "linkTarget": "/Applications/CuaDriver.app/Contents/MacOS/cua-driver",
+        "directory": "local-bin"
+      }
+    }
+  ]
+}

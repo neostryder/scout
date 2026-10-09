@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/Users/USER/.local/bin/python3.14\t/Users/USER/.local/share/uv/python/cpython-3.14-macos-aarch64-none/bin/python3.14\n/Users/USER/.local/bin/uv\t\n/Users/USER/go/bin/gopls\t\n/Users/USER/.local/bin/agent\t/Users/USER/.grok/bin/agent\n/Users/USER/.local/bin/ask.bak-luna-20260927\t\n/Users/USER/.local/bin/agent-acp\t\n/Users/USER/.local/bin/cua-driver\t/Applications/CuaDriver.app/Contents/MacOS/cua-driver\n",
+    "stderr": ""
+  }
+}

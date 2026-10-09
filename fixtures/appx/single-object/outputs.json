@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "{\"Name\":\"Microsoft.Windows.DevHome\",\"PackageFullName\":\"Microsoft.Windows.DevHome_0.0.0.0_x64__8wekyb3d8bbwe\",\"Version\":\"0.0.0.0\",\"Publisher\":\"CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US\",\"InstallLocation\":\"C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.Windows.DevHome_0.0.0.0_x64__8wekyb3d8bbwe\",\"SignatureKind\":1}",
+    "stderr": ""
+  }
+}

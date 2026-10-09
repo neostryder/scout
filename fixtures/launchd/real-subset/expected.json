@@ -1,0 +1,127 @@
+{
+ "sourceKind": "launchd",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "launchd",
+   "key": "AdGuardHome",
+   "name": "AdGuardHome",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchDaemons/AdGuardHome.plist",
+   "details": {
+    "domain": "daemon",
+    "program": "/Applications/AdGuardHome/AdGuardHome",
+    "runAtLoad": false,
+    "keepAlive": true,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.malwarebytes.mbam.rtprotection.daemon",
+   "name": "com.malwarebytes.mbam.rtprotection.daemon",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchDaemons/com.malwarebytes.mbam.rtprotection.daemon.plist",
+   "details": {
+    "domain": "daemon",
+    "program": "/Library/Application Support/Malwarebytes/MBAM/Engine.bundle/Contents/PlugIns/RTProtectionDaemon.app/Contents/MacOS/RTProtectionDaemon",
+    "runAtLoad": false,
+    "keepAlive": true,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.splashtop.streamer",
+   "name": "com.splashtop.streamer",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchAgents/com.splashtop.streamer.plist",
+   "details": {
+    "domain": "agent",
+    "program": "/Applications/Splashtop Streamer.app/Contents/MacOS/Splashtop Streamer",
+    "runAtLoad": true,
+    "keepAlive": true,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.cloudflare.warp.updater",
+   "name": "com.cloudflare.warp.updater",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchDaemons/com.cloudflare.warp.updater.plist",
+   "details": {
+    "domain": "daemon",
+    "program": "/Applications/Cloudflare WARP.app/Contents/Resources/warp-updater",
+    "runAtLoad": false,
+    "keepAlive": false,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.microsoft.update.agent",
+   "name": "com.microsoft.update.agent",
+   "kind": "service",
+   "version": null,
+   "location": "/Library/LaunchAgents/com.microsoft.update.agent.plist",
+   "details": {
+    "domain": "agent",
+    "program": "/Library/Application Support/Microsoft/MAU2.0/Microsoft AutoUpdate.app/Contents/MacOS/Microsoft Update Assistant.app/Contents/MacOS/Microsoft Update Assistant",
+    "runAtLoad": true,
+    "keepAlive": false,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.DigiDNA.iMazing2Mac.Mini",
+   "name": "com.DigiDNA.iMazing2Mac.Mini",
+   "kind": "service",
+   "version": null,
+   "location": "/Users/USER/Library/LaunchAgents/com.DigiDNA.iMazing2Mac.Mini.plist",
+   "details": {
+    "domain": "user-agent",
+    "program": "/Applications/iMazing.app/Contents/MacOS/iMazing Mini.app/Contents/MacOS/iMazing Mini",
+    "runAtLoad": false,
+    "keepAlive": false,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.symless.synergy3",
+   "name": "com.symless.synergy3",
+   "kind": "service",
+   "version": null,
+   "location": "/Users/USER/Library/LaunchAgents/com.symless.synergy3.plist",
+   "details": {
+    "domain": "user-agent",
+    "program": "/Applications/Synergy.app/Contents/MacOS/synergy-service",
+    "runAtLoad": false,
+    "keepAlive": true,
+    "disabled": false
+   }
+  },
+  {
+   "ecosystem": "launchd",
+   "key": "com.ispy.agent.dvr",
+   "name": "com.ispy.agent.dvr",
+   "kind": "service",
+   "version": null,
+   "location": "/Users/USER/Library/LaunchAgents/com.ispy.agent.dvr.plist",
+   "details": {
+    "domain": "user-agent",
+    "program": "/Users/USER/Library/Application Support/AgentDVR/AgentService.app/Contents/MacOS/Agent",
+    "runAtLoad": true,
+    "keepAlive": true,
+    "disabled": false
+   }
+  }
+ ]
+}

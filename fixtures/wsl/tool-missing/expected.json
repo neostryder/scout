@@ -1,0 +1,7 @@
+{
+  "sourceKind": "wsl",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "probe did not run (exit 127): wsl.exe: command not found"
+}

@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 0,
+  "stdout": "com.google.pkg.Keystone\t1.3.19.240\t/\t\ncom.microsoft.package.Microsoft_Excel.app\t16.113.26092714\t/\tLibrary/Caches/com.microsoft.autoupdate.helper/Clones.noindex\norg.adblockplus.adblockplussafarimac\t2.2.19\t/\tApplications\ncom.microsoft.package.Frameworks\t0\t/\tprivate/tmp/com.microsoft.package.Frameworks\ncom.microsoft.package.Microsoft_AutoUpdate.app\t4.85.26091737\t/\tLibrary/Application Support/Microsoft/MAU2.0\ncom.google.pkg.ChromeRemoteDesktopHostService\t154.0.8037.11\t/\t\ncom.barebones.bbedit\t15.5.0\t/\tApplications\ncom.overmacs.photosweeper\t4.9.5\t/\tApplications\n",
+  "stderr": ""
+ }
+}

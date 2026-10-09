@@ -1,0 +1,7 @@
+{
+  "url": "https://example.test/tool",
+  "status": 200,
+  "body": "<html><head><meta content='v2.4.0' name='application-version'><meta property='og:software:version' content='2.4.0'></head><body>Tool</body></html>",
+  "target": { "id": 1, "ecosystem": "binary", "key": "tool", "name": "Tool", "tap": null, "homepage": "https://example.test/tool", "details": {} },
+  "expected": { "status": "ok", "answers": [{ "channel": "stable", "version": "2.4.0", "advisory": true, "installable": false }] }
+}

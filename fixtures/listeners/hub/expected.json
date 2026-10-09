@@ -1,0 +1,156 @@
+{
+  "origin": "netconn",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 56954,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": 2076,
+      "processName": "JDownloader2",
+      "processPath": "C:/Users/USER/AppData/Local/JDownloader 2/JDownloader2.exe",
+      "container": null
+    },
+    {
+      "port": 9666,
+      "protocol": "tcp",
+      "address": "::1",
+      "bind": "loopback",
+      "pid": 2076,
+      "processName": "JDownloader2",
+      "processPath": "C:/Users/USER/AppData/Local/JDownloader 2/JDownloader2.exe",
+      "container": null
+    },
+    {
+      "port": 5357,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 2869,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 445,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 22,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": 6136,
+      "processName": "sshd",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 9666,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 2076,
+      "processName": "JDownloader2",
+      "processPath": "C:/Users/USER/AppData/Local/JDownloader 2/JDownloader2.exe",
+      "container": null
+    },
+    {
+      "port": 9665,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 2076,
+      "processName": "JDownloader2",
+      "processPath": "C:/Users/USER/AppData/Local/JDownloader 2/JDownloader2.exe",
+      "container": null
+    },
+    {
+      "port": 8787,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 6700,
+      "processName": "node",
+      "processPath": "C:/My Programs/nvm4w/nodejs/node.exe",
+      "container": null
+    },
+    {
+      "port": 139,
+      "protocol": "tcp",
+      "address": "192.168.1.100",
+      "bind": "lan",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 139,
+      "protocol": "tcp",
+      "address": "172.25.96.1",
+      "bind": "lan",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 139,
+      "protocol": "tcp",
+      "address": "172.21.176.1",
+      "bind": "lan",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 53,
+      "protocol": "tcp",
+      "address": "127.0.2.3",
+      "bind": "loopback",
+      "pid": 5960,
+      "processName": "warp-svc",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 53,
+      "protocol": "tcp",
+      "address": "127.0.2.2",
+      "bind": "loopback",
+      "pid": 5960,
+      "processName": "warp-svc",
+      "processPath": null,
+      "container": null
+    },
+    {
+      "port": 22,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": 6136,
+      "processName": "sshd",
+      "processPath": null,
+      "container": null
+    }
+  ]
+}

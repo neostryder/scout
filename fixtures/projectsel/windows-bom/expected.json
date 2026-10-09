@@ -1,0 +1,11 @@
+{
+  "sourceKind": "projectsel",
+  "location": "",
+  "status": "ok",
+  "installs": [],
+  "selectors": [
+    { "file": "C:/Repositories/app/.nvmrc", "project": "C:/Repositories/app", "kind": "node", "tool": "node", "spec": "24" },
+    { "file": "C:/Repositories/app/package.json", "project": "C:/Repositories/app", "kind": "packageManager", "tool": "yarn", "spec": "4.9.0" },
+    { "file": "C:/Repositories/app/package.json", "project": "C:/Repositories/app", "kind": "engines", "tool": "node", "spec": ">=24" }
+  ]
+}

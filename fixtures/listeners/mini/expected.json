@@ -1,0 +1,76 @@
+{
+  "origin": "lsof",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 49157,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1095,
+      "processName": "rapportd",
+      "processPath": "/usr/libexec/rapportd",
+      "container": null
+    },
+    {
+      "port": 7000,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1343,
+      "processName": "ControlCenter",
+      "processPath": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      "container": null
+    },
+    {
+      "port": 5000,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1343,
+      "processName": "ControlCenter",
+      "processPath": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      "container": null
+    },
+    {
+      "port": 8090,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1457,
+      "processName": "Agent",
+      "processPath": "/Users/USER/Library/Application Support/AgentDVR/AgentService.app/Contents/MacOS/Agent",
+      "container": null
+    },
+    {
+      "port": 24803,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 1464,
+      "processName": "synergy-service",
+      "processPath": "/Applications/Synergy.app/Contents/MacOS/synergy-service",
+      "container": null
+    },
+    {
+      "port": 24802,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1464,
+      "processName": "synergy-service",
+      "processPath": "/Applications/Synergy.app/Contents/MacOS/synergy-service",
+      "container": null
+    },
+    {
+      "port": 50809,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 3624,
+      "processName": "Music",
+      "processPath": "/System/Applications/Music.app/Contents/MacOS/Music",
+      "container": null
+    }
+  ]
+}

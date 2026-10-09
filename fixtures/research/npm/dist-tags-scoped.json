@@ -1,0 +1,22 @@
+{
+ "url": "https://registry.npmjs.org/-/package/@anthropic-ai%2Fclaude-code/dist-tags",
+ "status": 200,
+ "body": "{\"stable\":\"2.1.280\",\"latest\":\"2.1.285\",\"next\":\"2.1.285\"}",
+ "target": {
+  "id": 5,
+  "ecosystem": "npm",
+  "key": "@anthropic-ai/claude-code",
+  "name": "claude-code",
+  "tap": null
+ },
+ "expected": {
+  "status": "ok",
+  "answers": [
+   {
+    "channel": "stable",
+    "version": "2.1.285",
+    "installable": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,5 @@
+{
+  "success": true,
+  "result": [{ "pattern": "work.example.test/*", "script": "worker-app" }],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 1 }
+}

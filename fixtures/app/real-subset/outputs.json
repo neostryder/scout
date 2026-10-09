@@ -1,0 +1,7 @@
+{
+ "apps": {
+  "exitCode": 0,
+  "stdout": "/Applications/1Password.app\tcom.1password.1password\t8.12.36\t8.12.36\t\n/Applications/A Better Finder Rename 12.app\tnet.publicspace.abfr12\t12.30\t12.30\thttp://www.publicspace.net/app/signed_abfr12.xml\n/Applications/Apple Configurator.app\tcom.apple.configurator.ui\t2.20\t1001.5\t\n/Applications/Chrome Remote Desktop.app\tcom.google.Chrome.app.efmjfjelnicpmdcmfikempdhlmainjcb\t\t7339.133\t\n/Applications/HandBrake.app\tfr.handbrake.HandBrake\t1.9.2\t2025022300\thttps://handbrake.fr/appcast.arm64.xml\n/Applications/Steam.app\tcom.valvesoftware.steam\t\t6.1\t\n/Applications/Utilities/Feedback Assistant.app\tcom.apple.appleseed.FeedbackAssistant\t5.1\t642\t\n/Users/USER/Applications/Agent DVR.app\tcom.ispyconnect.agent.launcher\t2.4\t6\t\n",
+  "stderr": ""
+ }
+}

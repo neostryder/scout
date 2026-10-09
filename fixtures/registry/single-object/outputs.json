@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "{\"Hive\":\"HKLM\",\"Key\":\"7-Zip\",\"DisplayName\":\"7-Zip 26.01 (x64)\",\"DisplayVersion\":\"26.01\",\"Publisher\":\"Igor Pavlov\",\"InstallLocation\":\"C:\\\\Program Files\\\\7-Zip\\\\\",\"SystemComponent\":null}",
+    "stderr": ""
+  }
+}

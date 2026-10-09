@@ -1,0 +1,112 @@
+{
+ "sourceKind": "brew",
+ "location": "/opt/homebrew",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "brew",
+   "key": "ada-url",
+   "name": "ada-url",
+   "kind": "package",
+   "version": "3.4.3",
+   "location": "/opt/homebrew/Cellar/ada-url/3.4.3",
+   "description": "WHATWG-compliant and fast URL parser written in modern C++",
+   "homepage": "https://github.com/ada-url/ada",
+   "details": {
+    "tap": "homebrew/core",
+    "pinned": false,
+    "kegOnly": false,
+    "linked": true,
+    "outdated": true,
+    "installedVersions": [
+     "3.4.3"
+    ],
+    "onRequest": false
+   }
+  },
+  {
+   "ecosystem": "brew",
+   "key": "git",
+   "name": "git",
+   "kind": "package",
+   "version": "2.48.1",
+   "location": "/opt/homebrew/Cellar/git/2.48.1",
+   "description": "Distributed revision control system",
+   "homepage": "https://git-scm.com",
+   "details": {
+    "tap": "homebrew/core",
+    "pinned": false,
+    "kegOnly": false,
+    "linked": true,
+    "outdated": true,
+    "installedVersions": [
+     "2.48.1"
+    ],
+    "onRequest": true
+   }
+  },
+  {
+   "ecosystem": "brew",
+   "key": "icu4c@78",
+   "name": "icu4c@78",
+   "kind": "package",
+   "version": "78.3",
+   "location": "/opt/homebrew/Cellar/icu4c@78/78.3",
+   "description": "C/C++ and Java libraries for Unicode and globalization",
+   "homepage": "https://icu.unicode.org/home",
+   "details": {
+    "tap": "homebrew/core",
+    "pinned": false,
+    "kegOnly": true,
+    "linked": false,
+    "outdated": false,
+    "installedVersions": [
+     "78.3"
+    ],
+    "onRequest": false
+   }
+  },
+  {
+   "ecosystem": "brew",
+   "key": "node",
+   "name": "node",
+   "kind": "package",
+   "version": "25.8.1_1",
+   "location": "/opt/homebrew/Cellar/node/25.8.1_1",
+   "description": "Open-source, cross-platform JavaScript runtime environment",
+   "homepage": "https://nodejs.org/",
+   "details": {
+    "tap": "homebrew/core",
+    "pinned": false,
+    "kegOnly": false,
+    "linked": true,
+    "outdated": true,
+    "installedVersions": [
+     "25.8.1_1"
+    ],
+    "onRequest": true
+   }
+  },
+  {
+   "ecosystem": "brew",
+   "key": "sqlite",
+   "name": "sqlite",
+   "kind": "package",
+   "version": "3.51.3",
+   "location": "/opt/homebrew/Cellar/sqlite/3.51.3",
+   "description": "Command-line interface for SQLite",
+   "homepage": "https://sqlite.org/index.html",
+   "details": {
+    "tap": "homebrew/core",
+    "pinned": false,
+    "kegOnly": true,
+    "linked": false,
+    "outdated": true,
+    "installedVersions": [
+     "3.51.3"
+    ],
+    "onRequest": false
+   }
+  }
+ ]
+}

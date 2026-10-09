@@ -1,0 +1,103 @@
+{
+  "origin": "linux-atime",
+  "status": "partial",
+  "signals": [
+    {
+      "match": {
+        "path": "/usr/bin/python3"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/node"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/git"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/curl"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/ssh"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/rg"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/make"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/cargo"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/bin/go"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/sbin/cron"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/usr/local/bin/scout"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    },
+    {
+      "match": {
+        "path": "/opt/tool/bin/tool"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    }
+  ],
+  "message": "root filesystem uses noatime"
+}

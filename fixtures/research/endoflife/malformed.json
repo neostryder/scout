@@ -1,0 +1,7 @@
+{
+  "url": "https://endoflife.date/api/nodejs.json",
+  "status": 200,
+  "body": "[{broken",
+  "target": { "id": 1, "ecosystem": "brew", "key": "node", "name": "Node", "tap": null, "homepage": null, "details": {} },
+  "expected": { "status": "failed", "answers": [], "message": "response is not a cycles array" }
+}

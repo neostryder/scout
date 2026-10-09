@@ -1,0 +1,16 @@
+{
+  "name": "@scout/hub",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "start": "node src/main.ts",
+    "start:production": "node src/main.ts --production --schedule-models"
+  },
+  "dependencies": {
+    "@scout/core": "workspace:*",
+    "@scout/ops": "workspace:*",
+    "@scout/research": "workspace:*"
+  }
+}

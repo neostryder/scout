@@ -1,0 +1,48 @@
+{
+  "name": "@scout/cli",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "scout-scan": "./src/scan.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "scan": "node src/scan.ts",
+    "report": "node src/report.ts",
+    "list": "node src/list.ts",
+    "enrich": "node src/enrich.ts",
+    "research": "node src/research.ts"
+  },
+  "dependencies": {
+    "@scout/adapter-aiuse": "workspace:*",
+    "@scout/adapter-deps": "workspace:*",
+    "@scout/adapter-dockerimages": "workspace:*",
+    "@scout/adapter-dpkg": "workspace:*",
+    "@scout/adapter-gobin": "workspace:*",
+    "@scout/adapter-homebrew": "workspace:*",
+    "@scout/adapter-launchd": "workspace:*",
+    "@scout/adapter-listeners": "workspace:*",
+    "@scout/adapter-linuxusage": "workspace:*",
+    "@scout/adapter-localbin": "workspace:*",
+    "@scout/adapter-noderuntime": "workspace:*",
+    "@scout/adapter-macapp": "workspace:*",
+    "@scout/adapter-macusage": "workspace:*",
+    "@scout/adapter-npmglobal": "workspace:*",
+    "@scout/adapter-pipxenv": "workspace:*",
+    "@scout/adapter-pkgutil": "workspace:*",
+    "@scout/adapter-projectsel": "workspace:*",
+    "@scout/adapter-pyruntimes": "workspace:*",
+    "@scout/adapter-services": "workspace:*",
+    "@scout/adapter-uvtools": "workspace:*",
+    "@scout/adapter-winappx": "workspace:*",
+    "@scout/adapter-winguests": "workspace:*",
+    "@scout/adapter-winregistry": "workspace:*",
+    "@scout/adapter-winservices": "workspace:*",
+    "@scout/adapter-winusage": "workspace:*",
+    "@scout/adapter-winwinget": "workspace:*",
+    "@scout/core": "workspace:*",
+    "@scout/ops": "workspace:*",
+    "@scout/research": "workspace:*"
+  }
+}

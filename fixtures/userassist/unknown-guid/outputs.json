@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "[{\"Guid\":\"{CEBFF5CD-ACE2-4F4F-9178-9926F41749EA}\",\"Name\":\"{6Q809377-6NS0-444O-8957-N3773S022001}\\\\Abgrcnq++\\\\abgrcnq++.rkr\",\"Hex\":\"A2000000000000000000000000000000B4869E3C0000000000000000000000000000000000000000000000001D070D3B00000000D0B4A43C010000005078762B894BDD0100000000\"}]",
+    "stderr": ""
+  },
+  "env": {
+    "exitCode": 0,
+    "stdout": "{\"UserProfile\":\"C:\\\\Users\\\\USER\",\"LocalAppData\":\"C:\\\\Users\\\\USER\\\\AppData\\\\Local\",\"AppData\":\"C:\\\\Users\\\\USER\\\\AppData\\\\Roaming\",\"ProgramData\":\"C:\\\\ProgramData\",\"ProgramFiles\":\"C:\\\\Program Files\",\"ProgramFilesX86\":\"C:\\\\Program Files (x86)\",\"SystemRoot\":\"C:\\\\WINDOWS\"}\r\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "origin": "linux-atime",
+  "status": "ok",
+  "signals": [
+    {
+      "match": {
+        "path": "/usr/bin/git"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/curl"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    }
+  ]
+}

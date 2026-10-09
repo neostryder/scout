@@ -1,0 +1,19 @@
+{
+  "url": "https://crates.io/api/v1/crates/demo-crate",
+  "status": 200,
+  "body": "{\"crate\":{}}",
+  "target": {
+    "id": 1,
+    "ecosystem": "cargo",
+    "key": "demo-crate",
+    "name": "demo-crate",
+    "tap": null,
+    "homepage": null,
+    "details": {}
+  },
+  "expected": {
+    "status": "failed",
+    "answers": [],
+    "message": "crate has no stable version field"
+  }
+}

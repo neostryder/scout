@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "result": {
+    "config": {
+      "ingress": [
+        { "hostname": "down.example.test", "path": "/health", "service": "http://127.0.0.1:3000" },
+        { "hostname": "status.example.test", "service": "http_status:404" },
+        { "hostname": "sock.example.test", "service": "unix:/tmp/app.sock" },
+        { "hostname": "remote.example.test", "service": "https://origin.example.test:8443" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+ "origin": "processes",
+ "status": "ok",
+ "signals": [
+  {
+   "match": {
+    "path": "/sbin/launchd"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/System/Library/CoreServices/osanalyticshelper"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/usr/libexec/logd"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Cloudflare WARP.app/Contents/Resources/CloudflareWARP"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Splashtop Streamer.app/Contents/MacOS/SRStreamerDaemon"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/AdGuardHome/AdGuardHome"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/opt/homebrew/Cellar/python@3.12/3.12.13/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  },
+  {
+   "match": {
+    "path": "/Applications/1Password.app/Contents/MacOS/1Password"
+   },
+   "kind": "running",
+   "value": "1",
+   "available": true
+  }
+ ],
+ "completeFor": [
+  "running"
+ ]
+}

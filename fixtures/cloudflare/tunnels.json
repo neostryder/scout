@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "result": [
+    {
+      "id": "tunnel-aaaa",
+      "name": "alpha",
+      "status": "healthy",
+      "connections": [{ "id": "conn-1" }, { "id": "conn-2" }, { "id": "conn-3" }, { "id": "conn-4" }],
+      "remote_config": true,
+      "token": "tun-secret-value"
+    },
+    { "id": "tunnel-bbbb", "name": "beta", "status": "healthy", "connections": 2, "remote_config": true },
+    { "id": "tunnel-cccc", "name": "gamma", "status": "inactive", "connections": 0, "remote_config": false },
+    { "id": "tunnel-deleted", "name": "gone", "status": "down", "is_deleted": true, "token": "tun-secret-value" }
+  ],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 1 }
+}

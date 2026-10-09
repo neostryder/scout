@@ -1,0 +1,7 @@
+{
+  "sourceKind": "pipx",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "pipx did not run (exit 127): zsh:1: command not found: pipx"
+}

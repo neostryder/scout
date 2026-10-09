@@ -1,0 +1,21 @@
+{
+  "url": "https://example.test/appcast.xml",
+  "status": 200,
+  "body": "<html>error</html>",
+  "target": {
+    "id": 1,
+    "ecosystem": "bundle",
+    "key": "test.demo",
+    "name": "test.demo",
+    "tap": null,
+    "homepage": null,
+    "details": {
+      "sparkleFeed": "https://example.test/appcast.xml"
+    }
+  },
+  "expected": {
+    "status": "failed",
+    "answers": [],
+    "message": "response is not an RSS appcast"
+  }
+}

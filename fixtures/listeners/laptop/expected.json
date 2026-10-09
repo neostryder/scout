@@ -1,0 +1,66 @@
+{
+  "origin": "lsof",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 7000,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 647,
+      "processName": "ControlCenter",
+      "processPath": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      "container": null
+    },
+    {
+      "port": 5000,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 647,
+      "processName": "ControlCenter",
+      "processPath": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      "container": null
+    },
+    {
+      "port": 3283,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 765,
+      "processName": "ARDAgent",
+      "processPath": "/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/MacOS/ARDAgent",
+      "container": null
+    },
+    {
+      "port": 3689,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 878,
+      "processName": "mediasharingd",
+      "processPath": "/System/Library/PrivateFrameworks/AMPSharing.framework/Versions/A/Support/mediasharingd",
+      "container": null
+    },
+    {
+      "port": 24803,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 892,
+      "processName": "synergy-service",
+      "processPath": "/Applications/Synergy.app/Contents/MacOS/synergy-service",
+      "container": null
+    },
+    {
+      "port": 24802,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 892,
+      "processName": "synergy-service",
+      "processPath": "/Applications/Synergy.app/Contents/MacOS/synergy-service",
+      "container": null
+    }
+  ]
+}

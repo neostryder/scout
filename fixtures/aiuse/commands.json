@@ -1,0 +1,18 @@
+[
+  { "command": "sudo -u root env -i -u TOKEN PRIVATE=value command time -p nohup exec nice -n 5 git status", "tools": ["git"] },
+  { "command": "PRIVATE=value rg pattern", "tools": ["rg"] },
+  { "command": "xargs -n 1 -I {} rg {}", "tools": ["rg"] },
+  { "command": "npx --yes tsc --version && npx -p typescript tsc && npx @scope/tool@1.0", "tools": ["tsc", "tsc", "tool"] },
+  { "command": "pnpm dlx eslint .; pnpm exec vitest; pnpm dlx --package typescript tsc", "tools": ["eslint", "vitest", "tsc"] },
+  { "command": "uvx ruff check . || uv run pytest | uv tool run --from ruff ruff", "tools": ["ruff", "pytest", "ruff"] },
+  { "command": "python -m pip list\npython3 -m http.server", "tools": ["pip", "http.server"] },
+  { "command": "bash -c 'sudo git status && rg \"quoted;separator\"'; sh -c 'node --version'; zsh -c 'env A=b npm test'", "tools": ["git", "rg", "node", "npm"] },
+  { "command": "pwsh -Command 'Get-ChildItem; git status'; powershell -Command 'Get-Item'; cmd /c 'git status && rg pattern'", "tools": ["Get-ChildItem", "git", "Get-Item", "git", "rg"] },
+  { "command": "cd /private && echo PRIVATE_VALUE; export PRIVATE=VALUE; for x in a b; do git status; done; if rg pattern; then node --version; fi; [ -f file ]; test -f file; true; set -e", "tools": ["git", "rg", "node"] },
+  { "command": "'/opt/private/tool' --token PRIVATE_VALUE; C:/private/rg.exe x && C:/private/git.cmd status || C:/private/node.bat --version", "tools": ["tool", "rg", "git", "node"] },
+  { "command": "git commit -m \"PRIVATE;VALUE&&OTHER|TEXT\" && rg 'PRIVATE||VALUE'; node --version\nGet-ChildItem", "tools": ["git", "rg", "node", "Get-ChildItem"] },
+  { "command": "& 'C:/Program Files/tool.exe' --token PRIVATE_VALUE", "tools": ["tool"] },
+  { "command": "rg escaped\\;separator && git status # PRIVATE_VALUE", "tools": ["rg", "git"] },
+  { "command": "echo PRIVATE_VALUE; $PRIVATE_TOOL run; '/private/bad name.exe' secret; git 'unterminated", "tools": [] },
+  { "command": "sudo -n git status; nice -10 rg x; time -p npm test; env -i A=b node --version", "tools": ["git", "rg", "npm", "node"] }
+]

@@ -1,0 +1,5 @@
+{
+  "success": true,
+  "result": [{ "id": "zone-example", "name": "example.test" }],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 2, "count": 1, "total_count": 2 }
+}

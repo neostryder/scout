@@ -1,0 +1,149 @@
+import { hubMachineId } from "./hub.ts";
+import type { Db } from "./db.ts";
+import type { Probe, ProbeContext, ProbeOutputs, ScanStatus } from "./adapter.ts";
+import { classifyListener, type Classification, type ServiceClass } from "./classify.ts";
+import { loadDescriptionResolver, type Description, type DescriptionResolver } from "./descriptions.ts";
+import { healthRow, type HealthRow } from "./health.ts";
+
+export type ListenerBind = "loopback" | "all" | "lan";
+
+export interface ListenerFact {
+  port: number;
+  protocol: "tcp";
+  address: string;
+  bind: ListenerBind;
+  pid: number | null;
+  processName: string | null;
+  processPath: string | null;
+  container: { name: string; image: string; containerPort: number } | null;
+}
+
+export interface ListenerResult {
+  origin: string;
+  status: ScanStatus;
+  facts: ListenerFact[];
+  message?: string;
+}
+
+export interface ListenerAdapter {
+  origin: string;
+  os: ReadonlyArray<"macos" | "windows" | "linux">;
+  probes(ctx: ProbeContext): Probe[];
+  parse(outputs: ProbeOutputs): ListenerResult;
+}
+
+export interface Listener {
+  id: number;
+  machineId: string;
+  machineName: string;
+  port: number;
+  protocol: "tcp";
+  address: string;
+  bind: ListenerBind;
+  pid: number | null;
+  processName: string | null;
+  processPath: string | null;
+  containerName: string | null;
+  containerImage: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  goneAt: string | null;
+  classification: Classification;
+  description: Description | null;
+  health: HealthRow | null;
+}
+
+const width: Record<ListenerBind, number> = { loopback: 0, lan: 1, all: 2 };
+const identity = (row: { port: number; protocol: string; processName: string | null; containerName: string | null }): string => JSON.stringify([row.port, row.protocol, row.containerName ?? "", row.processName ?? ""]);
+
+export function recordListeners(db: Db, machineId: string, result: ListenerResult, now: string): { listeners: number; gone: number } {
+  const summary = { listeners: 0, gone: 0 };
+  if (result.status === "failed" || result.status === "skipped") return summary;
+  db.exec("BEGIN");
+  try {
+    const previous = listListeners(db, { machine: machineId });
+    const baselineKey = `listeners_observed:${machineId}`;
+    const firstScan = previous.length === 0 && !db.prepare("SELECT 1 FROM meta WHERE key = ?").get(baselineKey);
+    db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)").run(baselineKey, now);
+    const old = new Map(previous.map((row) => [identity(row), row]));
+    const facts = new Map<string, ListenerFact>();
+    for (const fact of result.facts) {
+      const key = identity({ ...fact, containerName: fact.container?.name ?? null });
+      const existing = facts.get(key);
+      if (!existing || width[fact.bind] > width[existing.bind]) facts.set(key, fact);
+    }
+    const put = db.prepare(
+      `INSERT INTO listeners (machine_id, port, protocol, address, bind, pid, process_name, process_path, container_name, container_image, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT DO UPDATE SET address = excluded.address, bind = excluded.bind, pid = excluded.pid,
+         process_path = excluded.process_path, container_image = excluded.container_image, last_seen_at = excluded.last_seen_at, gone_at = NULL`,
+    );
+    const event = db.prepare("INSERT INTO events (at, machine_id, kind, detail_json) VALUES (?, ?, ?, ?)");
+    const emit = (kind: string, port: number, process: string | null, oldBind: ListenerBind | null, newBind: ListenerBind | null, container: string | null) => {
+      if (!firstScan) event.run(now, machineId, kind, JSON.stringify({ machine: machineId, port, process, oldBind, newBind, ...(container !== null && container !== process ? { container } : {}) }));
+    };
+    for (const [key, fact] of facts) {
+      const before = old.get(key);
+      put.run(machineId, fact.port, fact.protocol, fact.address, fact.bind, fact.pid, fact.processName, fact.processPath, fact.container?.name ?? null, fact.container?.image ?? null, now, now);
+      summary.listeners++;
+      if (!before) emit("listener_new", fact.port, fact.processName ?? fact.container?.name ?? null, null, fact.bind, fact.container?.name ?? null);
+      else if (before.bind !== fact.bind) emit("listener_changed", fact.port, fact.processName ?? fact.container?.name ?? null, before.bind, fact.bind, fact.container?.name ?? null);
+    }
+    if (result.status === "ok") {
+      for (const row of previous) {
+        // Each reader proves absence only for its own family; Docker and lsof run separately.
+        const owned = result.origin === "docker-ports" ? row.containerName !== null : result.origin === "listeners" || row.containerName === null;
+        if (!owned || row.goneAt !== null || facts.has(identity(row))) continue;
+        db.prepare("UPDATE listeners SET gone_at = ? WHERE id = ?").run(now, row.id);
+        summary.gone++;
+        emit("listener_gone", row.port, row.processName ?? row.containerName, row.bind, null, row.containerName);
+      }
+    }
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+  return summary;
+}
+
+export interface ListenerFilter {
+  machine?: string;
+  bind?: ListenerBind;
+  state?: "present" | "gone";
+  q?: string;
+  port?: number;
+  class?: ServiceClass;
+  official?: boolean;
+  includeHidden?: boolean;
+}
+
+export function listListeners(db: Db, filter: ListenerFilter = {}, descriptions: DescriptionResolver = loadDescriptionResolver(db)): Listener[] {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (filter.machine !== undefined) { clauses.push("l.machine_id = ?"); params.push(filter.machine); }
+  if (filter.bind !== undefined) { clauses.push("l.bind = ?"); params.push(filter.bind); }
+  if (filter.state !== undefined) clauses.push(`l.gone_at IS ${filter.state === "present" ? "NULL" : "NOT NULL"}`);
+  if (filter.port !== undefined) { clauses.push("l.port = ?"); params.push(filter.port); }
+  const rows = db.prepare(
+    `SELECT l.id, l.machine_id AS machineId, m.name AS machineName, l.port, l.protocol, l.address, l.bind, l.pid,
+       l.process_name AS processName, l.process_path AS processPath, l.container_name AS containerName, l.container_image AS containerImage,
+       l.first_seen_at AS firstSeenAt, l.last_seen_at AS lastSeenAt, l.gone_at AS goneAt
+     FROM listeners l JOIN machines m ON m.id = l.machine_id
+     ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""} ORDER BY m.name, l.port, l.id`,
+  ).all(...params) as unknown as Omit<Listener, "classification" | "description" | "health">[];
+  const serviceRows = db.prepare(
+    `SELECT machine_id AS machineId, kind, domain, name, display_name AS displayName, program, state, start_mode AS startMode, enabled,
+       pid, run_as AS runAs, triggers, last_run AS lastRun, last_result AS lastResult
+     FROM services WHERE machine_id IN (SELECT id FROM machines WHERE (? IS NULL OR id = ?)) AND gone_at IS NULL`,
+  ).all(filter.machine ?? null, filter.machine ?? null) as unknown as import("./services.ts").ServiceFact[];
+  return rows.map((row) => {
+    const classification = classifyListener(row as Listener, serviceRows);
+    return { ...row, classification, description: descriptions.describe(row), health: row.machineId === hubMachineId() && row.goneAt === null && !classification.hidden ? healthRow(db, `listener:${hubMachineId()}:${row.port}`) : null };
+  }).filter((row) =>
+    (filter.q === undefined || [row.processName, row.processPath, row.containerName, row.description?.text].some((text) => text?.toLowerCase().includes(filter.q!.toLowerCase()))) &&
+    (filter.class === undefined || row.classification.class === filter.class) &&
+    (filter.official === undefined || row.classification.official === filter.official) &&
+    (filter.includeHidden !== false || !row.classification.hidden)
+  );
+}

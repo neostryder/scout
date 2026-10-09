@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "python3\nnode\ngit\ncurl\nssh\nrg\nmake\ncargo\ngo\napt\ntmux\nvim\nnode\n[kthreadd]\n[kworker/0:1]\nps\nsh\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "url": "https://proxy.golang.org/github.com/!example/!tool/v2/@latest",
+  "status": 200,
+  "body": "{\"Version\":\"v2.3.1\",\"Time\":\"2026-09-29T12:00:00Z\"}",
+  "target": {
+    "id": 1,
+    "ecosystem": "go-bin",
+    "key": "github.com/Example/Tool/v2",
+    "name": "github.com/Example/Tool/v2",
+    "tap": null,
+    "homepage": null,
+    "details": {
+      "module": "github.com/Example/Tool/v2"
+    }
+  },
+  "expected": {
+    "status": "ok",
+    "answers": [
+      {
+        "channel": "stable",
+        "version": "v2.3.1",
+        "installable": false
+      }
+    ]
+  }
+}

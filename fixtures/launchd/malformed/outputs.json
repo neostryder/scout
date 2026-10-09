@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 0,
+  "stdout": "/Library/LaunchDaemons/AdGuardHome.plist\t{\"RunAtLoad\":false,\"StandardErrorPath\":\"\\/var\\/log\\/AdGuardHome.stderr.log\",\"StandardOutPath\":\"\\/var\\/log\\/AdGuardHome.stdout.log\",\"Disabled\":false,\"SessionCreate\":false,\"ProgramArguments\":[\"\\/Applications\\/AdGuardHome\\/AdGuardHome\",\"-s\",\"run\"],\"WorkingDirectory\":\"\\/Applications\\/AdGuardHome\",\"KeepAlive\":true,\"Label\":\"AdGuardHome\"}\n/Library/LaunchDaemons/com.example.broken.plist\t{not json}\n/Library/LaunchDaemons/com.cloudflare.warp.updater.plist\t{\"ProgramArguments\":[\"\\/Applications\\/Cloudflare WARP.app\\/Contents\\/Resources\\/warp-updater\"],\"KeepAlive\":false,\"Label\":\"com.cloudflare.warp.updater\",\"RunAtLoad\":false,\"UserName\":\"root\"}\n",
+  "stderr": ""
+ }
+}

@@ -1,0 +1,5 @@
+{
+  "status": 200,
+  "body": "{\"tag_name\":\"v2.0.0\",\"draft\":false,\"prerelease\":false,\"html_url\":\"https://github.com/example/tool/releases/tag/v2.0.0\",\"body\":\"## Changes\\nThe release fixes startup failures.\\n![Screenshot](https://example.test/image.png)\\n<img src='https://example.test/other.png'>\\n<!-- internal note -->\\n## New Contributors\\n* @person made their first contribution in https://github.com/example/tool/pull/5\\nhttps://github.com/example/tool/graphs/contributors\\n## Details\\nThe release adds a portable build.\\n**Full Changelog**: https://github.com/example/tool/compare/v1.0.0...v2.0.0\"}",
+  "expectedText": "## Changes\nThe release fixes startup failures.\n\n\n\n## Details\nThe release adds a portable build.\n**Full Changelog**:"
+}

@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "[\"C:\\\\Program Files\\\\WindowsApps\\\\AcrobatNotificationClient_1.0.4.0_x86__e1rzdqpraam7r\\\\AcrobatNotificationClient.exe\",\"C:\\\\Program Files\\\\Adobe\\\\Acrobat DC\\\\Acrobat\\\\AcroTray.exe\",\"C:\\\\Program Files\\\\AdGuard\\\\Adguard.exe\",\"C:\\\\Program Files\\\\AdGuard\\\\Adguard.BrowserExtensionHost.exe\",\"C:\\\\Program Files\\\\Adobe\\\\Acrobat DC\\\\Acrobat\\\\AdobeCollabSync.exe\",\"C:\\\\Program Files\\\\WindowsApps\\\\AdobeNotificationClient_6.0.0.1_x86__enpm4xejd91yc\\\\AdobeNotificationClient.exe\",\"C:\\\\WINDOWS\\\\SystemApps\\\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\\\AppActions.exe\",\"C:\\\\Program Files\\\\WindowsApps\\\\AppleInc.iCloud_15.9.60.0_x64__nzyj5cx40ttqa\\\\iCloud\\\\ApplePhotoStreams.exe\"]",
+    "stderr": ""
+  }
+}

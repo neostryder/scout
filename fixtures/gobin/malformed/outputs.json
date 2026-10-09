@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/Users/USER/go/bin/gopls\tgolang.org/x/tools/gopls\tgolang.org/x/tools/gopls\tv0.21.1\n/Users/USER/go/bin/broken\n",
+    "stderr": ""
+  }
+}

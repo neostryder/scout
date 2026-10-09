@@ -1,0 +1,72 @@
+{
+  "sourceKind": "services",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "service",
+      "key": "Adguard Service",
+      "name": "Adguard Service",
+      "kind": "service",
+      "version": null,
+      "location": "C:\\Program Files\\AdGuard\\AdguardSvc.exe",
+      "details": {
+        "state": "Running",
+        "startMode": "Auto",
+        "pathName": "\"C:\\Program Files\\AdGuard\\AdguardSvc.exe\""
+      }
+    },
+    {
+      "ecosystem": "service",
+      "key": "ALG",
+      "name": "Application Layer Gateway Service",
+      "kind": "service",
+      "version": null,
+      "location": "C:\\WINDOWS\\System32\\alg.exe",
+      "details": {
+        "state": "Stopped",
+        "startMode": "Manual",
+        "pathName": "C:\\WINDOWS\\System32\\alg.exe"
+      }
+    },
+    {
+      "ecosystem": "service",
+      "key": "LSM",
+      "name": "LSM",
+      "kind": "service",
+      "version": null,
+      "location": "",
+      "details": {
+        "state": "Running",
+        "startMode": "Unknown",
+        "pathName": null
+      }
+    },
+    {
+      "ecosystem": "service",
+      "key": "ADPSvc",
+      "name": "Aggregated Data Platform Service",
+      "kind": "service",
+      "version": null,
+      "location": "C:\\WINDOWS\\system32\\svchost.exe",
+      "details": {
+        "state": "Stopped",
+        "startMode": "Manual",
+        "pathName": "C:\\WINDOWS\\system32\\svchost.exe -k LocalServiceAndNoImpersonation -p"
+      }
+    },
+    {
+      "ecosystem": "service",
+      "key": "AdobeARMservice",
+      "name": "Adobe Acrobat Update Service",
+      "kind": "service",
+      "version": null,
+      "location": "C:\\Program Files (x86)\\Common Files\\Adobe\\ARM\\1.0\\armsvc.exe",
+      "details": {
+        "state": "Running",
+        "startMode": "Auto",
+        "pathName": "\"C:\\Program Files (x86)\\Common Files\\Adobe\\ARM\\1.0\\armsvc.exe\""
+      }
+    }
+  ]
+}

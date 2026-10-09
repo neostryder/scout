@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 0,
+  "stdout": "adduser\t3.137ubuntu1\tii \tall\tadd and remove users and groups\nbroken\t1.0\ncurl\t8.5.0-2ubuntu10.9\tii \tarm64\tcommand line tool for transferring data with URL syntax\n",
+  "stderr": ""
+ }
+}

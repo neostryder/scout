@@ -1,0 +1,7 @@
+{
+  "url": "https://endoflife.date/api/rust.json",
+  "status": 200,
+  "body": "[{\"cycle\":\"1.99\",\"releaseDate\":\"2026-08-01\",\"eol\":true,\"latest\":\"1.99.0\",\"lts\":false},{\"cycle\":\"1.98\",\"releaseDate\":\"2026-07-01\",\"eol\":false,\"latest\":\"1.98.1\",\"lts\":false}]",
+  "target": { "id": 1, "ecosystem": "binary", "key": "rust", "name": "Rust", "tap": null, "homepage": null, "details": {}, "observedAt": "2026-09-30T06:00:00.000Z" },
+  "expected": { "status": "ok", "answers": [{ "channel": "stable", "version": "1.98.1", "advisory": true, "installable": false }] }
+}

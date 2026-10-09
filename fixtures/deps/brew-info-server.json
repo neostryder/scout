@@ -1,0 +1,113 @@
+{
+ "formulae": [
+  {
+   "name": "colima",
+   "full_name": "colima",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "lima"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.10.3",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.10.3"
+   },
+   "installed": [
+    {
+     "version": "0.10.3",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "lima",
+       "version": "2.2.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "docker",
+   "full_name": "docker",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "29.7.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "29.8.1"
+   },
+   "installed": [
+    {
+     "version": "29.7.0",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "docker-completion",
+   "full_name": "docker-completion",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "29.7.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "29.8.1"
+   },
+   "installed": [
+    {
+     "version": "29.7.0",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "docker-compose",
+   "full_name": "docker-compose",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "5.3.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "5.5.1"
+   },
+   "installed": [
+    {
+     "version": "5.3.1",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "lima",
+   "full_name": "lima",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "2.2.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2.2.0"
+   },
+   "installed": [
+    {
+     "version": "2.2.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  }
+ ],
+ "casks": []
+}

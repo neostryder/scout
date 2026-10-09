@@ -1,0 +1,20 @@
+{
+  "sourceKind": "appx",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "appx",
+      "key": "Microsoft.Windows.DevHome",
+      "name": "Microsoft.Windows.DevHome",
+      "kind": "app",
+      "version": "0.0.0.0",
+      "location": "C:\\Program Files\\WindowsApps\\Microsoft.Windows.DevHome_0.0.0.0_x64__8wekyb3d8bbwe",
+      "details": {
+        "packageFullName": "Microsoft.Windows.DevHome_0.0.0.0_x64__8wekyb3d8bbwe",
+        "publisher": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+        "signatureKind": 1
+      }
+    }
+  ]
+}

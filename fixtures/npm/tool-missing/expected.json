@@ -1,0 +1,7 @@
+{
+ "sourceKind": "npm",
+ "location": "",
+ "status": "skipped",
+ "installs": [],
+ "message": "npm did not run (exit 127): zsh:1: command not found: npm"
+}

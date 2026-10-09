@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 0,
+  "stdout": "/sbin/launchd\n/System/Library/CoreServices/osanalyticshelper\n/usr/libexec/logd\nCore Audio Driver (ACE.driver)\n/Applications/Cloudflare WARP.app/Contents/Resources/CloudflareWARP\n/Applications/Splashtop Streamer.app/Contents/MacOS/SRStreamerDaemon\n/Applications/AdGuardHome/AdGuardHome\n/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder\n/opt/homebrew/Cellar/python@3.12/3.12.13/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python\n/Applications/Tailscale.app/Contents/MacOS/Tailscale\n/Applications/1Password.app/Contents/MacOS/1Password\n",
+  "stderr": ""
+ }
+}

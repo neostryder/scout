@@ -1,0 +1,29 @@
+{
+  "url": "https://api.github.com/repos/example/demo/releases?per_page=30",
+  "status": 200,
+  "body": "[{\"tag_name\":\"v2.1.0-rc.1\",\"draft\":false,\"prerelease\":true,\"published_at\":\"2026-09-29T12:00:00Z\"},{\"tag_name\":\"v2.0.0\",\"draft\":false,\"prerelease\":false,\"published_at\":\"2026-09-29T12:00:00Z\"},{\"tag_name\":\"v3.0.0-beta.2\",\"draft\":false,\"prerelease\":true,\"published_at\":\"2026-09-29T12:00:00Z\"},{\"tag_name\":\"v3.0.0-beta.1\",\"draft\":false,\"prerelease\":true,\"published_at\":\"2026-09-29T12:00:00Z\"},{\"tag_name\":\"release-4\",\"draft\":false,\"prerelease\":false,\"published_at\":\"2026-09-29T12:00:00Z\"}]",
+  "target": {
+    "id": 1,
+    "ecosystem": "npm",
+    "key": "demo",
+    "name": "demo",
+    "tap": null,
+    "homepage": "https://github.com/example/demo",
+    "details": {}
+  },
+  "expected": {
+    "status": "ok",
+    "answers": [
+      {
+        "channel": "stable",
+        "version": "2.0.0",
+        "installable": false
+      },
+      {
+        "channel": "beta",
+        "version": "3.0.0-beta.2",
+        "installable": false
+      }
+    ]
+  }
+}

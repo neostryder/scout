@@ -1,0 +1,12 @@
+{
+  "containers": {
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n"
+  },
+  "images": {
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n"
+  }
+}

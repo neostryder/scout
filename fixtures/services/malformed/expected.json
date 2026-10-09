@@ -1,0 +1,7 @@
+{
+  "sourceKind": "services",
+  "location": "",
+  "status": "failed",
+  "installs": [],
+  "message": "probe output is not valid JSON"
+}

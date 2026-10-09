@@ -1,0 +1,23 @@
+{
+  "url": "https://api.github.com/repos/example/demo/releases?per_page=30",
+  "status": 403,
+  "body": "{\"message\":\"API rate limit exceeded\"}",
+  "target": {
+    "id": 1,
+    "ecosystem": "npm",
+    "key": "demo",
+    "name": "demo",
+    "tap": null,
+    "homepage": "https://github.com/example/demo",
+    "details": {}
+  },
+  "expected": {
+    "status": "failed",
+    "answers": [],
+    "message": "GitHub rate limit resets at 2026-09-30T00:00:00.000Z"
+  },
+  "headers": {
+    "x-ratelimit-remaining": "0",
+    "x-ratelimit-reset": "1790726400"
+  }
+}

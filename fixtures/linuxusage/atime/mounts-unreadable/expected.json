@@ -1,0 +1,15 @@
+{
+  "origin": "linux-atime",
+  "status": "partial",
+  "signals": [
+    {
+      "match": {
+        "path": "/usr/bin/git"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": false
+    }
+  ],
+  "message": "root mount options are unreadable"
+}

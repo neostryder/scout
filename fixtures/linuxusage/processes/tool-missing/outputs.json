@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 127,
+    "stdout": "",
+    "stderr": "/bin/sh: ps: not found\n"
+  }
+}

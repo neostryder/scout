@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scout</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/services.css">
+  <script type="module" src="/theme.js"></script>
+  <script type="module" src="/review-reminder.js"></script>
+  <script type="module" src="/alerts-badge.js"></script>
+  <script type="module" src="/download-kinds.js"></script>
+  <script type="module" src="/app.js"></script>
+  <script type="module" src="/dependency-cards.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>Scout</h1>
+    <nav class="views" aria-label="Views">
+      <button type="button" data-view="updates">Updates <span id="updates-count" class="badge"></span></button>
+      <button type="button" data-view="catalog">Catalog</button>
+      <button type="button" data-view="services">Services</button>
+      <button type="button" data-view="review">Review queue <span id="review-count" class="badge"></span></button>
+      <button type="button" data-view="jobs">Jobs</button>
+    </nav>
+    <a id="alerts-badge" class="alerts-badge" href="/?view=services&tab=alerts" hidden></a>
+    <div id="summary" class="summary" aria-live="polite"></div>
+    <button id="toggle-filters" class="only-narrow" type="button" aria-expanded="false">Filters</button>
+  </header>
+  <div id="list-layout" class="layout">
+    <aside id="filters" class="filters" aria-label="Filters"></aside>
+    <main class="results">
+      <div class="search-bar">
+        <label class="search-label">Search <input id="search" type="search" placeholder="Name, description, publisher" autocomplete="off"></label>
+        <details id="saved-filters" class="saved-filters"></details>
+      </div>
+      <div class="bar">
+        <span id="count" class="count" aria-live="polite"></span>
+        <label class="sort">Sort <select id="sort" aria-label="Sort by"></select></label>
+        <label class="sort">Direction <select id="dir" aria-label="Sort direction"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+        <button id="clear" type="button">Clear all</button>
+      </div>
+      <div id="chips" class="chips"></div>
+      <div id="selection" class="selection" hidden><button id="update-selected" class="primary" type="button"></button><button id="select-page" type="button">Select all on this page</button><button id="clear-selection" type="button">Clear selection</button></div>
+      <div class="table-wrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+      <div class="more"><button id="more" type="button" hidden>Show more</button></div>
+    </main>
+  </div>
+  <main id="review" class="review" hidden></main>
+  <main id="jobs" class="review" hidden></main>
+  <main id="services" hidden></main>
+  <aside id="detail" class="detail" hidden aria-label="Details"></aside>
+  <dialog id="confirm" aria-labelledby="confirm-title"><h2 id="confirm-title">Confirm updates</h2><div id="confirm-body"></div><div class="actions"><button id="confirm-cancel" type="button">Cancel</button><button id="confirm-submit" type="button">Start updates</button></div></dialog>
+</body>
+</html>

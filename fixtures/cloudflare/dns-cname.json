@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "result": [
+    { "type": "CNAME", "name": "app.example.test", "content": "tunnel-aaaa.cfargotunnel.com", "proxied": true },
+    { "type": "CNAME", "name": "down.example.test", "content": "tunnel-bbbb.cfargotunnel.com", "proxied": true },
+    { "type": "CNAME", "name": "gone.example.test", "content": "tunnel-zzzz.cfargotunnel.com", "proxied": true },
+    { "type": "CNAME", "name": "local.example.test", "content": "tunnel-cccc.cfargotunnel.com", "proxied": true }
+  ],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 1 }
+}

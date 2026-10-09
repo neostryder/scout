@@ -1,0 +1,7 @@
+{
+  "sourceKind": "python",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "python launcher did not run (exit 127): py.exe: command not found"
+}

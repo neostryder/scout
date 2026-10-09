@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "=== /projects/app/package.json\n{\"engines\":\n=== /projects/app/.tool-versions\nnodejs\n=== /projects/app/rust-toolchain.toml\n[toolchain]\ncomponents = [\"rustfmt\"]\n=== /projects/good/.nvmrc\n24\n",
+    "stderr": ""
+  }
+}

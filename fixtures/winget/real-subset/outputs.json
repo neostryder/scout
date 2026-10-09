@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 0,
+  "stdout": "[{\"Id\":\"CoreyButler.NVMforWindows\",\"Name\":\"NVM for Windows\",\"InstalledVersion\":\"1.2.2\",\"Source\":\"winget\",\"IsUpdateAvailable\":false,\"AvailableVersion\":\"2.0.0\"},{\"Id\":\"ARP\\\\Machine\\\\X64\\\\AMD Catalyst Install Manager\",\"Name\":\"AMD Software\",\"InstalledVersion\":\"24.30.18\",\"Source\":null,\"IsUpdateAvailable\":false,\"AvailableVersion\":null},{\"Id\":\"NexusMods.Vortex\",\"Name\":\"Vortex\",\"InstalledVersion\":\"2.2.0\",\"Source\":\"winget\",\"IsUpdateAvailable\":true,\"AvailableVersion\":\"2.6.3\"},{\"Id\":\"XPDP273C0XHQH2\",\"Name\":\"Adobe Acrobat Reader DC\",\"InstalledVersion\":\"26.002.21931\",\"Source\":\"msstore\",\"IsUpdateAvailable\":false,\"AvailableVersion\":\"26.002.21901\"},{\"Id\":\"MSIX\\\\21090PaddyXu.QuickLook_4.5.0.0_neutral__egxr34yet59cg\",\"Name\":\"QuickLook\",\"InstalledVersion\":\"4.5.0.0\",\"Source\":null,\"IsUpdateAvailable\":false,\"AvailableVersion\":null},{\"Id\":\"ARP\\\\Machine\\\\X64\\\\Steam App 1026680\",\"Name\":\"FINAL FANTASY VIII - REMASTERED\",\"InstalledVersion\":\"Unknown\",\"Source\":null,\"IsUpdateAvailable\":false,\"AvailableVersion\":null}]",
+  "stderr": ""
+ }
+}

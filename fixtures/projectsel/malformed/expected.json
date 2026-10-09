@@ -1,0 +1,10 @@
+{
+  "sourceKind": "projectsel",
+  "location": "",
+  "status": "partial",
+  "installs": [],
+  "selectors": [
+    { "file": "/projects/good/.nvmrc", "project": "/projects/good", "kind": "node", "tool": "node", "spec": "24" }
+  ],
+  "message": "skipped 3 malformed file(s)"
+}

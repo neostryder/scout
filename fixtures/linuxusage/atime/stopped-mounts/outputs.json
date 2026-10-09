@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/usr/bin/git\t1700000000\t1699900000\n",
+    "stderr": ""
+  },
+  "mounts": {
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "Sandbox mc-m3 is stopped\n"
+  }
+}

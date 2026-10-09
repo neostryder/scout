@@ -1,0 +1,7 @@
+{
+  "ports": {
+    "exitCode": 0,
+    "stdout": "example-relay-relay-1|example-relay-relay|0.0.0.0:3310->3300/tcp, [::]:3310->3300/tcp|Up 8 hours\nfoundry-v14|ghcr.io/felddy/foundryvtt:14.367|0.0.0.0:30014->30000/tcp, [::]:30014->30000/tcp|Up 8 hours (healthy)\n",
+    "stderr": ""
+  }
+}

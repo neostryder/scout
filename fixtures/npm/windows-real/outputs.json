@@ -1,0 +1,12 @@
+{
+  "ls": {
+    "exitCode": 0,
+    "stdout": "{\n  \"resolved\": \"file:../../Users/USER/AppData/Local/nvm/v26.8.1\",\n  \"dependencies\": {\n    \"@github/copilot\": {\n      \"version\": \"1.0.89\",\n      \"overridden\": false\n    },\n    \"@minimax-ai/code\": {\n      \"version\": \"0.5.4\",\n      \"overridden\": false\n    },\n    \"@openai/codex\": {\n      \"version\": \"0.156.1\",\n      \"overridden\": false\n    },\n    \"@pnpm/exe\": {\n      \"version\": \"12.3.4\",\n      \"overridden\": false\n    },\n    \"npm\": {\n      \"version\": \"11.19.0\",\n      \"overridden\": false\n    }\n  }\n}\n",
+    "stderr": ""
+  },
+  "root": {
+    "exitCode": 0,
+    "stdout": "C:\\My Programs\\nvm4w\\nodejs\\node_modules\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/usr/bin/python3\t1700000000\t1699900000\n/usr/bin/node\t1699900000\t1699900000\n/usr/bin/git\t1700000000\t1699900000\n/usr/bin/curl\t1699900000\t1699900000\n/usr/bin/ssh\t1700000000\t1699900000\n/usr/bin/rg\t1699900000\t1699900000\n/usr/bin/make\t1700000000\t1699900000\n/usr/bin/cargo\t1699900000\t1699900000\n/usr/bin/go\t1700000000\t1699900000\n/usr/sbin/cron\t1699900000\t1699900000\n/usr/local/bin/scout\t1700000000\t1699900000\n/opt/tool/bin/tool\t1699900000\t1699900000\n",
+    "stderr": ""
+  },
+  "mounts": {
+    "exitCode": 0,
+    "stdout": "overlay / overlay rw,relatime,lowerdir=/layers,upperdir=/upper,workdir=/work 0 0\nproc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n",
+    "stderr": ""
+  }
+}

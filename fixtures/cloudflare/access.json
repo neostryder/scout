@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "result": [
+    { "id": "app-scout", "name": "Scout", "domain": "app.example.test", "policies": [{ "name": "allow" }] },
+    { "id": "app-wild", "name": "Wild", "domain": "*.example.test", "policies": [{ "name": "one" }, { "name": "two" }] }
+  ],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 1 }
+}

@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/Users/USER/.local/bin/uv\t\n/Users/USER/.local/bin/not-a-row\n/Users/USER/go/bin/gopls\t\n",
+    "stderr": ""
+  }
+}

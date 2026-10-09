@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": " -V:3.14 *        C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python314\\python.exe\r\n -V:3.13          C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\r\n -V:3.12          C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\r\n -V:Astral/CPython3.13.11 C:\\Users\\USER\\AppData\\Roaming\\uv\\python\\cpython-3.13.11-windows-x86_64-none\\python.exe\r\n -V:Astral/CPython3.12.10 C:\\Users\\USER\\Downloads\\StabilityMatrix-win-x64\\Data\\Assets\\Python\\cpython-3.12.10-windows-x86_64-none\\python.exe\r\n -V:Astral/CPython3.11.15 C:\\Users\\USER\\AppData\\Roaming\\uv\\python\\cpython-3.11.15-windows-x86_64-none\\python.exe\r\n",
+    "stderr": ""
+  }
+}

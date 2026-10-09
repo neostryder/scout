@@ -1,0 +1,21 @@
+{
+  "url": "https://proxy.golang.org/github.com/!example/!tool/v2/@latest",
+  "status": 200,
+  "body": "{}",
+  "target": {
+    "id": 1,
+    "ecosystem": "go-bin",
+    "key": "github.com/Example/Tool/v2",
+    "name": "github.com/Example/Tool/v2",
+    "tap": null,
+    "homepage": null,
+    "details": {
+      "module": "github.com/Example/Tool/v2"
+    }
+  },
+  "expected": {
+    "status": "failed",
+    "answers": [],
+    "message": "response has no module version"
+  }
+}

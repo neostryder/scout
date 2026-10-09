@@ -1,0 +1,10 @@
+{
+  "origin": "ai-use",
+  "status": "ok",
+  "signals": [
+    { "match": { "name": "git" }, "kind": "ai_use_7d", "value": "3", "available": true },
+    { "match": { "name": "git" }, "kind": "ai_use_30d", "value": "6", "available": true },
+    { "match": { "name": "git" }, "kind": "ai_last_used", "value": "2026-09-30T11:00:00.000Z", "available": true }
+  ],
+  "completeFor": ["ai_use_7d", "ai_use_30d"]
+}

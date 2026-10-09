@@ -1,0 +1,109 @@
+{
+ "sourceKind": "registry",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\7-Zip",
+   "name": "7-Zip 26.01 (x64)",
+   "kind": "package",
+   "version": "26.01",
+   "location": "C:\\Program Files\\7-Zip\\",
+   "publisher": "Igor Pavlov",
+   "details": {
+    "hive": "HKLM",
+    "key": "7-Zip",
+    "publisher": "Igor Pavlov",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\Steam App 1026680",
+   "name": "FINAL FANTASY VIII - REMASTERED",
+   "kind": "package",
+   "version": null,
+   "location": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII Remastered",
+   "publisher": "Square Enix",
+   "details": {
+    "hive": "HKLM",
+    "key": "Steam App 1026680",
+    "publisher": "Square Enix",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM-WOW6432\\3fdeebc8",
+   "name": "Visual Studio Build Tools 2022",
+   "kind": "package",
+   "version": "17.14.35",
+   "location": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools",
+   "publisher": "Microsoft Corporation",
+   "details": {
+    "hive": "HKLM-WOW6432",
+    "key": "3fdeebc8",
+    "publisher": "Microsoft Corporation",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": true
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKCU\\5CBD44E2723BB1841697EE65F4F6FB6DBF7D5E594165632D89494C75F6F61A13",
+   "name": "LogiOptionsPlusWordAddin",
+   "kind": "package",
+   "version": "2.1.6799.0",
+   "location": "",
+   "publisher": "Logitech",
+   "details": {
+    "hive": "HKCU",
+    "key": "5CBD44E2723BB1841697EE65F4F6FB6DBF7D5E594165632D89494C75F6F61A13",
+    "publisher": "Logitech",
+    "systemComponent": false,
+    "scope": "user",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\{010792BA-551A-3AC0-A7EF-0FAB4156C382}",
+   "name": "Microsoft Visual C++ 2013 x64 Additional Runtime - 12.0.40664",
+   "kind": "package",
+   "version": "12.0.40664",
+   "location": "",
+   "publisher": "Microsoft Corporation",
+   "details": {
+    "hive": "HKLM",
+    "key": "{010792BA-551A-3AC0-A7EF-0FAB4156C382}",
+    "publisher": "Microsoft Corporation",
+    "systemComponent": true,
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\57979c68-f490-55b8-8fed-8b017a5af2fe",
+   "name": "Vortex",
+   "kind": "package",
+   "version": "2.2.0",
+   "location": "",
+   "publisher": "Black Tree Gaming Ltd.",
+   "details": {
+    "hive": "HKLM",
+    "key": "57979c68-f490-55b8-8fed-8b017a5af2fe",
+    "publisher": "Black Tree Gaming Ltd.",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  }
+ ]
+}

@@ -1,0 +1,73 @@
+{
+  "origin": "processes",
+  "status": "ok",
+  "signals": [
+    {
+      "match": {
+        "path": "C:\\Program Files\\WindowsApps\\AcrobatNotificationClient_1.0.4.0_x86__e1rzdqpraam7r\\AcrobatNotificationClient.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\AcroTray.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Program Files\\AdGuard\\Adguard.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Program Files\\AdGuard\\Adguard.BrowserExtensionHost.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\AdobeCollabSync.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Program Files\\WindowsApps\\AdobeNotificationClient_6.0.0.1_x86__enpm4xejd91yc\\AdobeNotificationClient.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\WINDOWS\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\AppActions.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Program Files\\WindowsApps\\AppleInc.iCloud_15.9.60.0_x64__nzyj5cx40ttqa\\iCloud\\ApplePhotoStreams.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    }
+  ],
+  "completeFor": [
+    "running"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "url": "https://example.test/tool",
+  "status": 200,
+  "body": "<html><head><meta name='version' content='2.4.0'></head><body><a href='/download'>Download v3.0.0-beta.1</a></body></html>",
+  "target": { "id": 1, "ecosystem": "binary", "key": "tool", "name": "Tool", "tap": null, "homepage": "https://example.test/tool", "details": {} },
+  "expected": { "status": "ok", "answers": [] }
+}

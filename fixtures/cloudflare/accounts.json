@@ -1,0 +1,5 @@
+{
+  "success": true,
+  "result": [{ "id": "account-fake", "name": "Example account" }],
+  "result_info": { "page": 1, "per_page": 100, "total_pages": 1 }
+}

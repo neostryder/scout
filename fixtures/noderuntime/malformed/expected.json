@@ -1,0 +1,7 @@
+{
+  "sourceKind": "noderuntime",
+  "location": "",
+  "status": "failed",
+  "installs": [],
+  "message": "node output is not a version and a path"
+}

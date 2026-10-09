@@ -1,0 +1,34 @@
+{
+  "sourceKind": "wsl",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "wsl-distro",
+      "key": "Ubuntu",
+      "name": "Ubuntu",
+      "kind": "vm",
+      "version": null,
+      "location": "",
+      "details": {
+        "state": "Stopped",
+        "wslVersion": 2,
+        "default": false
+      }
+    },
+    {
+      "ecosystem": "wsl-distro",
+      "key": "docker-desktop",
+      "name": "docker-desktop",
+      "kind": "vm",
+      "version": null,
+      "location": "",
+      "details": {
+        "state": "Running",
+        "wslVersion": 2,
+        "default": false
+      }
+    }
+  ],
+  "message": "skipped 1 malformed row"
+}

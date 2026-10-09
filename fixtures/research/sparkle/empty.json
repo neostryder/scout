@@ -1,0 +1,20 @@
+{
+  "url": "https://example.test/appcast.xml",
+  "status": 200,
+  "body": "<?xml version=\"1.0\"?><rss version=\"2.0\" xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\"><channel></channel></rss>",
+  "target": {
+    "id": 1,
+    "ecosystem": "bundle",
+    "key": "test.demo",
+    "name": "test.demo",
+    "tap": null,
+    "homepage": null,
+    "details": {
+      "sparkleFeed": "https://example.test/appcast.xml"
+    }
+  },
+  "expected": {
+    "status": "ok",
+    "answers": []
+  }
+}

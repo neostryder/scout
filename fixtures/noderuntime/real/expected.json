@@ -1,0 +1,15 @@
+{
+  "sourceKind": "noderuntime",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "binary",
+      "key": "node",
+      "name": "Node.js",
+      "kind": "runtime",
+      "version": "26.8.1",
+      "location": "C:/My Programs/nvm4w/nodejs/node.exe"
+    }
+  ]
+}

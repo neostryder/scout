@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": " -V:3.14 *        C:\\Python314\\python.exe\nnot a python row\n -V:Astral/CPython3.13.11 C:\\Astral\\python.exe\n",
+    "stderr": ""
+  }
+}

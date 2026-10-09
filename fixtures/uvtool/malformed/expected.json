@@ -1,0 +1,21 @@
+{
+  "sourceKind": "uvtool",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "uv-tool",
+      "key": "lh-harness",
+      "name": "lh-harness",
+      "kind": "package",
+      "version": "0.1.7",
+      "location": "",
+      "details": {
+        "executables": [
+          "lh-harness"
+        ]
+      }
+    }
+  ],
+  "message": "skipped 1 malformed line(s)"
+}

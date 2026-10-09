@@ -1,0 +1,1 @@
+[pscustomobject]@{ UserProfile = $env:USERPROFILE; LocalAppData = $env:LOCALAPPDATA; AppData = $env:APPDATA; ProgramData = $env:ProgramData; ProgramFiles = $env:ProgramFiles; ProgramFilesX86 = ${env:ProgramFiles(x86)}; SystemRoot = $env:SystemRoot } | ConvertTo-Json -Compress

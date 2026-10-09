@@ -1,0 +1,34 @@
+{
+  "sourceKind": "sbx",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "sbx",
+      "key": "dsh-ds",
+      "name": "dsh-ds",
+      "kind": "vm",
+      "version": null,
+      "location": "C:\\Temp\\sbx\\work\\dsh-ds",
+      "details": {
+        "agent": "shell",
+        "status": "stopped",
+        "ports": null
+      }
+    },
+    {
+      "ecosystem": "sbx",
+      "key": "oc-ds",
+      "name": "oc-ds",
+      "kind": "vm",
+      "version": null,
+      "location": "C:\\Temp\\sbx\\work\\oc-ds",
+      "details": {
+        "agent": "opencode",
+        "status": "running",
+        "ports": null
+      }
+    }
+  ],
+  "message": "skipped 1 malformed row"
+}

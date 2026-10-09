@@ -1,0 +1,32 @@
+{
+  "sourceKind": "python",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "python",
+      "key": "3.14",
+      "name": "Python 3.14",
+      "kind": "runtime",
+      "version": "3.14",
+      "location": "C:\\Python314\\python.exe",
+      "details": {
+        "default": true,
+        "vendor": null
+      }
+    },
+    {
+      "ecosystem": "python",
+      "key": "Astral/CPython3.13.11",
+      "name": "Python Astral/CPython3.13.11",
+      "kind": "runtime",
+      "version": "3.13.11",
+      "location": "C:\\Astral\\python.exe",
+      "details": {
+        "default": false,
+        "vendor": "Astral"
+      }
+    }
+  ],
+  "message": "skipped 1 malformed row"
+}

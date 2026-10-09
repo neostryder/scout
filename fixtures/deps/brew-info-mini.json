@@ -1,0 +1,4346 @@
+{
+ "formulae": [
+  {
+   "name": "abseil",
+   "full_name": "abseil",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "20260817.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "20260817.0"
+   },
+   "installed": [
+    {
+     "version": "20260817.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "ada-url",
+   "full_name": "ada-url",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "fmt"
+   ],
+   "keg_only": false,
+   "linked_keg": "4.0.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "4.0.0"
+   },
+   "installed": [
+    {
+     "version": "3.4.3",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "fmt",
+       "version": "12.1.0",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "4.0.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "fmt",
+       "version": "12.2.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "bash",
+   "full_name": "bash",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "ncurses",
+    "readline",
+    "gettext"
+   ],
+   "keg_only": false,
+   "linked_keg": "5.3.9",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "5.3.20"
+   },
+   "installed": [
+    {
+     "version": "5.3.9",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ncurses",
+       "version": "6.6",
+       "declared_directly": true
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "bat",
+   "full_name": "bat",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libgit2",
+    "oniguruma"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.26.1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.26.1"
+   },
+   "installed": [
+    {
+     "version": "0.26.1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libssh2",
+       "version": "1.11.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libgit2",
+       "version": "1.9.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "oniguruma",
+       "version": "6.9.10",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "brotli",
+   "full_name": "brotli",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.2.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.2.0"
+   },
+   "installed": [
+    {
+     "version": "1.2.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "c-ares",
+   "full_name": "c-ares",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.34.8",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.34.8"
+   },
+   "installed": [
+    {
+     "version": "1.34.6",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "1.34.8",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "ca-certificates",
+   "full_name": "ca-certificates",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "2026-09-25",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2026-09-25"
+   },
+   "installed": [
+    {
+     "version": "2026-03-19",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "2026-09-25",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "cairo",
+   "full_name": "cairo",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "fontconfig",
+    "freetype",
+    "glib",
+    "libpng",
+    "libx11",
+    "libxcb",
+    "libxext",
+    "libxrender",
+    "lzo",
+    "pixman",
+    "gettext"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.18.4",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.18.6"
+   },
+   "installed": [
+    {
+     "version": "1.18.4",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      },
+      {
+       "full_name": "freetype",
+       "version": "2.14.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "fontconfig",
+       "version": "2.17.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": false
+      },
+      {
+       "full_name": "glib",
+       "version": "2.88.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxext",
+       "version": "1.3.7",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxrender",
+       "version": "0.9.12",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lzo",
+       "version": "2.10",
+       "declared_directly": true
+      },
+      {
+       "full_name": "pixman",
+       "version": "0.46.4",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "certifi",
+   "full_name": "certifi",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "ca-certificates"
+   ],
+   "keg_only": false,
+   "linked_keg": "2026.2.25",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2026.7.22"
+   },
+   "installed": [
+    {
+     "version": "2026.2.25",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "dav1d",
+   "full_name": "dav1d",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.5.3",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.5.4"
+   },
+   "installed": [
+    {
+     "version": "1.5.3",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "direnv",
+   "full_name": "direnv",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "bash"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.37.1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2.37.1"
+   },
+   "installed": [
+    {
+     "version": "2.37.1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "ncurses",
+       "version": "6.6",
+       "declared_directly": false
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "bash",
+       "version": "5.3.9",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "eza",
+   "full_name": "eza",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libgit2"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.23.5",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.23.5"
+   },
+   "installed": [
+    {
+     "version": "0.23.5",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-09-25",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libssh2",
+       "version": "1.11.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "llhttp",
+       "version": "9.4.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libgit2",
+       "version": "1.9.7",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fd",
+   "full_name": "fd",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "10.5.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "10.5.0"
+   },
+   "installed": [
+    {
+     "version": "10.5.0",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "ffmpeg",
+   "full_name": "ffmpeg",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "dav1d",
+    "lame",
+    "libvmaf",
+    "libvpx",
+    "openssl@3",
+    "opus",
+    "sdl2-compat",
+    "svt-av1",
+    "x264",
+    "x265",
+    "xz"
+   ],
+   "keg_only": false,
+   "linked_keg": "8.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "9.0.2"
+   },
+   "installed": [
+    {
+     "version": "8.1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "dav1d",
+       "version": "1.5.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lame",
+       "version": "3.100",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libvpx",
+       "version": "1.16.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "opus",
+       "version": "1.6.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "sdl2",
+       "version": "2.32.10",
+       "declared_directly": true
+      },
+      {
+       "full_name": "svt-av1",
+       "version": "4.0.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "x264",
+       "version": "r3222",
+       "declared_directly": true
+      },
+      {
+       "full_name": "x265",
+       "version": "4.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fmt",
+   "full_name": "fmt",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "12.2.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "12.2.0"
+   },
+   "installed": [
+    {
+     "version": "12.1.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "12.2.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "fontconfig",
+   "full_name": "fontconfig",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "freetype",
+    "gettext"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.17.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.18.3"
+   },
+   "installed": [
+    {
+     "version": "2.17.1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": false
+      },
+      {
+       "full_name": "freetype",
+       "version": "2.14.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "freetype",
+   "full_name": "freetype",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libpng"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.14.2",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.14.3"
+   },
+   "installed": [
+    {
+     "version": "2.14.2",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fribidi",
+   "full_name": "fribidi",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.0.16",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.0.17"
+   },
+   "installed": [
+    {
+     "version": "1.0.16",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "fzf",
+   "full_name": "fzf",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.70.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "0.74.4"
+   },
+   "installed": [
+    {
+     "version": "0.70.0",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "gcc",
+   "full_name": "gcc",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "gmp",
+    "isl",
+    "libmpc",
+    "mpfr",
+    "zstd"
+   ],
+   "keg_only": false,
+   "linked_keg": "15.2.0_1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "16.2.0"
+   },
+   "installed": [
+    {
+     "version": "15.2.0_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "gmp",
+       "version": "6.3.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "isl",
+       "version": "0.27",
+       "declared_directly": true
+      },
+      {
+       "full_name": "mpfr",
+       "version": "4.2.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libmpc",
+       "version": "1.3.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gettext",
+   "full_name": "gettext",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "json-c",
+    "libunistring"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.0"
+   },
+   "installed": [
+    {
+     "version": "1.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gh",
+   "full_name": "gh",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "2.88.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.102.0"
+   },
+   "installed": [
+    {
+     "version": "2.88.1",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "giflib",
+   "full_name": "giflib",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "6.1.2",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "6.1.3"
+   },
+   "installed": [
+    {
+     "version": "6.1.2",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "git",
+   "full_name": "git",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "pcre2",
+    "gettext"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.48.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.56.0"
+   },
+   "installed": [
+    {
+     "version": "2.48.1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "libunistring",
+       "version": "1.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "0.23.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "pcre2",
+       "version": "10.44",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "git-lfs",
+   "full_name": "git-lfs",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "3.7.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.8.0"
+   },
+   "installed": [
+    {
+     "version": "3.7.1",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "glib",
+   "full_name": "glib",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "pcre2",
+    "gettext"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.88.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.90.0"
+   },
+   "installed": [
+    {
+     "version": "2.88.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gmp",
+   "full_name": "gmp",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "6.3.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "6.3.0"
+   },
+   "installed": [
+    {
+     "version": "6.3.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "go",
+   "full_name": "go",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.26.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.27.1"
+   },
+   "installed": [
+    {
+     "version": "1.26.1",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "graphite2",
+   "full_name": "graphite2",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.3.14",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.3.15"
+   },
+   "installed": [
+    {
+     "version": "1.3.14",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "harfbuzz",
+   "full_name": "harfbuzz",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "cairo",
+    "freetype",
+    "glib",
+    "graphite2",
+    "icu4c@78",
+    "libpng"
+   ],
+   "keg_only": false,
+   "linked_keg": "13.2.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "14.5.0"
+   },
+   "installed": [
+    {
+     "version": "13.2.1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      },
+      {
+       "full_name": "freetype",
+       "version": "2.14.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "fontconfig",
+       "version": "2.17.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": false
+      },
+      {
+       "full_name": "glib",
+       "version": "2.88.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxext",
+       "version": "1.3.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxrender",
+       "version": "0.9.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lzo",
+       "version": "2.10",
+       "declared_directly": false
+      },
+      {
+       "full_name": "pixman",
+       "version": "0.46.4",
+       "declared_directly": false
+      },
+      {
+       "full_name": "cairo",
+       "version": "1.18.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "graphite2",
+       "version": "1.3.14",
+       "declared_directly": true
+      },
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "hdrhistogram_c",
+   "full_name": "hdrhistogram_c",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.11.10",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.11.10"
+   },
+   "installed": [
+    {
+     "version": "0.11.9",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "0.11.10",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "highway",
+   "full_name": "highway",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.4.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.4.0"
+   },
+   "installed": [
+    {
+     "version": "1.4.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "httpie",
+   "full_name": "httpie",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "certifi",
+    "python@3.14"
+   ],
+   "keg_only": false,
+   "linked_keg": "3.2.4_6",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.2.4"
+   },
+   "installed": [
+    {
+     "version": "3.2.4_6",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "certifi",
+       "version": "2026.2.25",
+       "declared_directly": true
+      },
+      {
+       "full_name": "mpdecimal",
+       "version": "4.0.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "sqlite",
+       "version": "3.51.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "python@3.14",
+       "version": "3.14.3",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "icu4c@78",
+   "full_name": "icu4c@78",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "78.3"
+   },
+   "installed": [
+    {
+     "version": "78.3",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "iperf3",
+   "full_name": "iperf3",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "openssl@4"
+   ],
+   "keg_only": false,
+   "linked_keg": "3.18",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.22"
+   },
+   "installed": [
+    {
+     "version": "3.18",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2024-12-31",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.4.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "isl",
+   "full_name": "isl",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "gmp"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.27",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "0.28"
+   },
+   "installed": [
+    {
+     "version": "0.27",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "gmp",
+       "version": "6.3.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "jpeg-turbo",
+   "full_name": "jpeg-turbo",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "3.1.3",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.2.0"
+   },
+   "installed": [
+    {
+     "version": "3.1.3",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "jq",
+   "full_name": "jq",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "oniguruma"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.8.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.8.2"
+   },
+   "installed": [
+    {
+     "version": "1.8.1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "oniguruma",
+       "version": "6.9.10",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "just",
+   "full_name": "just",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.47.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.58.0"
+   },
+   "installed": [
+    {
+     "version": "1.47.1",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "lame",
+   "full_name": "lame",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "mpg123"
+   ],
+   "keg_only": false,
+   "linked_keg": "3.100",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "4.0"
+   },
+   "installed": [
+    {
+     "version": "3.100",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "leptonica",
+   "full_name": "leptonica",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "giflib",
+    "jpeg-turbo",
+    "libpng",
+    "libtiff",
+    "openjpeg",
+    "webp"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.87.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.87.0"
+   },
+   "installed": [
+    {
+     "version": "1.87.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "giflib",
+       "version": "6.1.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libtiff",
+       "version": "4.7.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "little-cms2",
+       "version": "2.18",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openjpeg",
+       "version": "2.5.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "webp",
+       "version": "1.6.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libarchive",
+   "full_name": "libarchive",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libb2",
+    "lz4",
+    "xz",
+    "zstd"
+   ],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.8.9"
+   },
+   "installed": [
+    {
+     "version": "3.8.6",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libb2",
+       "version": "0.98.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libb2",
+   "full_name": "libb2",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.98.1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.98.1"
+   },
+   "installed": [
+    {
+     "version": "0.98.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libdatrie",
+   "full_name": "libdatrie",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.2.14",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.2.14"
+   },
+   "installed": [
+    {
+     "version": "0.2.14",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libffi",
+   "full_name": "libffi",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "3.8.0"
+   },
+   "installed": [
+    {
+     "version": "3.8.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libgit2",
+   "full_name": "libgit2",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libssh2",
+    "llhttp"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.9.7",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.9.7"
+   },
+   "installed": [
+    {
+     "version": "1.9.2_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libssh2",
+       "version": "1.11.1",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "1.9.7",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-09-25",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libssh2",
+       "version": "1.11.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "llhttp",
+       "version": "9.4.3",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libmpc",
+   "full_name": "libmpc",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "gmp",
+    "mpfr"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.3.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.4.1"
+   },
+   "installed": [
+    {
+     "version": "1.3.1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "gmp",
+       "version": "6.3.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "mpfr",
+       "version": "4.2.2",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libnghttp2",
+   "full_name": "libnghttp2",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.70.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.70.0"
+   },
+   "installed": [
+    {
+     "version": "1.68.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "1.70.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libnghttp3",
+   "full_name": "libnghttp3",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.15.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.18.0"
+   },
+   "installed": [
+    {
+     "version": "1.15.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libngtcp2",
+   "full_name": "libngtcp2",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "openssl@3"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.21.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.25.0"
+   },
+   "installed": [
+    {
+     "version": "1.21.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libomp",
+   "full_name": "libomp",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "23.1.2"
+   },
+   "installed": [
+    {
+     "version": "22.1.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libpng",
+   "full_name": "libpng",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.6.55",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.6.58"
+   },
+   "installed": [
+    {
+     "version": "1.6.55",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libssh2",
+   "full_name": "libssh2",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "openssl@3"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.11.1_6",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.11.1"
+   },
+   "installed": [
+    {
+     "version": "1.11.1_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "1.11.1_6",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-09-25",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.5",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libthai",
+   "full_name": "libthai",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libdatrie"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.1.30",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.1.30"
+   },
+   "installed": [
+    {
+     "version": "0.1.30",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libdatrie",
+       "version": "0.2.14",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libtiff",
+   "full_name": "libtiff",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "jpeg-turbo",
+    "webp",
+    "xz",
+    "zstd"
+   ],
+   "keg_only": false,
+   "linked_keg": "4.7.1_1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "4.7.2"
+   },
+   "installed": [
+    {
+     "version": "4.7.1_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libtommath",
+   "full_name": "libtommath",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.3.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.3.0"
+   },
+   "installed": [
+    {
+     "version": "1.3.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libunistring",
+   "full_name": "libunistring",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.4.2",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.4.2"
+   },
+   "installed": [
+    {
+     "version": "1.4.2",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libuv",
+   "full_name": "libuv",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.52.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.53.0"
+   },
+   "installed": [
+    {
+     "version": "1.52.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libvpx",
+   "full_name": "libvpx",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.16.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.17.0"
+   },
+   "installed": [
+    {
+     "version": "1.16.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "libx11",
+   "full_name": "libx11",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libxcb",
+    "xorgproto"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.8.13",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.8.13"
+   },
+   "installed": [
+    {
+     "version": "1.8.13",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libxau",
+   "full_name": "libxau",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "xorgproto"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.0.12",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.0.12"
+   },
+   "installed": [
+    {
+     "version": "1.0.12",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libxcb",
+   "full_name": "libxcb",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libxau",
+    "libxdmcp"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.17.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.17.0"
+   },
+   "installed": [
+    {
+     "version": "1.17.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libxdmcp",
+   "full_name": "libxdmcp",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "xorgproto"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.1.5",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.1.5"
+   },
+   "installed": [
+    {
+     "version": "1.1.5",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libxext",
+   "full_name": "libxext",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libx11",
+    "xorgproto"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.3.7",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.3.7"
+   },
+   "installed": [
+    {
+     "version": "1.3.7",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "libxrender",
+   "full_name": "libxrender",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libx11",
+    "xorgproto"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.9.12",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.9.12"
+   },
+   "installed": [
+    {
+     "version": "0.9.12",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "little-cms2",
+   "full_name": "little-cms2",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "jpeg-turbo",
+    "libtiff"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.18",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.19.1"
+   },
+   "installed": [
+    {
+     "version": "2.18",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libtiff",
+       "version": "4.7.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "llhttp",
+   "full_name": "llhttp",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "9.4.3",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "9.4.3"
+   },
+   "installed": [
+    {
+     "version": "9.3.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "9.4.3",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "lz4",
+   "full_name": "lz4",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.10.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.10.0"
+   },
+   "installed": [
+    {
+     "version": "1.10.0",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "lzo",
+   "full_name": "lzo",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "2.10",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2.10"
+   },
+   "installed": [
+    {
+     "version": "2.10",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "merve",
+   "full_name": "merve",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "simdutf"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.2.2_3",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.2.2"
+   },
+   "installed": [
+    {
+     "version": "1.2.2_3",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "simdutf",
+       "version": "9.2.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "mkcert",
+   "full_name": "mkcert",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.4.4",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.4.4"
+   },
+   "installed": [
+    {
+     "version": "1.4.4",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "mpdecimal",
+   "full_name": "mpdecimal",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "4.0.1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "4.0.1"
+   },
+   "installed": [
+    {
+     "version": "4.0.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "mpfr",
+   "full_name": "mpfr",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "gmp"
+   ],
+   "keg_only": false,
+   "linked_keg": "4.2.2",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "4.2.2"
+   },
+   "installed": [
+    {
+     "version": "4.2.2",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "gmp",
+       "version": "6.3.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "nbytes",
+   "full_name": "nbytes",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.1.4",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.1.4"
+   },
+   "installed": [
+    {
+     "version": "0.1.4",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "ncurses",
+   "full_name": "ncurses",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "6.6"
+   },
+   "installed": [
+    {
+     "version": "6.6",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "node",
+   "full_name": "node",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "abseil",
+    "ada-url",
+    "brotli",
+    "c-ares",
+    "hdrhistogram_c",
+    "icu4c@78",
+    "libffi",
+    "libnghttp2",
+    "libuv",
+    "llhttp",
+    "merve",
+    "nbytes",
+    "openssl@3",
+    "simdjson",
+    "simdutf",
+    "sqlite",
+    "uvwasi",
+    "zstd",
+    "highway"
+   ],
+   "keg_only": false,
+   "linked_keg": "26.10.0_1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "26.10.0"
+   },
+   "installed": [
+    {
+     "version": "25.8.1_1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "fmt",
+       "version": "12.1.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "ada-url",
+       "version": "3.4.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "brotli",
+       "version": "1.2.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "c-ares",
+       "version": "1.34.6",
+       "declared_directly": true
+      },
+      {
+       "full_name": "hdrhistogram_c",
+       "version": "0.11.9",
+       "declared_directly": true
+      },
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libnghttp2",
+       "version": "1.68.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libnghttp3",
+       "version": "1.15.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libngtcp2",
+       "version": "1.21.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libuv",
+       "version": "1.52.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "llhttp",
+       "version": "9.3.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "simdjson",
+       "version": "4.4.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "sqlite",
+       "version": "3.51.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "uvwasi",
+       "version": "0.0.23",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "26.10.0_1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "abseil",
+       "version": "20260817.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "fmt",
+       "version": "12.2.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "ada-url",
+       "version": "4.0.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "brotli",
+       "version": "1.2.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "c-ares",
+       "version": "1.34.8",
+       "declared_directly": true
+      },
+      {
+       "full_name": "hdrhistogram_c",
+       "version": "0.11.10",
+       "declared_directly": true
+      },
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libffi",
+       "version": "3.8.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libnghttp2",
+       "version": "1.70.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libuv",
+       "version": "1.53.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "llhttp",
+       "version": "9.4.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "simdutf",
+       "version": "9.2.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "merve",
+       "version": "1.2.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "nbytes",
+       "version": "0.1.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-09-25",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.5",
+       "declared_directly": true
+      },
+      {
+       "full_name": "simdjson",
+       "version": "4.6.11",
+       "declared_directly": true
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.6",
+       "declared_directly": false
+      },
+      {
+       "full_name": "sqlite",
+       "version": "3.53.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "uvwasi",
+       "version": "0.0.23",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.4",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      },
+      {
+       "full_name": "highway",
+       "version": "1.4.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "oniguruma",
+   "full_name": "oniguruma",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "6.9.10",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "6.9.10"
+   },
+   "installed": [
+    {
+     "version": "6.9.10",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "openblas",
+   "full_name": "openblas",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "gcc",
+    "libomp"
+   ],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "0.3.34"
+   },
+   "installed": [
+    {
+     "version": "0.3.31_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "gmp",
+       "version": "6.3.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "isl",
+       "version": "0.27",
+       "declared_directly": false
+      },
+      {
+       "full_name": "mpfr",
+       "version": "4.2.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libmpc",
+       "version": "1.3.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gcc",
+       "version": "15.2.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libomp",
+       "version": "22.1.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "openjpeg",
+   "full_name": "openjpeg",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libpng",
+    "libtiff",
+    "little-cms2"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.5.4",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2.5.4"
+   },
+   "installed": [
+    {
+     "version": "2.5.4",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      },
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libtiff",
+       "version": "4.7.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "little-cms2",
+       "version": "2.18",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "openssl@3",
+   "full_name": "openssl@3",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "ca-certificates"
+   ],
+   "keg_only": true,
+   "linked_keg": "3.6.5",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "3.6.5"
+   },
+   "installed": [
+    {
+     "version": "3.3.1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2024-07-02",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "3.4.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2024-12-31",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "3.6.1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "3.6.5",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-09-25",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "opus",
+   "full_name": "opus",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "1.6.1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.6.1"
+   },
+   "installed": [
+    {
+     "version": "1.6.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "pango",
+   "full_name": "pango",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "cairo",
+    "fontconfig",
+    "freetype",
+    "fribidi",
+    "glib",
+    "harfbuzz",
+    "libthai"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.57.0_2",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.58.2"
+   },
+   "installed": [
+    {
+     "version": "1.57.0_2",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": false
+      },
+      {
+       "full_name": "freetype",
+       "version": "2.14.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "fontconfig",
+       "version": "2.17.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": false
+      },
+      {
+       "full_name": "glib",
+       "version": "2.88.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxext",
+       "version": "1.3.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxrender",
+       "version": "0.9.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lzo",
+       "version": "2.10",
+       "declared_directly": false
+      },
+      {
+       "full_name": "pixman",
+       "version": "0.46.4",
+       "declared_directly": false
+      },
+      {
+       "full_name": "cairo",
+       "version": "1.18.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "fribidi",
+       "version": "1.0.16",
+       "declared_directly": true
+      },
+      {
+       "full_name": "graphite2",
+       "version": "1.3.14",
+       "declared_directly": false
+      },
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "harfbuzz",
+       "version": "13.2.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libdatrie",
+       "version": "0.2.14",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libthai",
+       "version": "0.1.30",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "pcre2",
+   "full_name": "pcre2",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "10.47_1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "10.49"
+   },
+   "installed": [
+    {
+     "version": "10.47_1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "pipx",
+   "full_name": "pipx",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "python@3.14"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.10.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "1.17.7"
+   },
+   "installed": [
+    {
+     "version": "1.10.0",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "mpdecimal",
+       "version": "4.0.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "sqlite",
+       "version": "3.51.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "python@3.14",
+       "version": "3.14.3",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "pixman",
+   "full_name": "pixman",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.46.4",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.46.4"
+   },
+   "installed": [
+    {
+     "version": "0.46.4",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "pnpm",
+   "full_name": "pnpm",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "10.32.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "12.8.1"
+   },
+   "installed": [
+    {
+     "version": "10.32.1",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "python@3.12",
+   "full_name": "python@3.12",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "mpdecimal",
+    "openssl@3",
+    "sqlite",
+    "xz"
+   ],
+   "keg_only": false,
+   "linked_keg": "3.12.13",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.12.14"
+   },
+   "installed": [
+    {
+     "version": "3.12.13",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "mpdecimal",
+       "version": "4.0.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "sqlite",
+       "version": "3.51.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "python@3.14",
+   "full_name": "python@3.14",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "mpdecimal",
+    "openssl@3",
+    "sqlite",
+    "xz",
+    "zstd"
+   ],
+   "keg_only": false,
+   "linked_keg": "3.14.3_1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "3.14.7"
+   },
+   "installed": [
+    {
+     "version": "3.14.3_1",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "mpdecimal",
+       "version": "4.0.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "sqlite",
+       "version": "3.51.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r",
+   "full_name": "r",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "cairo",
+    "gcc",
+    "jpeg-turbo",
+    "libpng",
+    "libx11",
+    "openblas",
+    "pcre2",
+    "readline",
+    "tcl-tk",
+    "xz",
+    "zstd",
+    "fontconfig",
+    "freetype",
+    "gettext",
+    "libxau",
+    "libxcb",
+    "libxdmcp",
+    "libxext",
+    "libxrender",
+    "pixman"
+   ],
+   "keg_only": false,
+   "linked_keg": "4.5.3",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "4.6.1"
+   },
+   "installed": [
+    {
+     "version": "4.5.3",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      },
+      {
+       "full_name": "freetype",
+       "version": "2.14.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "fontconfig",
+       "version": "2.17.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": true
+      },
+      {
+       "full_name": "glib",
+       "version": "2.88.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxext",
+       "version": "1.3.7",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libxrender",
+       "version": "0.9.12",
+       "declared_directly": true
+      },
+      {
+       "full_name": "lzo",
+       "version": "2.10",
+       "declared_directly": false
+      },
+      {
+       "full_name": "pixman",
+       "version": "0.46.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "cairo",
+       "version": "1.18.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "gmp",
+       "version": "6.3.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "isl",
+       "version": "0.27",
+       "declared_directly": false
+      },
+      {
+       "full_name": "mpfr",
+       "version": "4.2.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libmpc",
+       "version": "1.3.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": true
+      },
+      {
+       "full_name": "gcc",
+       "version": "15.2.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libomp",
+       "version": "22.1.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openblas",
+       "version": "0.3.31",
+       "declared_directly": true
+      },
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libtommath",
+       "version": "1.3.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "tcl-tk",
+       "version": "9.0.3",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "readline",
+   "full_name": "readline",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "8.3.6"
+   },
+   "installed": [
+    {
+     "version": "8.3.3",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "8.3.6",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "ripgrep",
+   "full_name": "ripgrep",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "pcre2"
+   ],
+   "keg_only": false,
+   "linked_keg": "15.1.0",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "15.2.0"
+   },
+   "installed": [
+    {
+     "version": "15.1.0",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "sdl2-compat",
+   "full_name": "sdl2-compat",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "sdl3"
+   ],
+   "keg_only": false,
+   "linked_keg": "2.32.10",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "2.32.72"
+   },
+   "installed": [
+    {
+     "version": "2.32.10",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "sevenzip",
+   "full_name": "sevenzip",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "26.00",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "26.03"
+   },
+   "installed": [
+    {
+     "version": "26.00",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "simdjson",
+   "full_name": "simdjson",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "4.6.11",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "4.6.11"
+   },
+   "installed": [
+    {
+     "version": "4.4.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "4.6.11",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "simdutf",
+   "full_name": "simdutf",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "icu4c@78"
+   ],
+   "keg_only": false,
+   "linked_keg": "9.2.1_1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "9.2.1"
+   },
+   "installed": [
+    {
+     "version": "9.2.1_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "sqlite",
+   "full_name": "sqlite",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "readline"
+   ],
+   "keg_only": true,
+   "linked_keg": null,
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "3.53.4"
+   },
+   "installed": [
+    {
+     "version": "3.51.3",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "readline",
+       "version": "8.3.3",
+       "declared_directly": true
+      }
+     ]
+    },
+    {
+     "version": "3.53.4",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "readline",
+       "version": "8.3.6",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "svt-av1",
+   "full_name": "svt-av1",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "4.0.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "4.2.0"
+   },
+   "installed": [
+    {
+     "version": "4.0.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "tcl-tk",
+   "full_name": "tcl-tk",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libtommath"
+   ],
+   "keg_only": false,
+   "linked_keg": "9.0.3",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "9.0.4"
+   },
+   "installed": [
+    {
+     "version": "9.0.3",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libtommath",
+       "version": "1.3.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "ca-certificates",
+       "version": "2026-03-19",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openssl@3",
+       "version": "3.6.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "tesseract",
+   "full_name": "tesseract",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "cairo",
+    "fontconfig",
+    "glib",
+    "harfbuzz",
+    "icu4c@78",
+    "leptonica",
+    "libarchive",
+    "pango",
+    "freetype",
+    "gettext"
+   ],
+   "keg_only": false,
+   "linked_keg": "5.5.2",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "5.5.3"
+   },
+   "installed": [
+    {
+     "version": "5.5.2",
+     "installed_on_request": true,
+     "runtime_dependencies": [
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": false
+      },
+      {
+       "full_name": "freetype",
+       "version": "2.14.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libunistring",
+       "version": "1.4.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "gettext",
+       "version": "1.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "fontconfig",
+       "version": "2.17.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "pcre2",
+       "version": "10.47",
+       "declared_directly": false
+      },
+      {
+       "full_name": "glib",
+       "version": "2.88.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xorgproto",
+       "version": "2025.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxau",
+       "version": "1.0.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxdmcp",
+       "version": "1.1.5",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxcb",
+       "version": "1.17.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libx11",
+       "version": "1.8.13",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxext",
+       "version": "1.3.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libxrender",
+       "version": "0.9.12",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lzo",
+       "version": "2.10",
+       "declared_directly": false
+      },
+      {
+       "full_name": "pixman",
+       "version": "0.46.4",
+       "declared_directly": false
+      },
+      {
+       "full_name": "cairo",
+       "version": "1.18.4",
+       "declared_directly": true
+      },
+      {
+       "full_name": "graphite2",
+       "version": "1.3.14",
+       "declared_directly": false
+      },
+      {
+       "full_name": "icu4c@78",
+       "version": "78.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "harfbuzz",
+       "version": "13.2.1",
+       "declared_directly": true
+      },
+      {
+       "full_name": "giflib",
+       "version": "6.1.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": false
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libtiff",
+       "version": "4.7.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "little-cms2",
+       "version": "2.18",
+       "declared_directly": false
+      },
+      {
+       "full_name": "openjpeg",
+       "version": "2.5.4",
+       "declared_directly": false
+      },
+      {
+       "full_name": "webp",
+       "version": "1.6.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "leptonica",
+       "version": "1.87.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libb2",
+       "version": "0.98.1",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libarchive",
+       "version": "3.8.6",
+       "declared_directly": true
+      },
+      {
+       "full_name": "fribidi",
+       "version": "1.0.16",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libdatrie",
+       "version": "0.2.14",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libthai",
+       "version": "0.1.30",
+       "declared_directly": false
+      },
+      {
+       "full_name": "pango",
+       "version": "1.57.0",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "tree",
+   "full_name": "tree",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "2.3.2",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2.3.2"
+   },
+   "installed": [
+    {
+     "version": "2.3.2",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "uv",
+   "full_name": "uv",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "0.10.12",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "0.12.21"
+   },
+   "installed": [
+    {
+     "version": "0.10.12",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "uvwasi",
+   "full_name": "uvwasi",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "libuv"
+   ],
+   "keg_only": false,
+   "linked_keg": "0.0.23",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "0.0.23"
+   },
+   "installed": [
+    {
+     "version": "0.0.23",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "libuv",
+       "version": "1.52.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "webp",
+   "full_name": "webp",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "giflib",
+    "jpeg-turbo",
+    "libpng"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.6.0",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.6.0"
+   },
+   "installed": [
+    {
+     "version": "1.6.0",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "giflib",
+       "version": "6.1.2",
+       "declared_directly": true
+      },
+      {
+       "full_name": "jpeg-turbo",
+       "version": "3.1.3",
+       "declared_directly": true
+      },
+      {
+       "full_name": "libpng",
+       "version": "1.6.55",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": false
+      },
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": false
+      },
+      {
+       "full_name": "zstd",
+       "version": "1.5.7",
+       "declared_directly": false
+      },
+      {
+       "full_name": "libtiff",
+       "version": "4.7.1",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "x264",
+   "full_name": "x264",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "r3222",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "r3222"
+   },
+   "installed": [
+    {
+     "version": "r3222",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "x265",
+   "full_name": "x265",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "4.1",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "4.3"
+   },
+   "installed": [
+    {
+     "version": "4.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "xorgproto",
+   "full_name": "xorgproto",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "2025.1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "2025.1"
+   },
+   "installed": [
+    {
+     "version": "2025.1",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "xz",
+   "full_name": "xz",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "5.8.4",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "5.8.4"
+   },
+   "installed": [
+    {
+     "version": "5.8.2",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    },
+    {
+     "version": "5.8.4",
+     "installed_on_request": false,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "yq",
+   "full_name": "yq",
+   "tap": "homebrew/core",
+   "dependencies": [],
+   "keg_only": false,
+   "linked_keg": "4.52.4",
+   "pinned": false,
+   "outdated": true,
+   "versions": {
+    "stable": "4.54.1"
+   },
+   "installed": [
+    {
+     "version": "4.52.4",
+     "installed_on_request": true,
+     "runtime_dependencies": []
+    }
+   ]
+  },
+  {
+   "name": "zstd",
+   "full_name": "zstd",
+   "tap": "homebrew/core",
+   "dependencies": [
+    "lz4",
+    "xz"
+   ],
+   "keg_only": false,
+   "linked_keg": "1.5.7_1",
+   "pinned": false,
+   "outdated": false,
+   "versions": {
+    "stable": "1.5.7"
+   },
+   "installed": [
+    {
+     "version": "1.5.7_1",
+     "installed_on_request": false,
+     "runtime_dependencies": [
+      {
+       "full_name": "lz4",
+       "version": "1.10.0",
+       "declared_directly": true
+      },
+      {
+       "full_name": "xz",
+       "version": "5.8.2",
+       "declared_directly": true
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "casks": []
+}

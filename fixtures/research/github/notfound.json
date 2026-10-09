@@ -1,0 +1,19 @@
+{
+  "url": "https://api.github.com/repos/example/demo/releases?per_page=30",
+  "status": 404,
+  "body": "{\"message\":\"Not Found\"}",
+  "target": {
+    "id": 1,
+    "ecosystem": "npm",
+    "key": "demo",
+    "name": "demo",
+    "tap": null,
+    "homepage": "https://github.com/example/demo",
+    "details": {}
+  },
+  "expected": {
+    "status": "notfound",
+    "answers": [],
+    "message": "the source does not list this package"
+  }
+}

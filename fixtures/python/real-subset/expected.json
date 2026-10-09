@@ -1,0 +1,79 @@
+{
+  "sourceKind": "python",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "python",
+      "key": "3.14",
+      "name": "Python 3.14",
+      "kind": "runtime",
+      "version": "3.14",
+      "location": "C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+      "details": {
+        "default": true,
+        "vendor": null
+      }
+    },
+    {
+      "ecosystem": "python",
+      "key": "3.13",
+      "name": "Python 3.13",
+      "kind": "runtime",
+      "version": "3.13",
+      "location": "C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "details": {
+        "default": false,
+        "vendor": null
+      }
+    },
+    {
+      "ecosystem": "python",
+      "key": "3.12",
+      "name": "Python 3.12",
+      "kind": "runtime",
+      "version": "3.12",
+      "location": "C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "details": {
+        "default": false,
+        "vendor": null
+      }
+    },
+    {
+      "ecosystem": "python",
+      "key": "Astral/CPython3.13.11",
+      "name": "Python Astral/CPython3.13.11",
+      "kind": "runtime",
+      "version": "3.13.11",
+      "location": "C:\\Users\\USER\\AppData\\Roaming\\uv\\python\\cpython-3.13.11-windows-x86_64-none\\python.exe",
+      "details": {
+        "default": false,
+        "vendor": "Astral"
+      }
+    },
+    {
+      "ecosystem": "python",
+      "key": "Astral/CPython3.12.10",
+      "name": "Python Astral/CPython3.12.10",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "location": "C:\\Users\\USER\\Downloads\\StabilityMatrix-win-x64\\Data\\Assets\\Python\\cpython-3.12.10-windows-x86_64-none\\python.exe",
+      "details": {
+        "default": false,
+        "vendor": "Astral"
+      }
+    },
+    {
+      "ecosystem": "python",
+      "key": "Astral/CPython3.11.15",
+      "name": "Python Astral/CPython3.11.15",
+      "kind": "runtime",
+      "version": "3.11.15",
+      "location": "C:\\Users\\USER\\AppData\\Roaming\\uv\\python\\cpython-3.11.15-windows-x86_64-none\\python.exe",
+      "details": {
+        "default": false,
+        "vendor": "Astral"
+      }
+    }
+  ]
+}

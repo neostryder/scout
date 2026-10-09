@@ -1,0 +1,19 @@
+{
+  "sourceKind": "pipx",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "pipx",
+      "key": "httpie",
+      "name": "httpie",
+      "kind": "package",
+      "version": "3.2.4",
+      "location": "C:\\Users\\USER\\pipx\\venvs\\httpie\\Scripts",
+      "details": {
+        "package": "httpie",
+        "pythonVersion": "Python 3.14.3"
+      }
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "origin": "win-tasks",
+  "status": "ok",
+  "facts": [
+    {
+      "kind": "scheduled-task",
+      "name": "\\Adobe Acrobat Update Task",
+      "displayName": "Adobe Acrobat Update Task",
+      "domain": "system",
+      "program": "C:/Program Files (x86)/Common Files/Adobe/ARM/1.0/AdobeARM.exe",
+      "state": "stopped",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": null,
+      "triggers": [
+        "Logon",
+        "Daily"
+      ],
+      "lastRun": "2026-10-06T14:41:17.0000000-07:00",
+      "lastResult": "0"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Office\\Office Feature Updates",
+      "displayName": "Office Feature Updates",
+      "domain": "system",
+      "program": "C:/Program Files/Microsoft Office/root/Office16/sdxhelper.exe",
+      "state": "stopped",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": null,
+      "triggers": [
+        "Daily",
+        "Daily",
+        "Daily",
+        "Daily",
+        "Daily",
+        "Daily"
+      ],
+      "lastRun": "2026-10-06T16:43:29.0000000-07:00",
+      "lastResult": "0"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Office\\Office Actions Server",
+      "displayName": "Office Actions Server",
+      "domain": "system",
+      "program": "C:/Program Files/Microsoft Office/root/VFS/ProgramFilesCommonX64/Microsoft Shared/Office16/ActionsServer/ActionsServer.exe",
+      "state": "stopped",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": null,
+      "triggers": [
+        "Logon",
+        "Time"
+      ],
+      "lastRun": "2026-09-28T21:09:17.0000000-07:00",
+      "lastResult": "0"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Windows\\AppID\\PolicyConverter",
+      "displayName": "PolicyConverter",
+      "domain": "system",
+      "program": "%windir%/system32/appidpolicyconverter.exe",
+      "state": "disabled",
+      "startMode": null,
+      "enabled": false,
+      "pid": null,
+      "runAs": "SYSTEM",
+      "triggers": [
+        ""
+      ],
+      "lastRun": null,
+      "lastResult": "267011"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Windows\\Multimedia\\SystemSoundsService",
+      "displayName": "SystemSoundsService",
+      "domain": "system",
+      "program": null,
+      "state": "running",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": null,
+      "triggers": [
+        "Logon"
+      ],
+      "lastRun": "2026-09-28T20:59:17.0000000-07:00",
+      "lastResult": "267009"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Windows\\Windows Media Sharing\\UpdateLibrary",
+      "displayName": "UpdateLibrary",
+      "domain": "system",
+      "program": "%ProgramFiles%/Windows Media Player/wmpnscfg.exe",
+      "state": "stopped",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": null,
+      "triggers": [
+        "Event"
+      ],
+      "lastRun": null,
+      "lastResult": "267011"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Driver Easy Scheduled Scan",
+      "displayName": "Driver Easy Scheduled Scan",
+      "domain": "system",
+      "program": "C:/Program Files/Easeware/DriverEasy/DriverEasy.exe",
+      "state": "stopped",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": "USER",
+      "triggers": [
+        ""
+      ],
+      "lastRun": "2026-10-05T22:03:00.0000000-07:00",
+      "lastResult": "0"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Windows\\Active Directory Rights Management Services Client\\AD RMS Rights Policy Template Management (Automated)",
+      "displayName": "AD RMS Rights Policy Template Management (Automated)",
+      "domain": "system",
+      "program": null,
+      "state": "disabled",
+      "startMode": null,
+      "enabled": false,
+      "pid": null,
+      "runAs": null,
+      "triggers": [
+        "Daily",
+        "Logon"
+      ],
+      "lastRun": null,
+      "lastResult": "267011"
+    },
+    {
+      "kind": "scheduled-task",
+      "name": "\\Microsoft\\Windows\\.NET Framework\\.NET Framework NGEN v4.0.30319",
+      "displayName": ".NET Framework NGEN v4.0.30319",
+      "domain": "system",
+      "program": null,
+      "state": "stopped",
+      "startMode": null,
+      "enabled": true,
+      "pid": null,
+      "runAs": "SYSTEM",
+      "triggers": [
+        ""
+      ],
+      "lastRun": "2026-09-18T10:36:58.0000000-07:00",
+      "lastResult": "2147946720"
+    }
+  ]
+}

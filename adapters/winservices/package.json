@@ -1,0 +1,1 @@
+{"name":"@scout/adapter-winservices","private":true,"version":"0.0.0","type":"module","exports":{".":"./src/index.ts"},"scripts":{"test":"node --test test/*.test.ts"},"dependencies":{"@scout/core":"workspace:*"}}

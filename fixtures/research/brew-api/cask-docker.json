@@ -1,0 +1,22 @@
+{
+ "url": "https://formulae.brew.sh/api/cask/docker-desktop.json",
+ "status": 200,
+ "body": "{\"token\":\"docker-desktop\",\"version\":\"4.93.0,240920\",\"deprecated\":false,\"disabled\":false}",
+ "target": {
+  "id": 3,
+  "ecosystem": "cask",
+  "key": "docker-desktop",
+  "name": "Docker Desktop",
+  "tap": "homebrew/cask"
+ },
+ "expected": {
+  "status": "ok",
+  "answers": [
+   {
+    "channel": "stable",
+    "version": "4.93.0",
+    "installable": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,20 @@
+{
+  "sourceKind": "gobin",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "go-bin",
+      "key": "golang.org/x/tools/gopls",
+      "name": "gopls",
+      "kind": "binary",
+      "version": "v0.21.1",
+      "location": "/Users/USER/go/bin/gopls",
+      "details": {
+        "package": "golang.org/x/tools/gopls",
+        "module": "golang.org/x/tools/gopls"
+      }
+    }
+  ],
+  "message": "skipped 1 malformed line(s)"
+}

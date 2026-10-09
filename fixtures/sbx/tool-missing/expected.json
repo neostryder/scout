@@ -1,0 +1,7 @@
+{
+  "sourceKind": "sbx",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "probe did not run (exit 127): sbx.exe: command not found"
+}

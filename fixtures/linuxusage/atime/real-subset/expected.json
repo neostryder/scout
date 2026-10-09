@@ -1,0 +1,102 @@
+{
+  "origin": "linux-atime",
+  "status": "ok",
+  "signals": [
+    {
+      "match": {
+        "path": "/usr/bin/python3"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/node"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/git"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/curl"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/ssh"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/rg"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/make"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/cargo"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/bin/go"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/sbin/cron"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/usr/local/bin/scout"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "/opt/tool/bin/tool"
+      },
+      "kind": "last_used",
+      "value": null,
+      "available": true
+    }
+  ]
+}

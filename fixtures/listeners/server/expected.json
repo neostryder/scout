@@ -1,0 +1,96 @@
+{
+  "origin": "lsof",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 49399,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1294,
+      "processName": "rapportd",
+      "processPath": "/usr/libexec/rapportd",
+      "container": null
+    },
+    {
+      "port": 7000,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1345,
+      "processName": "ControlCenter",
+      "processPath": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      "container": null
+    },
+    {
+      "port": 5000,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1345,
+      "processName": "ControlCenter",
+      "processPath": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      "container": null
+    },
+    {
+      "port": 8765,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 2878,
+      "processName": "Python",
+      "processPath": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python",
+      "container": null
+    },
+    {
+      "port": 20241,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 2903,
+      "processName": "cloudflared",
+      "processPath": "/opt/homebrew/opt/cloudflared/bin/cloudflared",
+      "container": null
+    },
+    {
+      "port": 41343,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 2961,
+      "processName": "LM Studio",
+      "processPath": "/Applications/LM Studio.app/Contents/MacOS/LM Studio",
+      "container": null
+    },
+    {
+      "port": 1234,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 2961,
+      "processName": "LM Studio",
+      "processPath": "/Applications/LM Studio.app/Contents/MacOS/LM Studio",
+      "container": null
+    },
+    {
+      "port": 56831,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 30123,
+      "processName": "limactl",
+      "processPath": "/Users/USER/.homebrew/bin/limactl",
+      "container": null
+    },
+    {
+      "port": 7679,
+      "protocol": "tcp",
+      "address": "::1",
+      "bind": "loopback",
+      "pid": 60665,
+      "processName": "Google Drive",
+      "processPath": "/Applications/Google Drive.app/Contents/MacOS/Google Drive",
+      "container": null
+    }
+  ]
+}

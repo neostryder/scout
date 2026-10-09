@@ -1,0 +1,4 @@
+{
+  "claude": { "exitCode": 0, "stdout": "git\t2\t4\t2026-09-30T10:00:00.000Z\tclaude\n#day\tgit\t2026-09-30\t2\t2026-09-30T10:00:00.000Z\tclaude\n#checkpoint {\"files\":{}}\n", "stderr": "" },
+  "codex": { "exitCode": 0, "stdout": "git\t1\t2\t2026-09-30T11:00:00.000Z\tcodex\n#checkpoint {\"files\":{}}\n", "stderr": "" }
+}

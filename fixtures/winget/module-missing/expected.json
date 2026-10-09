@@ -1,0 +1,7 @@
+{
+ "sourceKind": "winget",
+ "location": "",
+ "status": "skipped",
+ "installs": [],
+ "message": "winget module did not run (exit 1): Import-Module: The specified module 'Microsoft.WinGet.Client' was not loaded because no valid module file was found in any module directory."
+}

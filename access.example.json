@@ -1,0 +1,6 @@
+{
+  "host": "scout.example.com",
+  "teamDomain": "your-team.cloudflareaccess.com",
+  "aud": "the-application-audience-tag-from-cloudflare-access",
+  "allowedEmails": ["you@example.com"]
+}

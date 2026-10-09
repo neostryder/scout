@@ -1,0 +1,17 @@
+{
+  "name": "@scout/ops",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@scout/adapter-listeners": "workspace:*",
+    "@scout/adapter-services": "workspace:*",
+    "@scout/core": "workspace:*"
+  }
+}

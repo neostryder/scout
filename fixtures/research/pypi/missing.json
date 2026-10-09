@@ -1,0 +1,17 @@
+{
+ "url": "https://pypi.org/pypi/no-such-package-scout-xyz/json",
+ "status": 404,
+ "body": "{\"message\": \"Not Found\"}",
+ "target": {
+  "id": 8,
+  "ecosystem": "pipx",
+  "key": "no-such-package-scout-xyz",
+  "name": "x",
+  "tap": null
+ },
+ "expected": {
+  "status": "notfound",
+  "answers": [],
+  "message": "the source does not list this package"
+ }
+}

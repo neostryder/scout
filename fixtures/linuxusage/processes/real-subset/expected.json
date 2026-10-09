@@ -1,0 +1,102 @@
+{
+  "origin": "linux-processes",
+  "status": "ok",
+  "signals": [
+    {
+      "match": {
+        "name": "python3"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "node"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "git"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "curl"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "ssh"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "rg"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "make"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "cargo"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "go"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "apt"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "tmux"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    },
+    {
+      "match": {
+        "name": "vim"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+ "url": "https://formulae.brew.sh/api/formula/git.json",
+ "status": 200,
+ "body": "{\"name\":\"git\",\"tap\":\"homebrew/core\",\"versions\":{\"stable\":\"2.56.0\",\"head\":\"HEAD\",\"bottle\":true},\"revision\":0,\"version_scheme\":0,\"deprecated\":false,\"disabled\":false}",
+ "target": {
+  "id": 1,
+  "ecosystem": "brew",
+  "key": "git",
+  "name": "git",
+  "tap": "homebrew/core"
+ },
+ "expected": {
+  "status": "ok",
+  "answers": [
+   {
+    "channel": "stable",
+    "version": "2.56.0",
+    "installable": true
+   }
+  ]
+ }
+}

@@ -1,0 +1,7 @@
+{
+  "listeners": {
+    "exitCode": 0,
+    "stdout": "p647\ncControlCenter\nf10\nn*:7000\nf11\nn*:7000\nf12\nn*:5000\nf13\nn*:5000\np765\ncARDAgent\nf10\nn*:3283\np878\ncmediasharingd\nf6\nn*:3689\nf7\nn*:3689\np892\ncsynergy-service\nf24\nn127.0.0.1:24803\nf26\nn*:24802\n---SCOUT-PS---\n  647 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter\n  765 /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/MacOS/ARDAgent\n  878 /System/Library/PrivateFrameworks/AMPSharing.framework/Versions/A/Support/mediasharingd\n  892 /Applications/Synergy.app/Contents/MacOS/synergy-service\n",
+    "stderr": ""
+  }
+}

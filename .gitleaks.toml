@@ -1,0 +1,3 @@
+[allowlist]
+description = "Recorded fixtures hold Windows uninstall keys (GUIDs and installer hashes), not credentials."
+paths = ['''fixtures/.*''']

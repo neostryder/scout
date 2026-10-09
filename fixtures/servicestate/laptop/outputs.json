@@ -1,0 +1,7 @@
+{
+  "state": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-SYSTEM---\n\t\t       0      - \tcom.apple.backgroundassets.managed.relay.service\n\t\t    2434      - \tcom.apple.lskdd\n\t\t       0   (pe) \tcom.apple.kernelmanager_helper\n\t\t       0      0 \tcom.apple.wifiFirmwareLoader\n\t\t    1522      - \tcom.apple.XprotectFramework.PluginService\n\t\t   38252      0 \tcom.apple.netbiosd\n\t\t       0      0 \tcom.apple.CSCSupportd\n\t\t   98818   (pe) \tcom.apple.bsd.dirhelper\n---SCOUT-GUI---\n\t\t       0      - \tcom.apple.unmountassistant.useragent\n\t\t    1797      - \tcom.apple.XprotectFramework.PluginService\n\t\t   28804   (jt) \tcom.apple.frauddefensed\n---SCOUT-DISABLED-SYSTEM---\n\tdisabled services = {\n\t\t\"com.cloudflare.warp.updater\" => enabled\n\t\t\"com.apple.CSCSupportd\" => disabled\n\t\t\"com.apple.ftpd\" => disabled\n\t}\n---SCOUT-DISABLED-GUI---\n\tdisabled services = {\n\t\t\"com.apple.ManagedClientAgent.enrollagent\" => disabled\n\t}\n",
+    "stderr": ""
+  }
+}

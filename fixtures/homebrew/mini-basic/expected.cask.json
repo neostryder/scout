@@ -1,0 +1,25 @@
+{
+ "sourceKind": "cask",
+ "location": "/opt/homebrew",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "cask",
+   "key": "orbstack",
+   "name": "OrbStack",
+   "kind": "app",
+   "version": "2.0.5,19905",
+   "location": "/opt/homebrew/Caskroom/orbstack",
+   "description": "Replacement for Docker Desktop",
+   "homepage": "https://orbstack.dev/",
+   "details": {
+    "tap": "homebrew/cask",
+    "outdated": false,
+    "bundleShortVersion": "2.0.5",
+    "appNames": [
+     "OrbStack.app"
+    ]
+   }
+  }
+ ]
+}

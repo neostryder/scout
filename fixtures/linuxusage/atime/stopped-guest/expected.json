@@ -1,0 +1,6 @@
+{
+  "origin": "linux-atime",
+  "status": "skipped",
+  "signals": [],
+  "message": "Guest Ubuntu is not running"
+}

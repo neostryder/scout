@@ -1,0 +1,32 @@
+{
+  "sourceKind": "localbin",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/.local/bin/uv",
+      "name": "uv",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/.local/bin/uv",
+      "details": {
+        "linkTarget": null,
+        "directory": "local-bin"
+      }
+    },
+    {
+      "ecosystem": "binary",
+      "key": "/Users/USER/go/bin/gopls",
+      "name": "gopls",
+      "kind": "binary",
+      "version": null,
+      "location": "/Users/USER/go/bin/gopls",
+      "details": {
+        "linkTarget": null,
+        "directory": "go-bin"
+      }
+    }
+  ],
+  "message": "skipped 1 malformed line(s)"
+}

@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/usr/bin/git\t1700000000\t1699900000\n/usr/bin/curl\t1699900000\t1699900000\n",
+    "stderr": ""
+  },
+  "mounts": {
+    "exitCode": 0,
+    "stdout": "/dev/sda1 / ext4 rw,relatime 0 1\n",
+    "stderr": ""
+  }
+}

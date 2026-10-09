@@ -1,0 +1,201 @@
+{
+ "sourceKind": "registry",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\57979c68-f490-55b8-8fed-8b017a5af2fe",
+   "name": "Vortex",
+   "kind": "package",
+   "version": "2.2.0",
+   "location": "C:\\Program Files\\Vortex",
+   "publisher": "Black Tree Gaming Ltd.",
+   "details": {
+    "hive": "HKLM",
+    "key": "57979c68-f490-55b8-8fed-8b017a5af2fe",
+    "publisher": "Black Tree Gaming Ltd.",
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\Capture",
+   "name": "Logitech Capture",
+   "kind": "package",
+   "version": "1.0.553",
+   "location": "C:\\Program Files\\Logitech\\LogiCapture\\bin",
+   "publisher": "Logitech",
+   "details": {
+    "hive": "HKLM",
+    "key": "Capture",
+    "publisher": "Logitech",
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\da414c81-a9fd-5732-bd5e-8acced116298",
+   "name": "Legacy Games Launcher 1.15.3",
+   "kind": "package",
+   "version": "1.15.3",
+   "location": "C:\\Program Files\\Legacy Games\\Legacy Games Launcher",
+   "publisher": "Legacy Games",
+   "details": {
+    "hive": "HKLM",
+    "key": "da414c81-a9fd-5732-bd5e-8acced116298",
+    "publisher": "Legacy Games",
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\MozillaMaintenanceService",
+   "name": "Mozilla Maintenance Service",
+   "kind": "package",
+   "version": "149.0.2",
+   "location": "C:\\Program Files (x86)\\Mozilla Maintenance Service",
+   "publisher": "Mozilla",
+   "details": {
+    "hive": "HKLM",
+    "key": "MozillaMaintenanceService",
+    "publisher": "Mozilla",
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\OneDriveSetup.exe",
+   "name": "Microsoft OneDrive",
+   "kind": "package",
+   "version": "26.173.0906.0008",
+   "location": "C:\\Program Files\\Microsoft OneDrive\\26.173.0906.0008",
+   "publisher": "Microsoft Corporation",
+   "details": {
+    "hive": "HKLM",
+    "key": "OneDriveSetup.exe",
+    "publisher": "Microsoft Corporation",
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\Steam App 2430930",
+   "name": "ARK: Survival Ascended Dedicated Server",
+   "kind": "package",
+   "version": null,
+   "location": "C:\\Program Files (x86)\\Steam\\steam\\games",
+   "details": {
+    "hive": "HKLM",
+    "key": "Steam App 2430930",
+    "publisher": null,
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\USBPcap",
+   "name": "USBPcap 1.5.4.0",
+   "kind": "package",
+   "version": "1.5.4.0",
+   "location": "C:\\Program Files\\USBPcap",
+   "publisher": "Tomasz Mon",
+   "details": {
+    "hive": "HKLM",
+    "key": "USBPcap",
+    "publisher": "Tomasz Mon",
+    "systemComponent": false,
+    "locationSource": "UninstallString",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\{16394977-6CA9-462C-99D8-7ABC61F1810B}",
+   "name": "GitHub CLI",
+   "kind": "package",
+   "version": "2.97.0",
+   "location": "",
+   "publisher": "GitHub, Inc.",
+   "details": {
+    "hive": "HKLM",
+    "key": "{16394977-6CA9-462C-99D8-7ABC61F1810B}",
+    "publisher": "GitHub, Inc.",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\Notepad++",
+   "name": "Notepad++ (64-bit x64)",
+   "kind": "package",
+   "version": "8.9.6.4",
+   "location": "C:\\Program Files\\Notepad++",
+   "publisher": "Notepad++ Team",
+   "details": {
+    "hive": "HKLM",
+    "key": "Notepad++",
+    "publisher": "Notepad++ Team",
+    "systemComponent": false,
+    "locationSource": "DisplayIcon",
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\40078385-F676-4C61-9A9C-F9028599D6D3_is1",
+   "name": "NVM for Windows 1.2.2",
+   "kind": "package",
+   "version": "1.2.2",
+   "location": "C:\\Users\\USER\\AppData\\Local\\nvm\\",
+   "publisher": "Author Software Inc.",
+   "details": {
+    "hive": "HKLM",
+    "key": "40078385-F676-4C61-9A9C-F9028599D6D3_is1",
+    "publisher": "Author Software Inc.",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  },
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\Steam App 1026680",
+   "name": "FINAL FANTASY VIII - REMASTERED",
+   "kind": "package",
+   "version": null,
+   "location": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII Remastered",
+   "publisher": "Square Enix",
+   "details": {
+    "hive": "HKLM",
+    "key": "Steam App 1026680",
+    "publisher": "Square Enix",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  }
+ ]
+}

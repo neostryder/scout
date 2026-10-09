@@ -1,0 +1,12 @@
+== lh-harness
+home = C:\Users\user\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none
+implementation = CPython
+uv = 0.12.5
+version_info = 3.13.11
+include-system-site-packages = false
+== httpie
+home = C:\Users\user\AppData\Local\Programs\Python\Python314
+include-system-site-packages = false
+version = 3.14.3
+executable = C:\Users\user\AppData\Local\Programs\Python\Python314\python.exe
+command = C:\Users\user\AppData\Local\Programs\Python\Python314\python.exe -m venv --without-pip C:\Users\user\pipx\venvs\httpie

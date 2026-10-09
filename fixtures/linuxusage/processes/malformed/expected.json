@@ -1,0 +1,15 @@
+{
+  "origin": "linux-processes",
+  "status": "partial",
+  "signals": [
+    {
+      "match": {
+        "name": "node"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    }
+  ],
+  "message": "skipped 2 malformed line(s)"
+}

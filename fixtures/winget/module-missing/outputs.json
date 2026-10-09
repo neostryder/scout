@@ -1,0 +1,7 @@
+{
+ "list": {
+  "exitCode": 1,
+  "stdout": "",
+  "stderr": "Import-Module: The specified module 'Microsoft.WinGet.Client' was not loaded because no valid module file was found in any module directory.\n"
+ }
+}

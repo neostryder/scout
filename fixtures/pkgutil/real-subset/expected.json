@@ -1,0 +1,103 @@
+{
+ "sourceKind": "pkgutil",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.google.pkg.Keystone",
+   "name": "com.google.pkg.Keystone",
+   "kind": "package",
+   "version": "1.3.19.240",
+   "location": "/",
+   "details": {
+    "volume": "/",
+    "location": ""
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.microsoft.package.Microsoft_Excel.app",
+   "name": "com.microsoft.package.Microsoft_Excel.app",
+   "kind": "package",
+   "version": "16.113.26092714",
+   "location": "/Library/Caches/com.microsoft.autoupdate.helper/Clones.noindex",
+   "details": {
+    "volume": "/",
+    "location": "Library/Caches/com.microsoft.autoupdate.helper/Clones.noindex"
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "org.adblockplus.adblockplussafarimac",
+   "name": "org.adblockplus.adblockplussafarimac",
+   "kind": "package",
+   "version": "2.2.19",
+   "location": "/Applications",
+   "details": {
+    "volume": "/",
+    "location": "Applications"
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.microsoft.package.Frameworks",
+   "name": "com.microsoft.package.Frameworks",
+   "kind": "package",
+   "version": "0",
+   "location": "/private/tmp/com.microsoft.package.Frameworks",
+   "details": {
+    "volume": "/",
+    "location": "private/tmp/com.microsoft.package.Frameworks"
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.microsoft.package.Microsoft_AutoUpdate.app",
+   "name": "com.microsoft.package.Microsoft_AutoUpdate.app",
+   "kind": "package",
+   "version": "4.85.26091737",
+   "location": "/Library/Application Support/Microsoft/MAU2.0",
+   "details": {
+    "volume": "/",
+    "location": "Library/Application Support/Microsoft/MAU2.0"
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.google.pkg.ChromeRemoteDesktopHostService",
+   "name": "com.google.pkg.ChromeRemoteDesktopHostService",
+   "kind": "package",
+   "version": "154.0.8037.11",
+   "location": "/",
+   "details": {
+    "volume": "/",
+    "location": ""
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.barebones.bbedit",
+   "name": "com.barebones.bbedit",
+   "kind": "package",
+   "version": "15.5.0",
+   "location": "/Applications",
+   "details": {
+    "volume": "/",
+    "location": "Applications"
+   }
+  },
+  {
+   "ecosystem": "pkgutil",
+   "key": "com.overmacs.photosweeper",
+   "name": "com.overmacs.photosweeper",
+   "kind": "package",
+   "version": "4.9.5",
+   "location": "/Applications",
+   "details": {
+    "volume": "/",
+    "location": "Applications"
+   }
+  }
+ ]
+}

@@ -1,0 +1,22 @@
+{
+ "url": "https://pypi.org/pypi/httpie/json",
+ "status": 200,
+ "body": "{\"info\":{\"name\":\"httpie\",\"version\":\"3.2.4\",\"yanked\":false}}",
+ "target": {
+  "id": 7,
+  "ecosystem": "pipx",
+  "key": "httpie",
+  "name": "httpie",
+  "tap": null
+ },
+ "expected": {
+  "status": "ok",
+  "answers": [
+   {
+    "channel": "stable",
+    "version": "3.2.4",
+    "installable": true
+   }
+  ]
+ }
+}

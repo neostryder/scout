@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "Guest Ubuntu is not running\n"
+  },
+  "mounts": {
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "Guest Ubuntu is not running\n"
+  }
+}

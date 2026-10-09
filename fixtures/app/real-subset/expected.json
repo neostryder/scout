@@ -1,0 +1,111 @@
+{
+ "sourceKind": "app",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "bundle",
+   "key": "com.1password.1password",
+   "name": "1Password",
+   "kind": "app",
+   "version": "8.12.36",
+   "location": "/Applications/1Password.app",
+   "details": {
+    "build": "8.12.36",
+    "sparkleFeed": null,
+    "apple": false
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "net.publicspace.abfr12",
+   "name": "A Better Finder Rename 12",
+   "kind": "app",
+   "version": "12.30",
+   "location": "/Applications/A Better Finder Rename 12.app",
+   "details": {
+    "build": "12.30",
+    "sparkleFeed": "http://www.publicspace.net/app/signed_abfr12.xml",
+    "apple": false
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "com.apple.configurator.ui",
+   "name": "Apple Configurator",
+   "kind": "app",
+   "version": "2.20",
+   "location": "/Applications/Apple Configurator.app",
+   "details": {
+    "build": "1001.5",
+    "sparkleFeed": null,
+    "apple": true
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "com.google.Chrome.app.efmjfjelnicpmdcmfikempdhlmainjcb",
+   "name": "Chrome Remote Desktop",
+   "kind": "app",
+   "version": "7339.133",
+   "location": "/Applications/Chrome Remote Desktop.app",
+   "details": {
+    "build": "7339.133",
+    "sparkleFeed": null,
+    "apple": false
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "fr.handbrake.HandBrake",
+   "name": "HandBrake",
+   "kind": "app",
+   "version": "1.9.2",
+   "location": "/Applications/HandBrake.app",
+   "details": {
+    "build": "2025022300",
+    "sparkleFeed": "https://handbrake.fr/appcast.arm64.xml",
+    "apple": false
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "com.valvesoftware.steam",
+   "name": "Steam",
+   "kind": "app",
+   "version": "6.1",
+   "location": "/Applications/Steam.app",
+   "details": {
+    "build": "6.1",
+    "sparkleFeed": null,
+    "apple": false
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "com.apple.appleseed.FeedbackAssistant",
+   "name": "Feedback Assistant",
+   "kind": "app",
+   "version": "5.1",
+   "location": "/Applications/Utilities/Feedback Assistant.app",
+   "details": {
+    "build": "642",
+    "sparkleFeed": null,
+    "apple": true
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "com.ispyconnect.agent.launcher",
+   "name": "Agent DVR",
+   "kind": "app",
+   "version": "2.4",
+   "location": "/Users/USER/Applications/Agent DVR.app",
+   "details": {
+    "build": "6",
+    "sparkleFeed": null,
+    "apple": false
+   }
+  }
+ ]
+}

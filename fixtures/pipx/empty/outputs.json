@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "{\n    \"pipx_spec_version\": \"0.1\",\n    \"venvs\": {}\n}\n",
+    "stderr": "nothing has been installed with pipx 😴\n"
+  }
+}

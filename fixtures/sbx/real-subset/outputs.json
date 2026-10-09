@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "SANDBOX   AGENT      STATUS    PORTS   WORKSPACE\ndsh-ds    shell      stopped           C:\\Temp\\sbx\\work\\dsh-ds\nmc-m3     shell      stopped           C:\\Temp\\sbx\\work\\mc-m3\noc-ds     opencode   running           C:\\Temp\\sbx\\work\\oc-ds\n",
+    "stderr": ""
+  }
+}

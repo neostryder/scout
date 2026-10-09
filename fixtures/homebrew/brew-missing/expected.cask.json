@@ -1,0 +1,7 @@
+{
+ "sourceKind": "cask",
+ "location": "/Users/user/.homebrew",
+ "status": "skipped",
+ "installs": [],
+ "message": "brew did not run (exit 127): zsh:1: no such file or directory: /Users/user/.homebrew/bin/brew"
+}

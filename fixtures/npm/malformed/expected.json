@@ -1,0 +1,16 @@
+{
+ "sourceKind": "npm",
+ "location": "/opt/homebrew/lib/node_modules",
+ "status": "partial",
+ "installs": [
+  {
+   "ecosystem": "npm",
+   "key": "npm",
+   "name": "npm",
+   "kind": "package",
+   "version": "11.11.0",
+   "location": "/opt/homebrew/lib/node_modules/npm"
+  }
+ ],
+ "message": "skipped 1 malformed line(s)"
+}

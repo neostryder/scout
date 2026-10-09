@@ -1,0 +1,17 @@
+{
+  "origin": "processes",
+  "status": "ok",
+  "signals": [
+    {
+      "match": {
+        "path": "C:\\Program Files\\WindowsApps\\AcrobatNotificationClient_1.0.4.0_x86__e1rzdqpraam7r\\AcrobatNotificationClient.exe"
+      },
+      "kind": "running",
+      "value": "1",
+      "available": true
+    }
+  ],
+  "completeFor": [
+    "running"
+  ]
+}

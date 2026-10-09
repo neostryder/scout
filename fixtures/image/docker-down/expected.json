@@ -1,0 +1,7 @@
+{
+  "sourceKind": "image",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "docker did not run (exit 1): Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+}

@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "[]",
+    "stderr": ""
+  },
+  "env": {
+    "exitCode": 0,
+    "stdout": "{\"UserProfile\":\"C:\\\\Users\\\\USER\",\"LocalAppData\":\"C:\\\\Users\\\\USER\\\\AppData\\\\Local\",\"AppData\":\"C:\\\\Users\\\\USER\\\\AppData\\\\Roaming\",\"ProgramData\":\"C:\\\\ProgramData\",\"ProgramFiles\":\"C:\\\\Program Files\",\"ProgramFilesX86\":\"C:\\\\Program Files (x86)\",\"SystemRoot\":\"C:\\\\WINDOWS\"}\r\n",
+    "stderr": ""
+  }
+}

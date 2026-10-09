@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "NAME STATE VERSION\nUbuntu Stopped 2\nbad row\ndocker-desktop Running 2\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "url": "https://api.github.com/repos/example/demo/releases?per_page=30",
+  "status": 200,
+  "body": "[]",
+  "target": {
+    "id": 1,
+    "ecosystem": "npm",
+    "key": "demo",
+    "name": "demo",
+    "tap": null,
+    "homepage": "https://github.com/example/demo",
+    "details": {}
+  },
+  "expected": {
+    "status": "ok",
+    "answers": []
+  }
+}

@@ -1,0 +1,24 @@
+{
+ "sourceKind": "registry",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "arp",
+   "key": "HKLM\\7-Zip",
+   "name": "7-Zip 26.01 (x64)",
+   "kind": "package",
+   "version": "26.01",
+   "location": "C:\\Program Files\\7-Zip\\",
+   "publisher": "Igor Pavlov",
+   "details": {
+    "hive": "HKLM",
+    "key": "7-Zip",
+    "publisher": "Igor Pavlov",
+    "systemComponent": false,
+    "scope": "machine",
+    "wow64": false
+   }
+  }
+ ]
+}

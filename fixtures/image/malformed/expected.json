@@ -1,0 +1,46 @@
+{
+  "sourceKind": "image",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "image",
+      "key": "backend-webapp",
+      "name": "backend-webapp-1",
+      "kind": "image",
+      "version": "latest",
+      "location": "/Users/USER/services/webapp/backend/docker-compose.yml",
+      "digest": "sha256:1d0c101547b7f38a3e98296dda47e0eccf62c995b41f7c3734bef1ff8ff6bb39",
+      "details": {
+        "container": "backend-webapp-1",
+        "containerId": "683587f0159f",
+        "state": "running",
+        "project": "backend",
+        "service": "webapp",
+        "workingDir": "/Users/USER/services/webapp/backend",
+        "imageId": "sha256:1d0c101547b7f38a3e98296dda47e0eccf62c995b41f7c3734bef1ff8ff6bb39",
+        "tagKind": "built"
+      }
+    },
+    {
+      "ecosystem": "image",
+      "key": "redis",
+      "name": "firecrawl-redis-1",
+      "kind": "image",
+      "version": "alpine",
+      "location": "/Users/USER/services/firecrawl/docker-compose.yaml",
+      "digest": "sha256:e8eb6f2980c06c6a25c08f62cb2e00dc7d2fead9aa492cfdd8b54a42109ae0f2",
+      "details": {
+        "container": "firecrawl-redis-1",
+        "containerId": "5dd914b10de9",
+        "state": "running",
+        "project": "firecrawl",
+        "service": "redis",
+        "workingDir": "/Users/USER/services/firecrawl",
+        "imageId": "sha256:e8eb6f2980c06c6a25c08f62cb2e00dc7d2fead9aa492cfdd8b54a42109ae0f2",
+        "tagKind": "floating"
+      }
+    }
+  ],
+  "message": "skipped 1 malformed container line(s)"
+}

@@ -1,0 +1,62 @@
+{
+  "origin": "docker-ports",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 3310,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "container": {
+        "name": "example-relay-relay-1",
+        "image": "example-relay-relay",
+        "containerPort": 3300
+      }
+    },
+    {
+      "port": 3310,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "container": {
+        "name": "example-relay-relay-1",
+        "image": "example-relay-relay",
+        "containerPort": 3300
+      }
+    },
+    {
+      "port": 30014,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "container": {
+        "name": "foundry-v14",
+        "image": "ghcr.io/felddy/foundryvtt:14.367",
+        "containerPort": 30000
+      }
+    },
+    {
+      "port": 30014,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "container": {
+        "name": "foundry-v14",
+        "image": "ghcr.io/felddy/foundryvtt:14.367",
+        "containerPort": 30000
+      }
+    }
+  ]
+}

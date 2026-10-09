@@ -1,0 +1,7 @@
+{"timestamp":"2026-09-30T11:00:00Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"git status && rg 'PRIVATE||VALUE' C:/private/customer.txt\"}"}}
+{"timestamp":"2026-09-23T11:00:00Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"bash\",\"-lc\",\"git status; node --version\"]}"}}
+{"timestamp":"2026-09-30T11:00:00Z","type":"response_item","payload":{"type":"function_call","name":"shell_command","arguments":"{\"command\":\"uvx ruff; python3 -m pip\"}"}}
+{"timestamp":"2026-09-30T11:00:00Z","type":"response_item","payload":{"type":"function_call","name":"custom_exec","arguments":"{\"command\":[\"C:/private/tool.exe\",\"--token\",\"PRIVATE_VALUE\"]}"}}
+{"timestamp":"2026-09-30T11:00:00Z","type":"response_item","payload":{"type":"function_call","name":"Read","arguments":"{\"cmd\":\"PRIVATE_VALUE\"}"}}
+{"timestamp":"2026-09-30T11:00:00Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"invalid"}}
+{malformed

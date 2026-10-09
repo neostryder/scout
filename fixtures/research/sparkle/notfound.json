@@ -1,0 +1,21 @@
+{
+  "url": "https://example.test/appcast.xml",
+  "status": 404,
+  "body": "not found",
+  "target": {
+    "id": 1,
+    "ecosystem": "bundle",
+    "key": "test.demo",
+    "name": "test.demo",
+    "tap": null,
+    "homepage": null,
+    "details": {
+      "sparkleFeed": "https://example.test/appcast.xml"
+    }
+  },
+  "expected": {
+    "status": "notfound",
+    "answers": [],
+    "message": "the source does not list this package"
+  }
+}

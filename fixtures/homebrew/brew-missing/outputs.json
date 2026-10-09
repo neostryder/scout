@@ -1,0 +1,7 @@
+{
+ "info": {
+  "exitCode": 127,
+  "stdout": "",
+  "stderr": "zsh:1: no such file or directory: /Users/user/.homebrew/bin/brew\n"
+ }
+}

@@ -1,0 +1,9 @@
+node_modules/
+*.db
+*.db-*
+.claude/
+.scout-data/
+*.patch
+fixtures/_raw/
+/machines.json
+/access.json

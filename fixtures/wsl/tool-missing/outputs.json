@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 127,
+    "stdout": "",
+    "stderr": "wsl.exe: command not found"
+  }
+}

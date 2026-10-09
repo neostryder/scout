@@ -1,0 +1,20 @@
+{
+  "machines": [
+    {
+      "id": "desktop",
+      "name": "Desktop",
+      "arch": "x64",
+      "os": "windows",
+      "transport": { "type": "local" },
+      "projectRoots": ["C:/Projects/*"]
+    },
+    {
+      "id": "mac-mini",
+      "name": "Mac mini",
+      "arch": "arm64",
+      "os": "macos",
+      "address": "192.168.1.20",
+      "transport": { "type": "ssh", "target": "user@192.168.1.20", "options": ["-i", "~/.ssh/id_ed25519"] }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "=== /home/test/projects/app/.node-version\nv24.4.0\n=== /home/test/projects/app/.tool-versions\n# Project runtimes\nnodejs 24.4.0\npython 3.13.2\nrust stable\ngolang 1.24.1\nruby 3.4.1\npnpm 10.4.0\njava temurin-21\n=== /home/test/projects/app/.python-version\n3.13.2\n=== /home/test/projects/rust-app/rust-toolchain\nnightly-2026-09-01\n=== /home/test/projects/rust-toml/rust-toolchain.toml\n[toolchain]\nchannel = \"1.90.0\"\ncomponents = [\"rustfmt\"]\n=== /home/test/projects/legacy-toml/rust-toolchain\n[toolchain]\nchannel = 'stable'\n=== /home/test/projects/app/package.json\n{\"packageManager\":\"pnpm@10.4.0+sha512.fixture\",\"engines\":{\"node\":\">=24 <27\",\"npm\":\"^11\"}}\n",
+    "stderr": ""
+  }
+}

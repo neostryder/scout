@@ -1,0 +1,85 @@
+{
+  "sourceKind": "appx",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "appx",
+      "key": "Microsoft.Windows.DevHome",
+      "name": "Microsoft.Windows.DevHome",
+      "kind": "app",
+      "version": "0.0.0.0",
+      "location": "C:\\Program Files\\WindowsApps\\Microsoft.Windows.DevHome_0.0.0.0_x64__8wekyb3d8bbwe",
+      "details": {
+        "packageFullName": "Microsoft.Windows.DevHome_0.0.0.0_x64__8wekyb3d8bbwe",
+        "publisher": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+        "signatureKind": 1
+      }
+    },
+    {
+      "ecosystem": "appx",
+      "key": "Microsoft.XboxSpeechToTextOverlay",
+      "name": "Microsoft.XboxSpeechToTextOverlay",
+      "kind": "app",
+      "version": "1.97.17002.0",
+      "location": "C:\\Program Files\\WindowsApps\\Microsoft.XboxSpeechToTextOverlay_1.97.17002.0_x64__8wekyb3d8bbwe",
+      "details": {
+        "packageFullName": "Microsoft.XboxSpeechToTextOverlay_1.97.17002.0_x64__8wekyb3d8bbwe",
+        "publisher": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+        "signatureKind": 3
+      }
+    },
+    {
+      "ecosystem": "appx",
+      "key": "AdvancedMicroDevicesInc-RSXCM",
+      "name": "AdvancedMicroDevicesInc-RSXCM",
+      "kind": "app",
+      "version": "22.10.0.0",
+      "location": "C:\\Program Files\\WindowsApps\\AdvancedMicroDevicesInc-RSXCM_22.10.0.0_x64__v2es6h43hjn86",
+      "details": {
+        "packageFullName": "AdvancedMicroDevicesInc-RSXCM_22.10.0.0_x64__v2es6h43hjn86",
+        "publisher": "CN=Advanced Micro Devices, O=Advanced Micro Devices, S=California, C=US",
+        "signatureKind": 1
+      }
+    },
+    {
+      "ecosystem": "appx",
+      "key": "MSTeams",
+      "name": "MSTeams",
+      "kind": "app",
+      "version": "26225.1806.5074.1452",
+      "location": "C:\\Program Files\\WindowsApps\\MSTeams_26225.1806.5074.1452_x64__8wekyb3d8bbwe",
+      "details": {
+        "packageFullName": "MSTeams_26225.1806.5074.1452_x64__8wekyb3d8bbwe",
+        "publisher": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+        "signatureKind": 1
+      }
+    },
+    {
+      "ecosystem": "appx",
+      "key": "aimgr",
+      "name": "aimgr",
+      "kind": "app",
+      "version": "0.20.61.0",
+      "location": "C:\\Program Files\\WindowsApps\\aimgr_0.20.61.0_x64__8wekyb3d8bbwe",
+      "details": {
+        "packageFullName": "aimgr_0.20.61.0_x64__8wekyb3d8bbwe",
+        "publisher": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+        "signatureKind": 1
+      }
+    },
+    {
+      "ecosystem": "appx",
+      "key": "Malwarebytes.AntiMalware",
+      "name": "Malwarebytes.AntiMalware",
+      "kind": "app",
+      "version": "5.0.0.113",
+      "location": "C:\\Program Files\\WindowsApps\\Malwarebytes.AntiMalware_5.0.0.113_neutral__fjscb452b7c5t",
+      "details": {
+        "packageFullName": "Malwarebytes.AntiMalware_5.0.0.113_neutral__fjscb452b7c5t",
+        "publisher": "CN=Malwarebytes Inc, O=Malwarebytes Inc, L=Santa Clara, S=California, C=US",
+        "signatureKind": 1
+      }
+    }
+  ]
+}

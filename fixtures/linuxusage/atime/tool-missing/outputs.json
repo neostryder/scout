@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 127,
+    "stdout": "",
+    "stderr": "stat is not installed\n"
+  },
+  "mounts": {
+    "exitCode": 0,
+    "stdout": "overlay / overlay rw,relatime,lowerdir=/layers,upperdir=/upper,workdir=/work 0 0\nproc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "listeners": {
+    "exitCode": 0,
+    "stdout": "p1294\ncrapportd\nf17\nn*:49399\nf18\nn*:49399\np1345\ncControlCenter\nf9\nn*:7000\nf10\nn*:7000\nf11\nn*:5000\nf12\nn*:5000\np2878\ncPython\nf11\nn*:8765\np2903\nccloudflared\nf9\nn127.0.0.1:20241\np2961\ncLM Studio\nf71\nn127.0.0.1:41343\nf74\nn*:1234\np30123\nclimactl\nf13\nn127.0.0.1:56831\np60665\ncGoogle Drive\nf30\nn[::1]:7679\n---SCOUT-PS---\n 1294 /usr/libexec/rapportd\n 1345 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter\n 2878 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python\n 2903 /opt/homebrew/opt/cloudflared/bin/cloudflared\n 2961 /Applications/LM Studio.app/Contents/MacOS/LM Studio\n30123 /Users/USER/.homebrew/bin/limactl\n60665 /Applications/Google Drive.app/Contents/MacOS/Google Drive\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "origin": "userassist",
+  "status": "partial",
+  "signals": [
+    {
+      "match": {
+        "ecosystem": "appx",
+        "key": "Microsoft.WindowsCalculator"
+      },
+      "kind": "last_used",
+      "value": "2025-03-26T05:24:55Z",
+      "available": true
+    },
+    {
+      "match": {
+        "ecosystem": "appx",
+        "key": "Microsoft.WindowsCalculator"
+      },
+      "kind": "use_count",
+      "value": "0",
+      "available": true
+    },
+    {
+      "match": {
+        "ecosystem": "appx",
+        "key": "Microsoft.WindowsNotepad"
+      },
+      "kind": "last_used",
+      "value": "2026-09-25T23:20:28Z",
+      "available": true
+    },
+    {
+      "match": {
+        "ecosystem": "appx",
+        "key": "Microsoft.WindowsNotepad"
+      },
+      "kind": "use_count",
+      "value": "0",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\My Programs\\NVCleanstall_1.19.0.exe"
+      },
+      "kind": "last_used",
+      "value": "2025-07-12T16:48:45Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\My Programs\\NVCleanstall_1.19.0.exe"
+      },
+      "kind": "use_count",
+      "value": "0",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Games\\Angband\\Angband\\angband.exe"
+      },
+      "kind": "last_used",
+      "value": "2026-09-14T00:29:28Z",
+      "available": true
+    },
+    {
+      "match": {
+        "path": "C:\\Games\\Angband\\Angband\\angband.exe"
+      },
+      "kind": "use_count",
+      "value": "0",
+      "available": true
+    }
+  ],
+  "message": "2 unresolved known-folder ids"
+}

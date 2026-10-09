@@ -1,0 +1,61 @@
+{
+ "sourceKind": "winget",
+ "location": "",
+ "status": "ok",
+ "installs": [
+  {
+   "ecosystem": "winget",
+   "key": "CoreyButler.NVMforWindows",
+   "name": "NVM for Windows",
+   "kind": "package",
+   "version": "1.2.2",
+   "location": "",
+   "details": { "source": "winget", "updateAvailable": false, "availableVersion": "2.0.0" }
+  },
+  {
+   "ecosystem": "winget-local",
+   "key": "ARP\\Machine\\X64\\AMD Catalyst Install Manager",
+   "name": "AMD Software",
+   "kind": "package",
+   "version": "24.30.18",
+   "location": "",
+   "details": { "source": null, "updateAvailable": false, "availableVersion": null }
+  },
+  {
+   "ecosystem": "winget",
+   "key": "NexusMods.Vortex",
+   "name": "Vortex",
+   "kind": "package",
+   "version": "2.2.0",
+   "location": "",
+   "details": { "source": "winget", "updateAvailable": true, "availableVersion": "2.6.3" }
+  },
+  {
+   "ecosystem": "msstore",
+   "key": "XPDP273C0XHQH2",
+   "name": "Adobe Acrobat Reader DC",
+   "kind": "package",
+   "version": "26.002.21931",
+   "location": "",
+   "details": { "source": "msstore", "updateAvailable": false, "availableVersion": "26.002.21901" }
+  },
+  {
+   "ecosystem": "winget-local",
+   "key": "MSIX\\21090PaddyXu.QuickLook_4.5.0.0_neutral__egxr34yet59cg",
+   "name": "QuickLook",
+   "kind": "package",
+   "version": "4.5.0.0",
+   "location": "",
+   "details": { "source": null, "updateAvailable": false, "availableVersion": null }
+  },
+  {
+   "ecosystem": "winget-local",
+   "key": "ARP\\Machine\\X64\\Steam App 1026680",
+   "name": "FINAL FANTASY VIII - REMASTERED",
+   "kind": "package",
+   "version": null,
+   "location": "",
+   "details": { "source": null, "updateAvailable": false, "availableVersion": null }
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+{
+ "ls": {
+  "exitCode": 127,
+  "stdout": "",
+  "stderr": "zsh:1: command not found: npm\n"
+ }
+}

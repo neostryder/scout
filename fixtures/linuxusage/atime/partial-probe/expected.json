@@ -1,0 +1,15 @@
+{
+  "origin": "linux-atime",
+  "status": "partial",
+  "signals": [
+    {
+      "match": {
+        "path": "/usr/bin/git"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    }
+  ],
+  "message": "stat: cannot stat /usr/bin/broken: No such file or directory"
+}

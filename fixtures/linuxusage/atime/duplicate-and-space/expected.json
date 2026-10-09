@@ -1,0 +1,14 @@
+{
+  "origin": "linux-atime",
+  "status": "ok",
+  "signals": [
+    {
+      "match": {
+        "path": "/opt/tool/bin/tool name"
+      },
+      "kind": "last_used",
+      "value": "2023-11-14T22:13:20Z",
+      "available": true
+    }
+  ]
+}

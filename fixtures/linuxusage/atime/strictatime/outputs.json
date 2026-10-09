@@ -1,0 +1,12 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "/bin/tool\t1700000000\t1699900000\n",
+    "stderr": ""
+  },
+  "mounts": {
+    "exitCode": 0,
+    "stdout": "/dev/sda1 / ext4 rw,strictatime 0 1\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,87 @@
+{
+ "origin": "spotlight",
+ "status": "partial",
+ "signals": [
+  {
+   "match": {
+    "path": "/Applications/A Better Finder Rename 12.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/A Better Finder Rename 12.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/Adblock Plus.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/Adblock Plus.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/BBEdit.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/BBEdit.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/Discord.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/Discord.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/HandBrake.app"
+   },
+   "kind": "last_used",
+   "value": null,
+   "available": false
+  },
+  {
+   "match": {
+    "path": "/Applications/HandBrake.app"
+   },
+   "kind": "use_count",
+   "value": null,
+   "available": false
+  }
+ ],
+ "message": "Spotlight reports no usage data"
+}

@@ -1,0 +1,6 @@
+{
+  "origin": "processes",
+  "status": "failed",
+  "signals": [],
+  "message": "process output is not valid JSON"
+}

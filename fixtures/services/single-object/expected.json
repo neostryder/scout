@@ -1,0 +1,20 @@
+{
+  "sourceKind": "services",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "service",
+      "key": "Adguard Service",
+      "name": "Adguard Service",
+      "kind": "service",
+      "version": null,
+      "location": "C:\\Program Files\\AdGuard\\AdguardSvc.exe",
+      "details": {
+        "state": "Running",
+        "startMode": "Auto",
+        "pathName": "\"C:\\Program Files\\AdGuard\\AdguardSvc.exe\""
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "origin": "docker-ports",
+  "status": "skipped",
+  "facts": [],
+  "message": "no published container ports were reported"
+}

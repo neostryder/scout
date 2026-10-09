@@ -1,0 +1,34 @@
+{
+ "sourceKind": "app",
+ "location": "",
+ "status": "partial",
+ "installs": [
+  {
+   "ecosystem": "bundle",
+   "key": "com.1password.1password",
+   "name": "1Password",
+   "kind": "app",
+   "version": "8.12.36",
+   "location": "/Applications/1Password.app",
+   "details": {
+    "build": "8.12.36",
+    "sparkleFeed": null,
+    "apple": false
+   }
+  },
+  {
+   "ecosystem": "bundle",
+   "key": "com.valvesoftware.steam",
+   "name": "Steam",
+   "kind": "app",
+   "version": "6.1",
+   "location": "/Applications/Steam.app",
+   "details": {
+    "build": "6.1",
+    "sparkleFeed": null,
+    "apple": false
+   }
+  }
+ ],
+ "message": "skipped 1 malformed line(s)"
+}

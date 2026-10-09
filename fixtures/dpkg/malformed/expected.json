@@ -1,0 +1,32 @@
+{
+ "sourceKind": "dpkg",
+ "location": "",
+ "status": "partial",
+ "installs": [
+  {
+   "ecosystem": "dpkg",
+   "key": "adduser",
+   "name": "adduser",
+   "kind": "package",
+   "version": "3.137ubuntu1",
+   "location": "",
+   "details": {
+    "arch": "all"
+   },
+   "description": "add and remove users and groups"
+  },
+  {
+   "ecosystem": "dpkg",
+   "key": "curl",
+   "name": "curl",
+   "kind": "package",
+   "version": "8.5.0-2ubuntu10.9",
+   "location": "",
+   "details": {
+    "arch": "arm64"
+   },
+   "description": "command line tool for transferring data with URL syntax"
+  }
+ ],
+ "message": "skipped 1 malformed line(s)"
+}
