@@ -173,7 +173,8 @@ test("cycles store samples, prune history, evaluate alerts and publish only chan
   assert.deepEqual(notices[3]!.data, { running: false, done: 1, total: 1 });
   notices.length = 0;
   await runHealthCycle(db, options);
-  assert.equal(notices.filter((notice) => notice.kind === "health").length, 0);
+  assert.equal(notices.filter((notice) => notice.kind === "health").length, 1, "the second failed check confirms the target as down");
+  assert.equal(healthTarget(db, listener.key, AT)!.state, "down");
   await runHealthCycle(db, options);
   assert.equal(alerts.find((change) => change.alert.kind === "unhealthy")!.alert.key, "unhealthy:listener:hub:8080");
   assert.equal(alertsResponse(db, new URLSearchParams("kind=unhealthy"), AT).total, 1);

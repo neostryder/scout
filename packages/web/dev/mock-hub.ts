@@ -772,11 +772,11 @@ function outagesMock(at: string) {
   const ago = (minutes: number) => new Date(Date.parse(at) - minutes * 60_000).toISOString();
   const outages = [
     { id: 3, kind: "service", state: "not-running", label: "Cogitator on Hub", startedAt: ago(14), endedAt: null, durationMs: 14 * 60_000, detail: "Stopped." },
-    { id: 2, kind: "machine", state: "hung", label: "Gamemaster", startedAt: ago(500), endedAt: ago(380), durationMs: 120 * 60_000, detail: "The ssh port accepted a connection but sent no greeting." },
+    { id: 2, kind: "machine", state: "hung", label: "Server", startedAt: ago(500), endedAt: ago(380), durationMs: 120 * 60_000, detail: "The ssh port accepted a connection but sent no greeting." },
     { id: 1, kind: "monitor-gap", state: "monitor-gap", label: "Hub", startedAt: ago(2000), endedAt: ago(1960), durationMs: 40 * 60_000, detail: "Scout was not running." },
   ];
   const items = [
-    { kind: "machine", key: "machine:gamemaster", machineId: "gamemaster", label: "Gamemaster", watched: outageConfig.machines.gamemaster !== false, failures: 0 },
+    { kind: "machine", key: "machine:server", machineId: "server", label: "Server", watched: outageConfig.machines.server !== false, failures: 0 },
     { kind: "url", key: "url:example.test", machineId: null, label: "example.test", watched: outageConfig.items["url:example.test"] !== false, failures: 0 },
     { kind: "service", key: "service:hub:cogitator", machineId: "hub", label: "Cogitator on Hub", watched: outageConfig.items["service:hub:cogitator"] !== false, failures: 2 },
   ];

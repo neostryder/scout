@@ -12,15 +12,15 @@ import { Notifier, type ChannelResult } from "../src/notify.ts";
 import { HubWatch } from "../src/watch.ts";
 
 const WEBHOOK = "https://discord.com/api/webhooks/123456789/abcDEF-ghi_JKL";
-const juhandu: ServiceFact = { kind: "windows-service", name: "juhandu", displayName: "Juhandu", domain: "system", program: "C:/Tools/juhandu.exe", state: "running", startMode: "auto", enabled: true, pid: 42, runAs: null, triggers: null, lastRun: null, lastResult: null };
-const machines: WatchedMachine[] = [{ id: "gm", name: "Gamemaster", host: "192.0.2.5", port: 22 }];
+const worker: ServiceFact = { kind: "windows-service", name: "worker", displayName: "Worker", domain: "system", program: "C:/Tools/worker.exe", state: "running", startMode: "auto", enabled: true, pid: 42, runAs: null, triggers: null, lastRun: null, lastResult: null };
+const machines: WatchedMachine[] = [{ id: "gm", name: "Server", host: "192.0.2.5", port: 22 }];
 
 interface Sent { title: string; body: string }
 
 function setup(t: TestContext, mode: { state: MachineProbe["state"] } = { state: "up" }) {
   const dir = mkdtempSync(join(tmpdir(), "scout-hub-watch-"));
   const db = openCatalog(":memory:");
-  upsertMachine(db, { id: "gm", name: "Gamemaster", os: "macos", kind: "host" });
+  upsertMachine(db, { id: "gm", name: "Server", os: "macos", kind: "host" });
   upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
   const sent: Sent[] = [];
   const posted: string[] = [];
@@ -47,7 +47,7 @@ test("a hung machine opens an outage after two rounds, notifies once on both cha
   const changes = await watch.cycle();
   assert.equal(changes.length, 1);
   assert.equal(sent.length, 2, "one Discord post and one desktop notice");
-  assert.match(sent[0]!.title ?? String(sent[0]), /Outage: Gamemaster is hung/);
+  assert.match(sent[0]!.title ?? String(sent[0]), /Outage: Server is hung/);
   advance(120_000);
   assert.deepEqual(await watch.cycle(), []);
   assert.equal(sent.length, 2, "a continuing outage is not announced again");
@@ -55,7 +55,7 @@ test("a hung machine opens an outage after two rounds, notifies once on both cha
   advance(120_000);
   await watch.cycle();
   assert.equal(sent.length, 4);
-  assert.match(JSON.stringify(sent[3]), /Recovered: Gamemaster/);
+  assert.match(JSON.stringify(sent[3]), /Recovered: Server/);
   assert.match(JSON.stringify(sent[3]), /after 6 min/);
   assert.equal(listOutages(db, { state: "open" }).length, 0);
 });
@@ -80,9 +80,9 @@ test("a pause stops checks and notices and the page can switch a machine off", a
 
 test("service checks count once an interval even when reads arrive every few seconds, and a stopped service is announced after two of them", async (t) => {
   const { db, watch, sent, advance } = setup(t);
-  recordServices(db, "gm", { origin: "services", status: "ok", facts: [juhandu] }, "2026-10-10T08:00:00.000Z");
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [worker] }, "2026-10-10T08:00:00.000Z");
   watch.observeServices("gm", "2026-10-10T08:00:00.000Z");
-  recordServices(db, "gm", { origin: "services", status: "ok", facts: [{ ...juhandu, state: "stopped" }] }, "2026-10-10T08:00:03.000Z");
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [{ ...worker, state: "stopped" }] }, "2026-10-10T08:00:03.000Z");
   advance(3_000);
   assert.deepEqual(watch.observeServices("gm", "2026-10-10T08:00:03.000Z"), []);
   advance(3_000);
@@ -94,7 +94,7 @@ test("service checks count once an interval even when reads arrive every few sec
   assert.equal(changes.length, 1);
   assert.equal(changes[0]!.outage.kind, "service");
   await new Promise((resolve) => setImmediate(resolve));
-  assert.match(JSON.stringify(sent), /Juhandu on Gamemaster is not running/);
+  assert.match(JSON.stringify(sent), /Worker on Server is not running/);
 });
 
 test("starting after a long silence records a monitor gap and a short one does not", async (t) => {

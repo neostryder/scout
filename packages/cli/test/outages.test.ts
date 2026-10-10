@@ -10,8 +10,8 @@ function seed(t: TestContext) {
   const dir = mkdtempSync(join(tmpdir(), "scout-cli-outages-"));
   const db = openCatalog(":memory:");
   t.after(() => { db.close(); rmSync(dir, { recursive: true, force: true }); });
-  upsertMachine(db, { id: "gm", name: "Gamemaster", os: "macos", kind: "host" });
-  const fail = (at: string): Observation => ({ kind: "machine", key: "machine:gm", machineId: "gm", label: "Gamemaster", ok: false, state: "hung", detail: "No SSH greeting.", at });
+  upsertMachine(db, { id: "gm", name: "Server", os: "macos", kind: "host" });
+  const fail = (at: string): Observation => ({ kind: "machine", key: "machine:gm", machineId: "gm", label: "Server", ok: false, state: "hung", detail: "No SSH greeting.", at });
   recordObservations(db, [fail("2026-10-10T08:00:00.000Z")]);
   recordObservations(db, [fail("2026-10-10T08:02:00.000Z")]);
   const lines: string[] = [];

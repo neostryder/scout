@@ -7,13 +7,13 @@ import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isW
 
 const AT = "2026-10-10T00:00:00.000Z";
 const stamp = (minutes: number): string => new Date(Date.parse(AT) + minutes * 60_000).toISOString();
-const machine = (at: number, ok: boolean, state = ok ? "up" : "hung"): Observation => ({ key: "machine:gm", kind: "machine", machineId: "gm", label: "Gamemaster", ok, state, detail: ok ? "" : "Port 22 accepted a connection but sent no SSH banner.", at: stamp(at) });
-const service: ServiceFact = { kind: "windows-service", name: "juhandu", displayName: "Juhandu", domain: "system", program: "C:/Tools/juhandu.exe", state: "running", startMode: "auto", enabled: true, pid: 42, runAs: null, triggers: null, lastRun: null, lastResult: null };
+const machine = (at: number, ok: boolean, state = ok ? "up" : "hung"): Observation => ({ key: "machine:gm", kind: "machine", machineId: "gm", label: "Server", ok, state, detail: ok ? "" : "Port 22 accepted a connection but sent no SSH banner.", at: stamp(at) });
+const service: ServiceFact = { kind: "windows-service", name: "worker", displayName: "Worker", domain: "system", program: "C:/Tools/worker.exe", state: "running", startMode: "auto", enabled: true, pid: 42, runAs: null, triggers: null, lastRun: null, lastResult: null };
 
 function seed(t: TestContext): Db {
   const db = openCatalog(":memory:");
   t.after(() => db.close());
-  upsertMachine(db, { id: "gm", name: "Gamemaster", os: "macos", kind: "host" });
+  upsertMachine(db, { id: "gm", name: "Server", os: "macos", kind: "host" });
   upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
   return db;
 }
@@ -123,7 +123,7 @@ test("manual-start, hidden and opted-out services are not watched", (t) => {
   const db = seed(t);
   recordServices(db, "gm", { origin: "services", status: "ok", facts: [service, { ...service, name: "ondemand", startMode: "manual" }] }, stamp(0));
   const keys = serviceObservations(db, "gm", defaultWatchConfig(), stamp(0)).map((obs) => obs.key);
-  assert.deepEqual(keys, [serviceWatchKey({ machineId: "gm", kind: "windows-service", domain: "system", name: "juhandu" } as never)]);
+  assert.deepEqual(keys, [serviceWatchKey({ machineId: "gm", kind: "windows-service", domain: "system", name: "worker" } as never)]);
   const off = parseWatchConfig({ items: { [keys[0]!]: false } });
   assert.deepEqual(serviceObservations(db, "gm", off, stamp(0)), []);
   assert.deepEqual(serviceObservations(db, "gm", parseWatchConfig({ machines: { gm: false } }), stamp(0)), []);
@@ -139,7 +139,7 @@ test("an open outage raises one alert that resolves on recovery and the immediat
   const created = evaluateAlerts(db, stamp(3), options).filter((change) => change.alert.kind === "machine-outage");
   assert.equal(created.length, 1);
   assert.equal(created[0]!.alert.severity, "high");
-  assert.equal(created[0]!.alert.machineName, "Gamemaster");
+  assert.equal(created[0]!.alert.machineName, "Server");
   assert.deepEqual(evaluateAlerts(db, stamp(4), options), []);
   recordObservations(db, [machine(5, true)]);
   const resolved = evaluateAlerts(db, stamp(6), options).filter((change) => change.change === "resolved");
