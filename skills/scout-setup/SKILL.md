@@ -12,7 +12,7 @@ Work through the steps below in order, one at a time, and check each result befo
 ## Ground rules
 
 - Ask before anything that changes the machine: installing Node, pnpm, git, or PowerShell; turning on an ssh server; writing to `authorized_keys` or `~/.ssh/config`; registering a scheduled task, launch agent, or systemd unit; creating a Cloudflare tunnel; opening a port. Say what you will run and why, and wait for a yes.
-- Never print, echo, log, or store a secret. That covers API tokens, `BWS_ACCESS_TOKEN`, `SCOUT_COGITATOR_KEY`, private keys, and anything in a secrets manager. Do not ask the user to paste a token into the chat. Have them set it in their own environment. Confirm a token works by its effect (the Cloudflare reader printing counts), never by showing it.
+- Never print, echo, log, or store a secret. That covers API tokens, `BWS_ACCESS_TOKEN`, `SCOUT_COGITATOR_KEY`, the Discord webhook address in `SCOUT_DISCORD_WEBHOOK`, private keys, and anything in a secrets manager. Do not ask the user to paste a token into the chat. Have them set it in their own environment. Confirm a token works by its effect (the Cloudflare reader printing counts), never by showing it.
 - Never start an update job, a start, stop, or restart, a recipe approval, or a stack from the page, the API, or the CLI unless the user asks for that specific action. Setting Scout up never requires one.
 - Scans are read-only and safe to run, but they take time and open ssh connections, so tell the user what is about to happen before you start one.
 
@@ -111,6 +111,8 @@ Run it in the background. It listens on 127.0.0.1 port 4870 only. Confirm the pa
 
 Show them around briefly: Catalog, Updates, Review, Jobs, and Services. Point out that update buttons and service controls always show a plan and ask for confirmation, and that you will not press them on their behalf.
 
+Show them the Outages tab on the Services page. The hub checks every machine, tracked hostname, and running service every 2 minutes, records each outage, and shows a desktop notification on the hub machine. Ask whether they also want outage notices posted to Discord. If they do, they create a webhook in the channel's settings and set its address as `SCOUT_DISCORD_WEBHOOK` in the hub's environment themselves. After a hub restart, have them press Send a test notice on the Outages tab and confirm the post arrived. Mention that the tab can pause the watch for 1 or 8 hours before maintenance.
+
 ## 9. Production mode, only if they want it
 
 Production mode puts the page on a public hostname such as `scout.example.com` behind Cloudflare Access. The hub still listens on loopback and a `cloudflared` tunnel on the hub machine carries traffic to it. The hub checks the Access token on every request itself and answers only the configured hostname.
@@ -123,6 +125,7 @@ If they want it, walk them through: a tunnel routing the hostname to `http://127
 
 - Cloudflare reader: a read-only API token in `SCOUT_CLOUDFLARE_TOKEN`, or a Bitwarden Secrets Manager secret named `CLOUDFLARE_SCOUT_READ` read through `bws`. Check it with `node packages/cli/src/main.ts cloudflare read`, which prints counts and never the token.
 - GitHub token in `SCOUT_GITHUB_TOKEN` for GitHub release lookups.
+- Discord outage notices: a webhook address in `SCOUT_DISCORD_WEBHOOK`. Only `discord.com` and `discordapp.com` addresses work. Check it with Send a test notice on the Outages tab.
 - AI toolkit: `SCOUT_AI_TOOLKIT` pointing at a PowerShell script, plus `SCOUT_MODEL_ROUTE_PUBLIC` and `SCOUT_MODEL_ROUTE_INTERNAL`. Capped at 30 calls an hour.
 - A local OpenAI-compatible gateway for project descriptions, configured in `.scout-data/cogitator.json` with its key in `SCOUT_COGITATOR_KEY`.
 
@@ -131,6 +134,8 @@ The user sets every token and key in their own environment.
 ## 11. Run the hub at login, only on request
 
 On Windows, `tools/run-hub.ps1` runs the production command and restarts the hub 10 seconds after any exit, logging to `.scout-data/hub.log`. For local mode they need a copy that runs `pnpm --filter @scout/hub start -- --live` instead. Registering a logon task changes the machine, so show the `Register-ScheduledTask` command from `docs/SETUP.md` and get a yes first. The task needs the full path to `pwsh.exe` and a zero execution time limit, and any optional environment variables belong in the script. On macOS or Linux, offer a launchd agent or a systemd user unit that runs the same command from the repository folder.
+
+On Windows, also offer the outage watchdog, `tools/watch-hub.ps1`, as a second logon task. It sends a notice when the hub stops writing its heartbeat. It needs the same environment variables as the hub and the same zero time limit. Registering it is another machine change, so show the command from `docs/SETUP.md` and get a yes first.
 
 ## Troubleshooting
 
@@ -142,5 +147,6 @@ On Windows, `tools/run-hub.ps1` runs the production command and restarts the hub
 - The page answers 421: the browser used a hostname the hub does not accept. Local mode wants `127.0.0.1` or `localhost`, and production mode wants the hostname in `access.json`.
 - Production mode refuses everything: the hub's output has an `[access] refused` line with the reason. Compare `access.json` with the Access application.
 - `cloudflare reader off` at startup: no token reached the hub process.
+- No Discord post for an outage: `SCOUT_DISCORD_WEBHOOK` did not reach the hub process or the watchdog task, or it is not a `discord.com` or `discordapp.com` webhook address. The Outages tab shows each channel's status and can send a test notice.
 
 When you finish, tell the user what is configured, which machines scanned cleanly, which mode the hub runs in, and anything left for them to do.

@@ -11,6 +11,7 @@ It is meant for one person or a household with a handful of machines: a Windows 
 - Updates installs through winget, the Store, brew, brew casks, npm, pipx, and uv. Each update shows the exact command, waits for your confirmation, then runs a preflight check, the update, and a verify step, one job at a time. A dependency guard refuses an update that would break a runtime another program needs, and asks for a second confirmation when the risk is softer.
 - Maps the running side of each machine: listening TCP ports, published container ports, Windows services, scheduled tasks, and launchd jobs. Each row carries a description and a label of essential, optional, or third-party. Start, stop, and restart go through a plan and a one-time confirmation, and a protected list (ssh, remote access, the tunnel, Scout itself, and more) cannot be stopped from Scout.
 - Raises alerts for new listeners and background jobs, stopped services, widened network exposure, unhealthy endpoints, TLS certificates within 14 days of expiry, crash loops, and port clashes.
+- Watches for outages. Every 2 minutes the hub checks that each machine answers its ssh port with an SSH greeting, and checks the public hostnames and running services it already tracks. A machine that accepts a connection but sends nothing back counts as hung. Each confirmed outage is recorded with its start and end, listed on the Services page, and sent as a desktop notification and, if you set up a webhook, a Discord post.
 - Starts your own projects on a Windows hub machine. Package scripts, launch configurations, and compose files under folders you name become launch recipes that you approve once, and a stack starts several recipes and services in order.
 
 Scout never runs an update or a control action on its own. Every change to a machine starts with a click or a command from you, and every one is written to an audit table.
@@ -57,11 +58,12 @@ All three platforms also get AI tool use counts, project files that pin tool ver
 
 ## Optional integrations
 
-Everything below stays off until you configure it. A read-only Cloudflare reader lists your zones, DNS records, tunnels, Access applications, and Workers routes, and joins each public hostname to the machine and port behind it. A local AI toolkit script can summarize release notes, read versions off vendor pages, and propose dependencies between installed programs, capped at 30 calls an hour, and a local OpenAI-compatible gateway can write descriptions of your projects. A GitHub token raises the rate limit for GitHub release lookups. [docs/SETUP.md](docs/SETUP.md#optional-integrations) has the details.
+Everything below stays off until you configure it. A read-only Cloudflare reader lists your zones, DNS records, tunnels, Access applications, and Workers routes, and joins each public hostname to the machine and port behind it. A local AI toolkit script can summarize release notes, read versions off vendor pages, and propose dependencies between installed programs, capped at 30 calls an hour, and a local OpenAI-compatible gateway can write descriptions of your projects. A GitHub token raises the rate limit for GitHub release lookups. A Discord webhook in `SCOUT_DISCORD_WEBHOOK` adds a Discord post to each outage notice. [docs/SETUP.md](docs/SETUP.md#optional-integrations) has the details.
 
 ## More
 
 - [docs/SETUP.md](docs/SETUP.md): installation and configuration
+- [docs/SETUP.md#outage-alerts](docs/SETUP.md#outage-alerts): what the outage watch checks and how its notices reach you
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how the packages fit together
 - [SECURITY.md](SECURITY.md): the security model and how to report a vulnerability
 - [CONVENTIONS.md](CONVENTIONS.md): rules for code, adapters, and fixtures

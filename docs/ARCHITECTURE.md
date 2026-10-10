@@ -28,7 +28,7 @@ Scans write into `.scout-data/catalog.db`, diffing each result against the last 
 
 ## The hub and its schedules
 
-The hub serves the page and a JSON API on 127.0.0.1, port 4870 by default, and pushes changes to the page over server-sent events. With `--live` or `--production`, it re-reads listeners and service state every 3 seconds for Windows machines and every 20 seconds for others while a Services page is open, every 5 minutes otherwise, and runs the Cloudflare reader when a token exists. The research schedule refreshes each version source when its cache lapses, and health probes run every 5 minutes.
+The hub serves the page and a JSON API on 127.0.0.1, port 4870 by default, and pushes changes to the page over server-sent events. With `--live` or `--production`, it re-reads listeners and service state every 3 seconds for Windows machines and every 20 seconds for others while a Services page is open, every 2 minutes otherwise, and runs the Cloudflare reader when a token exists. The research schedule refreshes each version source when its cache lapses, and health probes run every 2 minutes.
 
 ## Updates
 
@@ -45,6 +45,10 @@ On a Windows hub machine, package scripts, launch configurations, and compose fi
 ## Alerts and health
 
 Alerts cover new listeners and daemons, stopped services, domain origins that are down, widened exposure, unhealthy endpoints, certificates expiring within 14 days, crash loops, and port clashes against `.scout-data/ports.json`. They have stable keys, resolve when the condition clears, and can be acknowledged or muted. Health checks probe public hostnames from the Cloudflare reader and web ports on the hub machine, read certificate expiry from the TLS handshake, and keep 7 days of samples.
+
+## Outage watch
+
+With `--live` or `--production`, the hub runs an outage watch every 2 minutes. The machine probe opens a TCP connection to each machine's ssh port and waits up to 8 seconds for the SSH greeting, which separates up, hung (connected but silent), and down. The watch also takes the health results for public hostnames that are health targets and the live reads for services and ports seen running. Counters for each target confirm an outage after 2 consecutive failures and date its start from the first one. A target with 3 separate failures within 30 minutes is marked flapping, service checks count once per 2-minute window, and incomplete reads never count. Outages are rows in the catalog's `outages` table, beside a `watch_state` table, and each confirmed one also raises a `machine-outage` or `service-outage` alert. The notifier sends a desktop notification and, when `SCOUT_DISCORD_WEBHOOK` is set, a Discord post for each outage and recovery. The hub writes `.scout-data/heartbeat.json` every 30 seconds. `tools/watch-hub.ps1` sends a notice when that file goes stale, and at startup the hub records a `monitor-gap` outage when the previous heartbeat is more than 5 minutes old.
 
 ## The hub machine
 

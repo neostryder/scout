@@ -4,7 +4,7 @@ Scout reads a great deal about your machines and can change some of them. Every 
 
 ## What listens
 
-The hub is the only listener, and it binds to 127.0.0.1 (port 4870 by default) in every mode. Nothing on your network can reach it directly.
+The hub is the only listener, and it binds to 127.0.0.1 (port 4870 by default) in every mode. Nothing on your network can reach it directly. The outage watch and its watchdog add no listener.
 
 In local mode there is no sign-in. The hub answers only requests whose Host is `127.0.0.1`, `localhost`, or `[::1]`, which blocks DNS rebinding. Requests that change anything must carry a JSON content type, which a cross-site form cannot send, and any Origin they carry must be a loopback one. The page is served with a strict Content-Security-Policy that allows only the hub's own scripts and styles and forbids framing.
 
@@ -15,6 +15,8 @@ In production mode the page sits behind Cloudflare Access on a public hostname, 
 Scanning is read-only. Every probe is a fixed argument array defined by its adapter, never a shell string, and nothing in it comes from page or user input. Probes never install, upgrade, start a service, ask for a password, or write outside a temp folder, and a scan never starts a program or a guest VM. Remote machines are read over ssh with your own keys in batch mode, and Scout installs nothing on them.
 
 The Cloudflare reader uses GET requests only. Its token is read from an environment variable or Bitwarden Secrets Manager at startup, kept in memory, and never written to the catalog or the logs. Version research asks public registries and project sites about each package by name, and sends nothing else about your machines.
+
+The outage watch opens a TCP connection to each machine's ssh port, reads the SSH greeting, and closes the connection. It sends no credentials, never logs in, and runs no command on any machine. Its notices go to the hub machine's desktop and, when configured, to a Discord webhook. Only `discord.com` and `discordapp.com` webhook addresses are accepted, and a post never mentions anyone.
 
 Every process Scout starts on Windows runs with a hidden window.
 
@@ -34,7 +36,7 @@ The AI toolkit and the local AI gateway are off unless you configure them. Scout
 
 ## Local state
 
-`machines.json`, `access.json`, and the `.scout-data` folder are git-ignored. They hold your machine list, your Access settings, the catalog, and your edits and approvals. No token or key is written to any of them. Secrets come from environment variables or Bitwarden Secrets Manager, and lookup errors name the failure without the value.
+`machines.json`, `access.json`, and the `.scout-data` folder are git-ignored. They hold your machine list, your Access settings, the catalog, and your edits and approvals. No token or key is written to any of them. Secrets come from environment variables or Bitwarden Secrets Manager, and lookup errors name the failure without the value. The outage watch keeps its switches in `.scout-data/watch.json` and the hub's heartbeat in `.scout-data/heartbeat.json`. The Discord webhook address is a secret: Scout reads it from `SCOUT_DISCORD_WEBHOOK` only, never writes it to a file, and never shows it on the page.
 
 ## Reporting a vulnerability
 

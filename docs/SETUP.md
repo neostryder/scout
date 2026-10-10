@@ -137,7 +137,7 @@ Then open http://127.0.0.1:4870/. The page has Catalog, Updates, Review, Jobs, a
 | Flag | Effect |
 | --- | --- |
 | `--port N` | Listen on another port (default 4870). |
-| `--live` | Turn on live reads: listeners and service state every 3 seconds for Windows machines and every 20 seconds for others while a Services page is open, every 5 minutes otherwise, plus the Cloudflare reader if a token is set. |
+| `--live` | Turn on live reads: listeners and service state every 3 seconds for Windows machines and every 20 seconds for others while a Services page is open, every 2 minutes otherwise, plus the Cloudflare reader if a token is set. |
 | `--schedule` | Refresh version lookups on a schedule. Production mode turns this on. |
 | `--production` | Require Cloudflare Access on every request (see below). |
 | `--no-jobs` | Turn off update jobs. |
@@ -145,7 +145,9 @@ Then open http://127.0.0.1:4870/. The page has Catalog, Updates, Review, Jobs, a
 | `--no-models` | Turn off the AI toolkit even when it is configured. |
 | `--schedule-models` | Let release-note summaries and vendor-page reading use the AI toolkit on their own schedule. |
 | `--no-cloudflare` | Skip the Cloudflare reader. |
-| `--no-health` | Turn off health checks. `--health-interval N` sets their period in seconds (default 300, at least 30). |
+| `--no-health` | Turn off health checks. `--health-interval N` sets their period in seconds (default 120, at least 30). |
+| `--no-watch` | Turn off the outage watch. |
+| `--watch-interval N` | Set the outage watch period in seconds (default 120, at least 30). |
 | `--db path` | Use another catalog file. |
 | `--access path` | Use another Access configuration file in production mode. |
 
@@ -219,6 +221,51 @@ The `enrich` script is separate from the toolkit. `pnpm --filter @scout/cli enri
 
 Project descriptions can come from an OpenAI-compatible gateway running on the hub machine that publishes a discovery document. Configure it in `.scout-data/cogitator.json` with `gateway` (a loopback URL, `http://127.0.0.1:8470` by default), `role` (default `describe`), and optionally `discoveryFile`, and put its key in `SCOUT_COGITATOR_KEY`. Scout refuses a gateway URL that is not on loopback. This path also needs the AI toolkit to be configured.
 
+## Outage alerts
+
+With `--live` or `--production`, the hub checks for outages every 2 minutes. A machine can hang in a way that still answers ping and accepts TCP connections but sends no data, so the machine check opens a TCP connection to the ssh port and waits up to 8 seconds for the SSH greeting. It never logs in. A machine that sends the greeting is up, one that accepts the connection but sends no greeting is hung, and one that refuses or fails the connection is down.
+
+Everything below is watched by default:
+
+- Every machine in `machines.json`, through its ssh port.
+- Every public hostname from the Cloudflare reader that is already a health target.
+- Every service and listening port that the live reads have seen running. A service that has never been seen running is not watched, so it never raises an alert.
+
+An outage is confirmed after 2 failed checks in a row, and its start time is the first failed check, so a quick restart or update raises nothing. One recovery notice follows, with how long the outage lasted. A machine or address that fails 3 separate times within 30 minutes is marked flapping. Service checks count at most once per 2-minute window, even while an open Services page refreshes them more often, and an incomplete read never counts as a failure.
+
+Each outage is stored in the `outages` table of `.scout-data/catalog.db` with what failed, its kind, its state, its start and end, and a detail line. The Outages tab of the Services page lists open and past outages, and each one also appears on the Alerts tab as a high-severity `machine-outage` or `service-outage` alert.
+
+### Notices
+
+Each confirmed outage and each recovery shows a desktop notification on the hub machine: a tray balloon on Windows, an `osascript` notification on macOS, and `notify-send` on Linux. For a Discord post as well, create a webhook in the Discord channel's settings (Integrations, Webhooks, New Webhook), copy its URL, and set it as `SCOUT_DISCORD_WEBHOOK` in the hub's environment. Scout accepts only `discord.com` and `discordapp.com` webhook addresses, and its posts never mention anyone. The address is read from the environment only, and Scout never writes it to a file or shows it on the page.
+
+To check the setup, press Send a test notice on the Outages tab. The same tab shows the status of each notice channel.
+
+### Switches and maintenance
+
+The Outages tab has an on/off switch for each kind of check, each machine, and each item. Turning an item off closes its open outage without a notice. The switches are saved in `.scout-data/watch.json` on the hub machine. Before planned work, pause the watch for 1 or 8 hours from the same tab.
+
+The CLI covers the same ground:
+
+```
+node packages/cli/src/main.ts outages --state open
+node packages/cli/src/main.ts outages --state all --limit 50 --machine mac-mini
+node packages/cli/src/main.ts outages pause 60
+node packages/cli/src/main.ts outages resume
+node packages/cli/src/main.ts outages unwatch machine mac-mini
+node packages/cli/src/main.ts outages watch machine mac-mini
+```
+
+`--state` takes `open`, `closed`, or `all`, and `--machine` takes a machine id. `outages pause` takes a number of minutes. `watch` and `unwatch` take `machine`, `check`, or `item`, followed by its name.
+
+`--no-watch` turns the watch off, and `--watch-interval N` sets its period in seconds (default 120, at least 30).
+
+### When the hub itself stops
+
+The hub writes `.scout-data/heartbeat.json` every 30 seconds. On Windows, `tools/watch-hub.ps1` reads it every 60 seconds, and when it is more than 180 seconds old the script sends the Discord post and the desktop notification, then a recovery notice with the duration once the heartbeat moves again. The script never touches the catalog. Run it as a second logon task (see [Run the hub at login](#run-the-hub-at-login)).
+
+When the hub starts and finds its last heartbeat more than 5 minutes old, it records a `monitor-gap` outage, "Scout was not running", that covers the silence. An outage of the hub machine itself shows up this way once the machine is back. While the whole hub machine is down, nothing can send a notice: the watchdog covers a hub process that hangs or stops.
+
 ## Local state
 
 Everything Scout writes lives in `.scout-data/`:
@@ -230,6 +277,8 @@ Everything Scout writes lives in `.scout-data/`:
 | `ports.json` | Optional port registry: named `ranges` and `reserved` ports. Port-clash alerts come from it. |
 | `stacks.json` | Optional stacks: ordered lists of recipes and services with wait-for-port steps. |
 | `alerts.json` | Alert mutes. |
+| `watch.json` | Outage watch switches, set from the Outages tab or the `outages watch` and `unwatch` commands. Everything is watched until a switch is turned off. |
+| `heartbeat.json` | The hub's heartbeat, rewritten every 30 seconds. The watchdog reads it, and the hub reads it at startup to record a monitor gap. |
 | `tunnel-hosts.json` | Optional tunnel name to machine id map. |
 | `cogitator.json` | Optional local AI gateway settings. |
 | `hub.log` | Output of the Windows supervisor script. |
@@ -249,6 +298,16 @@ Register-ScheduledTask -TaskName "Scout hub" -Action $action -Trigger $trigger -
 ```
 
 The zero time limit matters: the supervisor never exits, and the default limit would stop it after three days. Set any optional environment variables (`SCOUT_AI_TOOLKIT`, `BWS_ACCESS_TOKEN`, and so on) at the top of the script, since a logon task does not run your shell profile. For local mode at login, make a copy of the script that runs `pnpm --filter @scout/hub start -- --live` instead.
+
+`tools/watch-hub.ps1` is the outage watchdog. Register it as a second logon task beside the hub, with the same environment variables as the hub so it can send the Discord post. It runs until logoff too, so it needs the same zero time limit:
+
+```powershell
+$pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
+$action = New-ScheduledTaskAction -Execute $pwsh -Argument '-NoProfile -WindowStyle Hidden -File "C:\Projects\scout\tools\watch-hub.ps1"'
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
+Register-ScheduledTask -TaskName "Scout watchdog" -Action $action -Trigger $trigger -Settings $settings
+```
 
 On macOS or Linux, any service manager works (a launchd agent, a systemd user unit). Run the same command from the repository folder and restart it when it exits.
 
@@ -271,6 +330,7 @@ Then restart the hub. Under the supervisor, stopping the `node` process is enoug
 - The page shows `421 misdirected request`: local mode accepts `127.0.0.1` or `localhost`, and production mode accepts only the hostname in `access.json`.
 - Production mode refuses every request: the hub log has an `[access] refused` line with the reason, such as `wrong audience` or `email is not allowed`. Compare `access.json` with the Access application.
 - The hub prints `cloudflare reader off`: no token was found. Set `SCOUT_CLOUDFLARE_TOKEN`, or make `bws` and `BWS_ACCESS_TOKEN` available to the hub process.
+- No Discord post arrives: press Send a test notice on the Outages tab and read the channel status there. `SCOUT_DISCORD_WEBHOOK` must reach the hub process (and the watchdog task), and it must be a `discord.com` or `discordapp.com` webhook address.
 - Port 4870 is taken: start the hub with `--port` and another port, and point the tunnel there in production mode.
 
 ## Platform notes
