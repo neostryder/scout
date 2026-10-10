@@ -7,8 +7,10 @@ import { loadDescriptionResolver } from "./descriptions.ts";
 import { buildHealthTargets, healthAlertCandidates, healthTarget } from "./health.ts";
 import { portClashes, portsFileReader, type PortRegistry, type RegistryFile } from "./ports.ts";
 import { recipesResponse } from "./recipes.ts";
+import { listenerWatchKey, listOutages, serviceWatchKey } from "./outages.ts";
+import { isWatched, type WatchConfig } from "./watch-file.ts";
 
-export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash"] as const;
+export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "machine-outage", "service-outage"] as const;
 export const ALERT_STATES = ["open", "acknowledged", "resolved"] as const;
 export type AlertKind = typeof ALERT_KINDS[number];
 export type AlertState = typeof ALERT_STATES[number];
@@ -31,8 +33,8 @@ export interface Alert {
 export interface AlertChange { alert: Alert; change: "created" | "resolved" | "acknowledged" | "muted" }
 export interface AlertMute { key: string; match: string; reason: string; source: "file" | "page"; at: string }
 export interface AlertFile { ungatedHosts: string[]; mute: { match: string; reason: string }[]; at: string | null; fileError: string | null }
-export interface AlertOptions { loadMutes?: () => AlertFile; loadPorts?: () => RegistryFile<PortRegistry>; tunnelHosts?: Record<string, string>; machineId?: string }
-interface Condition { hostname?: string; path?: string | null; fromBind?: "loopback" | "lan" | "all"; hostnames?: string[]; healthKey?: string }
+export interface AlertOptions { loadMutes?: () => AlertFile; loadPorts?: () => RegistryFile<PortRegistry>; tunnelHosts?: Record<string, string>; machineId?: string; loadWatch?: () => WatchConfig }
+interface Condition { hostname?: string; path?: string | null; fromBind?: "loopback" | "lan" | "all"; hostnames?: string[]; healthKey?: string; outageKey?: string }
 interface RouteSnapshot { state: string; machineId: string | null; listenerId: number | null; serviceId: number | null; port: number | null }
 interface EventDetail { port?: number; process?: string | null; container?: string | null; oldBind?: string; newBind?: string; name?: string; kind?: string; domain?: string; old?: { state?: string } | null }
 interface StoredAlert extends Omit<Alert, "target" | "muted"> { targetType: Alert["target"]["type"]; targetId: number | null; muted: number; condition: string }
@@ -143,10 +145,26 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   const candidates: Candidate[] = [];
   const clashes = portClashes((options.loadPorts ?? readPorts)().config, listeners, recipesResponse(db).recipes);
   for (const clash of clashes) candidates.push({ at: now, kind: "port-clash", severity: clash.kind === "recipe-port-shared" ? "warn" : "high", machineId: hubMachineId(), machineName: hubMachineName(), key: `port-clash:${clash.key}`, title: `Port clash: ${clash.port}`, detail: clash.detail, target: { type: null, id: null }, condition: {} });
+  const openOutages = listOutages(db, { state: "open", limit: 500, now }).filter((row) => row.kind === "machine" || row.kind === "flapping" || row.kind === "service");
+  const machineName = (id: string | null): string | null => id === null ? null : (db.prepare("SELECT name FROM machines WHERE id = ?").get(id) as { name: string } | undefined)?.name ?? null;
+  for (const row of openOutages) {
+    const kind: AlertKind = row.kind === "service" ? "service-outage" : "machine-outage";
+    const title = row.kind === "flapping" ? `Flapping: ${row.label}` : row.kind === "service" ? `Not running: ${row.label}` : `Machine ${row.state}: ${row.label}`;
+    candidates.push({ at: row.confirmedAt, kind, severity: row.kind === "service" ? "warn" : "high", machineId: row.machineId, machineName: machineName(row.machineId), key: `${kind}:${row.key}`, title, detail: `${row.detail} Since ${row.startedAt}.`.trim(), target: { type: null, id: null }, condition: { outageKey: row.key } });
+  }
+  const openOutageKeys = new Set(openOutages.map((row) => row.key));
   const healthCandidates = healthAlertCandidates(db, now, options.tunnelHosts);
   const healthKeys = new Set(buildHealthTargets(db, options.tunnelHosts).map((target) => target.key));
   candidates.push(...healthCandidates);
+  const watch = options.loadWatch?.();
+  // An item the outage watch has seen running is reported by that watch after two checks, so a restart does not raise an alert of its own.
+  const outageWatched = (row: Service | Listener): boolean => {
+    if (!watch) return false;
+    const key = "port" in row ? listenerWatchKey(row) : serviceWatchKey(row);
+    return db.prepare("SELECT 1 FROM watch_state WHERE key = ? AND last_state = 'up' OR key = ? AND failures > 0").get(key, key) !== undefined && isWatched(watch, "service", row.machineId, key, now);
+  };
   const add = (kind: AlertKind, row: Service | Listener, severity: Alert["severity"], title: string, detail: string, condition: Condition = {}): void => {
+    if (kind === "service-down" && outageWatched(row)) return;
     const type = "port" in row ? "listener" : "service";
     const identity = "port" in row ? `${row.port}:${row.processName ?? row.containerName ?? "unknown"}${row.containerName && row.processName ? `:${row.containerName}` : ""}` : `${row.kind}:${row.domain}:${row.name}`;
     candidates.push({ at: now, kind, severity, machineId: row.machineId, machineName: row.machineName, key: `${kind}:${row.machineId}:${kind === "service-down" ? `${type}:` : ""}${identity}`, title, detail, target: { type, id: row.id }, condition });
@@ -197,7 +215,8 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
       const target = row.targetType === "service" ? services.find((item) => item.id === row.targetId) : listeners.find((item) => item.id === row.targetId);
       const route = routes.find((item) => item.hostname === condition.hostname && item.path === condition.path);
       const health = condition.healthKey && healthKeys.has(condition.healthKey) ? healthTarget(db, condition.healthKey, now) : null;
-      const clears = row.kind === "port-clash" ? !clashes.some((clash) => `port-clash:${clash.key}` === row.key) :
+      const clears = row.kind === "machine-outage" || row.kind === "service-outage" ? !condition.outageKey || !openOutageKeys.has(condition.outageKey) :
+        row.kind === "port-clash" ? !clashes.some((clash) => `port-clash:${clash.key}` === row.key) :
         row.kind === "unhealthy" ? !health || ["up", "slow", "not-http"].includes(health.state) :
         row.kind === "cert-expiring" ? !health || health.tlsDaysLeft !== null && health.tlsDaysLeft > 14 :
         row.kind === "crash-loop" ? !healthCandidates.some((candidate) => candidate.key === row.key) :
@@ -215,7 +234,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
     for (const candidate of candidates) {
       const existing = db.prepare(`${SELECT} WHERE key = ? AND state <> 'resolved'`).get(candidate.key) as unknown as StoredAlert | undefined;
       if (existing) {
-        if ((candidate.kind === "cert-expiring" || candidate.kind === "unhealthy" || candidate.kind === "crash-loop" || candidate.kind === "port-clash") && (candidate.severity !== existing.severity || candidate.detail !== existing.detail)) {
+        if ((candidate.kind === "cert-expiring" || candidate.kind === "unhealthy" || candidate.kind === "crash-loop" || candidate.kind === "port-clash" || candidate.kind === "machine-outage" || candidate.kind === "service-outage") && (candidate.severity !== existing.severity || candidate.detail !== existing.detail)) {
           db.prepare("UPDATE alerts SET severity = ?, detail = ? WHERE id = ?").run(candidate.severity, candidate.detail, existing.id);
           changes.push({ alert: { ...alertObject(existing), severity: candidate.severity, detail: candidate.detail }, change: "created" });
         }

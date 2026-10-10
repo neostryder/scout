@@ -49,7 +49,7 @@ test("health states count failures and recover from down and non-HTTP samples", 
   const key = "listener:hub:8080";
   assert.equal(healthRow(db, key).state, "unknown");
   storeHealthSample(db, key, sample({ at: stamp(-1) }));
-  for (const [index, state] of ["failing", "failing", "down"].entries()) {
+  for (const [index, state] of ["failing", "down", "down"].entries()) {
     storeHealthSample(db, key, sample({ at: stamp(index), ok: false, status: 503, error: "HTTP 503" }));
     assert.equal(healthTarget(db, key)!.state, state);
     assert.equal(healthTarget(db, key)!.failures, index + 1);
@@ -59,7 +59,7 @@ test("health states count failures and recover from down and non-HTTP samples", 
   assert.equal(storeHealthSample(db, key, sample({ at: stamp(5), ok: false, status: null, notHttp: true }))!.target.state, "not-http");
   assert.equal(healthTarget(db, key)!.failures, 0);
   assert.equal(storeHealthSample(db, key, sample({ at: stamp(6), latencyMs: 2000 }))!.target.state, "up");
-  assert.deepEqual(healthState(sample({ ok: false }), 2), { state: "down", failures: 3 });
+  assert.deepEqual(healthState(sample({ ok: false }), 1), { state: "down", failures: 2 });
 });
 
 test("retention removes samples older than seven days and caps each target at 2016", (t) => {
@@ -112,7 +112,7 @@ test("unhealthy alerts use stable keys and domain and listener severity and reso
   for (let i = 0; i < 3; i++) {
     for (const target of buildHealthTargets(db)) storeHealthSample(db, target.key, sample({ ok: false, status: null, error: "timeout" }));
     const changes = evaluateAlerts(db, AT).filter((change) => change.alert.kind === "unhealthy");
-    assert.equal(changes.length, i === 2 ? 2 : 0);
+    assert.equal(changes.length, i === 0 ? 0 : 2);
   }
   const alerts = alertsResponse(db, new URLSearchParams("kind=unhealthy"), AT).alerts;
   assert.deepEqual(alerts.map((row) => [row.key, row.severity]).sort(), [["unhealthy:domain:scout.example.test", "high"], ["unhealthy:listener:hub:8080", "warn"]]);

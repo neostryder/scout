@@ -112,11 +112,14 @@ export function healthRow(db: Db, key: string, now = new Date().toISOString()): 
   return { key, state: target?.state ?? "unknown", latencyMs: target?.latencyMs ?? null, lastOkAt: target?.lastOkAt ?? null, failures: target?.failures ?? 0, tlsDaysLeft: target?.tlsDaysLeft ?? null };
 }
 
+/** Failed probes in a row that make a target down; the outage watch confirms an outage after the same number of checks. */
+export const HEALTH_DOWN_AFTER = 2;
+
 export function healthState(sample: HealthSample, previousFailures: number): { state: HealthState; failures: number } {
   if (sample.notHttp) return { state: "not-http", failures: 0 };
   if (sample.ok) return { state: (sample.latencyMs ?? 0) > 2000 ? "slow" : "up", failures: 0 };
   const failures = previousFailures + 1;
-  return { state: failures >= 3 ? "down" : "failing", failures };
+  return { state: failures >= HEALTH_DOWN_AFTER ? "down" : "failing", failures };
 }
 
 export function storeHealthSample(db: Db, key: string, sample: HealthSample): HealthChange | null {

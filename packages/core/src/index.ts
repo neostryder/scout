@@ -42,6 +42,8 @@ export * from "./actions.ts";
 export * from "./uninstall.ts";
 export * from "./alerts.ts";
 export * from "./alerts-file.ts";
+export * from "./outages.ts";
+export * from "./watch-file.ts";
 export * from "./health.ts";
 export * from "./ports.ts";
 export * from "./hub.ts";

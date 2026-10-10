@@ -223,6 +223,33 @@ CREATE TABLE IF NOT EXISTS health_samples (
 );
 CREATE INDEX IF NOT EXISTS health_samples_target ON health_samples(target_key, at, id);
 
+CREATE TABLE IF NOT EXISTS outages (
+  id INTEGER PRIMARY KEY,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('machine','url','service','flapping','monitor-gap')),
+  machine_id TEXT,
+  label TEXT NOT NULL,
+  state TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  confirmed_at TEXT NOT NULL,
+  ended_at TEXT,
+  detail TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS outages_open ON outages(key) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS outages_history ON outages(started_at, id);
+
+CREATE TABLE IF NOT EXISTS watch_state (
+  key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  machine_id TEXT,
+  label TEXT NOT NULL,
+  failures INTEGER NOT NULL DEFAULT 0,
+  first_failed_at TEXT,
+  last_state TEXT NOT NULL DEFAULT 'up',
+  last_checked_at TEXT,
+  episodes_json TEXT NOT NULL DEFAULT '[]'
+);
+
 CREATE TABLE IF NOT EXISTS alert_baseline (
   machine_id TEXT PRIMARY KEY REFERENCES machines(id),
   event_id INTEGER NOT NULL,
