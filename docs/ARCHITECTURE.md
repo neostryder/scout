@@ -40,7 +40,7 @@ Start, stop, and restart for Windows services, scheduled tasks, launchd jobs, an
 
 ## Recipes and stacks
 
-On a Windows hub machine, package scripts, launch configurations, and compose files under `projectRoots` become proposed launch recipes. Each is approved once for its exact command. Only node, npm, npx, pnpm, yarn, python, python3, py, uv, docker, deno, bun, and dotnet can launch, values reach the shell through environment variables, and arguments must match a strict character set. A stack in `.scout-data/stacks.json` lists up to 12 recipes and services in order, with optional ports to wait for, and each member runs through the control pipeline.
+On a Windows hub machine, package scripts, launch configurations, and compose files under `projectRoots` become proposed launch recipes. Each is approved once for its exact command. Only node, npm, npx, pnpm, yarn, python, python3, py, uv, docker, deno, bun, and dotnet can launch, values reach the shell through environment variables, and arguments must match a strict character set. A stack in `.scout-data/stacks.json` lists up to 12 recipes and services in order, with optional ports to wait for, and each member runs through the control pipeline. The launcher resolves each program name to an `.exe`, `.cmd`, `.bat`, or `.com` file on PATH and never starts a `.ps1` script, so a program that exists only as a script is not launched. A recipe with no port to confirm is checked about 3 and 8 seconds after launch, and Scout stops watching the process after the second check.
 
 ## Alerts and health
 

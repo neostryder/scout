@@ -120,7 +120,7 @@ test("stack execution starts each member in order, waits for fresh ports and aud
   assert.equal(audit!.message, "Started 3 of 3 members");
   assert.equal(audit!.rowId, 0);
   assert.deepEqual(f.calls, ["start:First", "port:8470", "port:8470", "start:dev", "port:8471", "start:Last"]);
-  assert.equal(f.time(), 5000);
+  assert.equal(f.time(), 10_000);
   const rows = listActions(f.db);
   assert.deepEqual(rows.map((row) => row.target), ["service", "recipe", "service", "stack"]);
   assert.ok(rows.every((row) => row.state === "done"));

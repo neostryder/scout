@@ -28,3 +28,8 @@
 ### Changed
 
 - [Visible] [Services] **Health checks run every 2 minutes instead of every 5.** `--health-interval` still sets the period in seconds.
+
+### Fixed
+
+- [Visible] [Services] **Launch recipes start the real program instead of opening a script in an editor.** When `pnpm` or a similar command resolved to a `.ps1` script, starting a recipe opened that script in the editor set for `.ps1` files, and Scout reported the recipe as running even though nothing had started. The launcher now starts the matching `.exe`, `.cmd`, `.bat`, or `.com` file on PATH, and if no such file exists the action fails without launching anything.
+- [Visible] [Services] **A recipe without a port is checked twice after launch.** The checks run about 3 and 8 seconds after it starts, and the result says whether the process was still running at 8 seconds or exited sooner. A stack that includes such a recipe now waits 8 seconds for it instead of 3.

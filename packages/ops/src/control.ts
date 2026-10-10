@@ -61,7 +61,7 @@ try {
   $code = Receive-Job -Job $job; if ($null -eq $code) { exit 1223 }; exit [int]$code;
 } finally { if ($job) { Remove-Job -Job $job -Force }; Remove-Item -LiteralPath $dir -Recurse -Force }
 `;
-export const WINDOWS_RECIPE = `${ERROR}$exe = [string]$env:SCOUT_RECIPE_EXE; $args = @(ConvertFrom-Json -InputObject $env:SCOUT_RECIPE_ARGS); $cwd = [string]$env:SCOUT_RECIPE_CWD; $proc = if ($args.Count) { Start-Process -FilePath $exe -ArgumentList $args -WorkingDirectory $cwd -WindowStyle Hidden -PassThru } else { Start-Process -FilePath $exe -WorkingDirectory $cwd -WindowStyle Hidden -PassThru }; $proc.Id`;
+export const WINDOWS_RECIPE = `${ERROR}$exe = [string]$env:SCOUT_RECIPE_EXE; $found = Get-Command -Name $exe -All -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '^\\.(exe|cmd|bat|com)$' } | Select-Object -First 1; if (-not $found) { exit 2 }; $exe = $found.Source; $args = @(ConvertFrom-Json -InputObject $env:SCOUT_RECIPE_ARGS); $cwd = [string]$env:SCOUT_RECIPE_CWD; $proc = if ($args.Count) { Start-Process -FilePath $exe -ArgumentList $args -WorkingDirectory $cwd -WindowStyle Hidden -PassThru } else { Start-Process -FilePath $exe -WorkingDirectory $cwd -WindowStyle Hidden -PassThru }; $proc.Id`;
 export const WINDOWS_RECIPE_PID = `${ERROR}$proc = Get-Process -Id ([int]$env:SCOUT_RECIPE_PID) -ErrorAction SilentlyContinue; if ($proc) { 'alive' }`;
 const TASK_READ = `${ERROR}$task = Get-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop; $info = $task | Get-ScheduledTaskInfo; $row = [pscustomobject]@{ TaskName = $task.TaskName; TaskPath = $task.TaskPath; State = [string]$task.State; Execute = ($task.Actions | Select-Object -First 1).Execute; Triggers = @(); RunAs = $task.Principal.UserId; LastRun = $info.LastRunTime.ToString('o'); LastResult = $info.LastTaskResult }; ConvertTo-Json -InputObject @($row) -Compress -Depth 3`;
 const NAME = /^[A-Za-z0-9._-]+$/;
@@ -457,25 +457,36 @@ export class ControlRunner extends EventEmitter {
     try {
       const result = await this.exec(plan.transport!, plan.argv, 20_000, undefined, plan.env);
       exitCode = result.exitCode;
+      if (exitCode === 2) { finish("failed", "The program was not found as an .exe, .cmd, or .bat file on this machine, so nothing was started."); return; }
       if (exitCode !== 0) { finish("failed", `The launch command exited with code ${exitCode}.`); return; }
       const pid = Number(result.stdout.trim());
       if (!validPid(pid)) { finish("failed", "The launch command did not return a process id."); return; }
       const port = row.recipe!.port;
       const start = this.clock.now();
       const machine = this.deps.machines.find((item) => item.id === row.machineId)!;
-      if (port === null) await this.clock.sleep(3000);
+      if (port === null) {
+        // A recipe with no port can only be confirmed by its process id, so it is checked twice: a dev server that dies on a bad config usually does so within a few seconds.
+        const seconds = (): number => Math.ceil((this.clock.now() - start) / 1000);
+        for (const wait of [3000, 5000]) {
+          await this.clock.sleep(wait);
+          let alive = false;
+          try { alive = await this.confirmRecipe(machine, port, pid, 15_000); } catch { finish("failed", "The launched process could not be checked."); return; }
+          if (!alive) { finish("failed", `The launched process exited within ${seconds()} s of launch.`); return; }
+        }
+        finish("done", `The launched process was still running ${seconds()} s after launch. Scout does not watch it after this check.`);
+        return;
+      }
       while (!this.closed && this.clock.now() - start < 20_000) {
         const remaining = 20_000 - (this.clock.now() - start);
         try {
           const running = await this.confirmRecipe(machine, port, pid, remaining);
-          if (running && this.clock.now() - start <= 20_000) { finish("done", port === null ? `The launched process is still running after ${Math.ceil((this.clock.now() - start) / 1000)} s.` : `The recipe started and port ${port} is listening.`); return; }
-          if (port === null) { finish("failed", "The launched process exited before confirmation."); return; }
+          if (running && this.clock.now() - start <= 20_000) { finish("done", `The recipe started and port ${port} is listening.`); return; }
         } catch { /* A temporary live read failure can recover before the deadline. */ }
         const wait = 20_000 - (this.clock.now() - start);
         if (wait <= 0) break;
         await this.clock.sleep(Math.min(2000, wait));
       }
-      finish("failed", this.closed ? "The control runner closed before confirmation." : port === null ? "The launched process could not be confirmed after 20 s." : `Port ${port} did not open within 20 s.`);
+      finish("failed", this.closed ? "The control runner closed before confirmation." : `Port ${port} did not open within 20 s.`);
     } catch { finish("failed", "The recipe could not be launched or confirmed."); }
   }
 

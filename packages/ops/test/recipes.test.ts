@@ -68,7 +68,7 @@ test("recipe confirmation refuses drift and changed decisions before executing",
   assert.deepEqual(listActions(f.db), []);
 });
 
-test("the fixed recipe script receives data through environment variables and confirms a pid after three seconds", async (t) => {
+test("the fixed recipe script receives data through environment variables and confirms a pid after three and eight seconds", async (t) => {
   const f = fixture(t); f.approve();
   const events: ActionRecord[] = [];
   const calls: { argv: string[]; env: unknown }[] = [];
@@ -88,12 +88,17 @@ test("the fixed recipe script receives data through environment variables and co
   assert.equal(audit.target, "recipe");
   assert.equal(audit.mechanism, "recipe");
   assert.deepEqual(events.map((event) => event.state), ["running", "done"]);
-  assert.deepEqual(f.sleeps, [3000]);
+  assert.deepEqual(f.sleeps, [3000, 5000]);
   assert.equal(calls[0]!.argv[4], WINDOWS_RECIPE);
   assert.equal(calls[1]!.argv[4], WINDOWS_RECIPE_PID);
+  assert.equal(calls[2]!.argv[4], WINDOWS_RECIPE_PID);
+  assert.match(audit.message!, /still running 8 s after launch/);
   assert.deepEqual(calls[0]!.env, { SCOUT_RECIPE_EXE: "node", SCOUT_RECIPE_ARGS: '["distinct-app.js"]', SCOUT_RECIPE_CWD: f.root });
   assert.deepEqual(calls[1]!.env, { SCOUT_RECIPE_PID: "4321" });
   for (const call of calls) assert.ok(!call.argv.join(" ").includes(f.root) && !call.argv.join(" ").includes("distinct-app.js"));
+  assert.match(WINDOWS_RECIPE, /Get-Command -Name \$exe -All -CommandType Application/);
+  assert.match(WINDOWS_RECIPE, /\\\.\(exe\|cmd\|bat\|com\)/);
+  assert.doesNotMatch(WINDOWS_RECIPE, /ps1/);
   assert.match(WINDOWS_RECIPE, /Start-Process -FilePath \$exe -ArgumentList \$args -WorkingDirectory \$cwd -WindowStyle Hidden -PassThru/);
   assert.doesNotMatch(WINDOWS_RECIPE, /Invoke-Expression/);
   const auditPlan = JSON.parse(String(f.db.prepare("SELECT plan_json FROM actions WHERE id = ?").get(audit.id)!.plan_json));
@@ -134,9 +139,26 @@ test("recipe confirmation fails when the launched pid exits and expired plans ex
   const control = f.runner({ exec: async () => { calls++; return { exitCode: 0, stdout: "4321", stderr: "" }; }, recipeReader: async () => false });
   const plan = (await control.plan("recipe", f.recipe.id, "start"))!;
   const run = await control.run(plan.id!, plan.token!);
-  assert.match((await control.wait(run.actionId))!.message!, /exited before confirmation/);
+  assert.match((await control.wait(run.actionId))!.message!, /exited within 3 s of launch/);
   const expired = (await control.plan("recipe", f.recipe.id, "start"))!;
   f.advance(120_000);
   await assert.rejects(control.run(expired.id!, expired.token!), { status: 404 });
   assert.equal(calls, 1);
+});
+
+test("a no-port recipe that dies between the two checks reports the second check, and a program that is not an executable starts nothing", async (t) => {
+  const f = fixture(t); f.approve();
+  let checks = 0;
+  const control = f.runner({ exec: async () => ({ exitCode: 0, stdout: "4321", stderr: "" }), recipeReader: async () => ++checks < 2 });
+  const plan = (await control.plan("recipe", f.recipe.id, "start"))!;
+  const run = await control.run(plan.id!, plan.token!);
+  const audit = (await control.wait(run.actionId))!;
+  assert.equal(audit.state, "failed");
+  assert.match(audit.message!, /exited within 8 s of launch/);
+  const g = fixture(t); g.approve();
+  const missing = g.runner({ exec: async () => ({ exitCode: 2, stdout: "", stderr: "" }) });
+  const second = (await missing.plan("recipe", g.recipe.id, "start"))!;
+  const result = (await missing.wait((await missing.run(second.id!, second.token!)).actionId))!;
+  assert.equal(result.state, "failed");
+  assert.match(result.message!, /not found as an \.exe, \.cmd, or \.bat file/);
 });
