@@ -4,9 +4,10 @@ import { recipeCommand, recipeFilter, recipeCounts, recipeEventReducer, recipeBu
 import { healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer } from "./services-model.js";
 import { rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, stackFilter, stackEventReducer } from "./services-model.js";
 import { renderDiagram } from "./services-diagram.js";
+import { createOutagesPanel } from "./outages.js";
 
 const PAGE = 100;
-const TABS = ["services", "listeners", "activity", "actions", "recipes", "domains", "alerts", "health", "ports", "stacks"];
+const TABS = ["services", "listeners", "activity", "actions", "recipes", "domains", "alerts", "health", "outages", "ports", "stacks"];
 const LENSES = [["daemons", "Daemons"], ["optional", "Could disable"], ["third-party", "Third-party"], ["official", "Official"], ["exposed", "Exposed"], ["hidden", "System hidden"]];
 const title = (text) => text[0].toUpperCase() + text.slice(1);
 const date = (value) => value ? new Date(value).toLocaleString() : "None";
@@ -44,6 +45,8 @@ export function createServicesView(root) {
   const tablePanel = h("section", { id: "services-table-panel", role: "tabpanel" }, tableStatus, h("div", { class: "data-wrap" }, table));
   const alertsPanel = h("section", { id: "services-alerts-panel", role: "tabpanel", class: "alerts-panel", hidden: true, "aria-labelledby": "services-tab-alerts" });
   const healthPanel = h("section", { id: "services-health-panel", role: "tabpanel", class: "health-panel", hidden: true, "aria-labelledby": "services-tab-health" });
+  const outages = createOutagesPanel({ onCount: (count) => paintOutagesTab(count) });
+  const outagesPanel = outages.panel;
   const portsPanel = h("section", { id: "services-ports-panel", role: "tabpanel", class: "ports-panel", hidden: true, "aria-labelledby": "services-tab-ports" });
   const stacksPanel = h("section", { id: "services-stacks-panel", role: "tabpanel", class: "stacks-panel", hidden: true, "aria-labelledby": "services-tab-stacks" });
   const protectedPanel = h("details", { class: "protected-panel", hidden: true, ontoggle: (event) => { if (event.currentTarget.open) loadProtected(event.currentTarget); } }, h("summary", {}, "Protected services"), h("div", {}));
@@ -56,8 +59,9 @@ export function createServicesView(root) {
     const index = event.key === "Home" ? 0 : event.key === "End" ? visible.length - 1 : (current + (event.key === "ArrowRight" ? 1 : visible.length - 1)) % visible.length;
     const button = visible[index];
     change("tab", button.id.replace("services-tab-", "")); button.focus();
-  } }, ...TABS.map((name) => h("button", { id: `services-tab-${name}`, type: "button", role: "tab", "aria-controls": ({ alerts: "services-alerts-panel", health: "services-health-panel", ports: "services-ports-panel", stacks: "services-stacks-panel" })[name] || "services-table-panel", onclick: () => change("tab", name) }, name === "alerts" ? "Alerts" : title(name))));
+  } }, ...TABS.map((name) => h("button", { id: `services-tab-${name}`, type: "button", role: "tab", "aria-controls": ({ alerts: "services-alerts-panel", health: "services-health-panel", outages: "services-outages-panel", ports: "services-ports-panel", stacks: "services-stacks-panel" })[name] || "services-table-panel", onclick: () => change("tab", name) }, name === "alerts" ? "Alerts" : title(name))));
   tabs.children[TABS.indexOf("recipes")].hidden = true;
+  tabs.children[TABS.indexOf("outages")].hidden = true;
   const recipeDialog = h("dialog", { class: "action-dialog", "aria-labelledby": "recipe-title", onclose: () => { if (recipeOpener?.isConnected) recipeOpener.focus(); else tabs.querySelector('[aria-selected="true"]')?.focus(); } });
   let recipeOpener = null;
   const detail = h("dialog", { class: "service-detail", "aria-labelledby": "services-detail-title", onclose: restoreFocus, onkeydown: trapFocus });
@@ -77,7 +81,7 @@ export function createServicesView(root) {
     const next = descriptionEditorState({ editing: descriptionEditing, error: descriptionError }, action);
     descriptionEditing = next.editing; descriptionError = next.error;
   }
-  root.replaceChildren(h("header", { class: "chart-header" }, h("div", {}, h("h1", {}, "The chart room"), subtitle), status, h("details", { class: "chart-menu" }, h("summary", {}, "View options"), h("label", {}, effectsInput, "Effects"))), figures, lenses, h("div", { class: "chart-filters" }, h("label", { class: "chart-search" }, "Search", search), h("label", {}, "Machine", machineSelect), h("label", {}, "Description", descriptionSelect), refresh, refreshEdge, h("div", { class: "describe-controls" }, refreshDescriptions, h("small", { class: "quiet" }, "Sends only names, never paths, users, hosts or ports."), refreshProjects, h("small", { class: "quiet" }, "Reads each project's README and notes on this computer and sends them only to the local Cogitator host."), describeStatus), h("button", { type: "button", onclick: () => { state.params = new URLSearchParams("view=services"); state.limit = PAGE; syncUrl(); syncControls(); load(); } }, "Clear filters")), announce, progress, h("div", { class: "chart-content" }, h("section", { class: "atlas-panel" }, atlasError, atlas), h("section", { class: "tables-panel" }, tabs, tablePanel, alertsPanel, healthPanel, portsPanel, stacksPanel, protectedPanel, h("div", { class: "more-services" }, more))), detail, actionDialog, recipeDialog);
+  root.replaceChildren(h("header", { class: "chart-header" }, h("div", {}, h("h1", {}, "The chart room"), subtitle), status, h("details", { class: "chart-menu" }, h("summary", {}, "View options"), h("label", {}, effectsInput, "Effects"))), figures, lenses, h("div", { class: "chart-filters" }, h("label", { class: "chart-search" }, "Search", search), h("label", {}, "Machine", machineSelect), h("label", {}, "Description", descriptionSelect), refresh, refreshEdge, h("div", { class: "describe-controls" }, refreshDescriptions, h("small", { class: "quiet" }, "Sends only names, never paths, users, hosts or ports."), refreshProjects, h("small", { class: "quiet" }, "Reads each project's README and notes on this computer and sends them only to the local Cogitator host."), describeStatus), h("button", { type: "button", onclick: () => { state.params = new URLSearchParams("view=services"); state.limit = PAGE; syncUrl(); syncControls(); load(); } }, "Clear filters")), announce, progress, h("div", { class: "chart-content" }, h("section", { class: "atlas-panel" }, atlasError, atlas), h("section", { class: "tables-panel" }, tabs, tablePanel, alertsPanel, healthPanel, outagesPanel, portsPanel, stacksPanel, protectedPanel, h("div", { class: "more-services" }, more))), detail, actionDialog, recipeDialog);
   reduced.addEventListener("change", applyEffects);
   applyEffects();
 
@@ -95,22 +99,27 @@ export function createServicesView(root) {
     const button = tabs.children[TABS.indexOf("health")];
     if (button) button.replaceChildren("Health", state.health.counts.down + state.health.counts.failing > 0 ? h("span", { class: "tab-count" }, String(state.health.counts.down + state.health.counts.failing)) : []);
   }
+  function paintOutagesTab(count) {
+    const button = tabs.children[TABS.indexOf("outages")];
+    if (button) button.replaceChildren("Outages", count > 0 ? h("span", { class: "tab-count" }, String(count)) : []);
+  }
   function syncControls() {
     search.value = query("q");
     search.setAttribute("aria-label", tab() === "domains" ? "Search domains" : "Search services"); search.placeholder = tab() === "domains" ? "Hostname, tunnel or service" : "Name, path, process or port";
     descriptionSelect.hidden = !["services", "listeners"].includes(tab());
-    search.closest("label").hidden = ["recipes", "ports", "stacks"].includes(tab());
-    machineSelect.closest("label").hidden = ["recipes", "ports", "stacks"].includes(tab());
-    descriptionSelect.closest("label").hidden = ["recipes", "ports", "stacks"].includes(tab());
+    search.closest("label").hidden = ["recipes", "outages", "ports", "stacks"].includes(tab());
+    machineSelect.closest("label").hidden = ["recipes", "outages", "ports", "stacks"].includes(tab());
+    descriptionSelect.closest("label").hidden = ["recipes", "outages", "ports", "stacks"].includes(tab());
     renderLenses(); renderMachines(); renderDescriptionFacet();
     for (const [index, button] of [...tabs.children].entries()) { button.setAttribute("aria-selected", String(TABS[index] === tab())); button.tabIndex = TABS[index] === tab() ? 0 : -1; }
     tablePanel.setAttribute("aria-labelledby", `services-tab-${tab()}`);
-    tablePanel.hidden = ["alerts", "health", "ports", "stacks"].includes(tab());
+    tablePanel.hidden = ["alerts", "health", "outages", "ports", "stacks"].includes(tab());
     alertsPanel.hidden = tab() !== "alerts" || !state.alertSupported;
     healthPanel.hidden = tab() !== "health" || !state.healthSupported;
+    outagesPanel.hidden = tab() !== "outages" || !outages.supported();
     portsPanel.hidden = tab() !== "ports" || !portsState.supported;
     stacksPanel.hidden = tab() !== "stacks" || !stacksState.supported;
-    lenses.hidden = ["alerts", "health", "ports", "stacks"].includes(tab());
+    lenses.hidden = ["alerts", "health", "outages", "ports", "stacks"].includes(tab());
   }
   function change(key, value) {
     clearTimeout(state.searchTimer);
@@ -119,7 +128,7 @@ export function createServicesView(root) {
     syncUrl(); syncControls(); tableStatus.textContent = `Reading ${title(tab())}.`; more.hidden = true; load({ table: true }); paintProgress();
   }
   function renderLenses() {
-    if (["ports", "stacks"].includes(tab())) { lenses.replaceChildren(); return; }
+    if (["outages", "ports", "stacks"].includes(tab())) { lenses.replaceChildren(); return; }
     if (tab() === "recipes") {
       lenses.setAttribute("aria-label", "Recipe state filters");
       lenses.replaceChildren(...[["active", "Proposed and approved"], ["proposed", "Proposed"], ["approved", "Approved"], ["rejected", "Rejected"], ["unsupported", "Unsupported"], ["all", "All states"]].map(([value, label]) => h("button", { type: "button", "aria-pressed": String((query("recipeState") || "active") === value), onclick: () => change("recipeState", value) }, label)), h("button", { type: "button", onclick: scanRecipeRows }, "Scan recipes"));
@@ -209,6 +218,7 @@ export function createServicesView(root) {
     if (routes.overview || routes.table && currentTab === "stacks") requested.push(["stacksRows", () => fetchJson("/api/services/stacks", controller.signal)]);
     if (routes.table && currentTab === "stacks") requested.push(["controlRows", () => fetchRows("services", new URLSearchParams("all=1"), controller.signal, true)]);
     if (routes.overview) requested.push(["alertRows", () => fetchJson("/api/services/alerts?state=all&limit=500&include=muted", controller.signal)]);
+    if (routes.overview || routes.table && currentTab === "outages") requested.push(["outageRows", () => fetchJson("/api/services/outages?limit=200", controller.signal)]);
     if (routes.overview || routes.table && currentTab === "health") requested.push(["healthRows", () => fetchJson("/api/services/health", controller.signal)]);
     if (routes.routes || routes.overview) requested.push(["routes", async () => {
       const rows = []; let result;
@@ -216,7 +226,7 @@ export function createServicesView(root) {
       return { ...result, rows };
     }]);
     if (routes.atlas) requested.push(["atlas", () => fetchRows("listeners", new URLSearchParams(), controller.signal, true)]);
-    if (routes.table && !["recipes", "ports", "stacks"].includes(currentTab)) requested.push(["table", async () => {
+    if (routes.table && !["recipes", "outages", "ports", "stacks"].includes(currentTab)) requested.push(["table", async () => {
       if (currentTab === "actions") return fetchJson(`/api/services/actions?limit=${state.limit}`, controller.signal);
       if (currentTab === "alerts") return fetchJson(`/api/services/alerts?state=${encodeURIComponent(query("alertState") === "muted" ? "all" : query("alertState") || "open")}&kind=${encodeURIComponent(query("alertKind"))}&include=muted`, controller.signal);
       if (currentTab === "activity") return fetchJson(`/api/services/events?${servicesQuery(params, "activity", state.limit)}`, controller.signal);
@@ -247,6 +257,10 @@ export function createServicesView(root) {
           continue;
         }
         if (route === "controlRows") continue;
+        if (route === "outageRows") {
+          if (alertEndpointMissing(statusCode)) { tabs.children[TABS.indexOf("outages")].hidden = true; outagesPanel.hidden = true; if (currentTab === "outages") { state.params.set("tab", "services"); syncUrl(); syncControls(); load({ table: true }); } } else outages.setError(result.reason.message);
+          continue;
+        }
         if (route === "alertRows" && alertEndpointMissing(statusCode)) { state.alertSupported = false; alertsPanel.hidden = true; tabs.children[TABS.indexOf("alerts")].hidden = true; continue; }
         if (route === "healthRows" && alertEndpointMissing(statusCode)) { state.healthSupported = false; healthPanel.hidden = true; tabs.children[TABS.indexOf("health")].hidden = true; if (currentTab === "health") { state.params.set("tab", "services"); syncUrl(); syncControls(); } continue; }
         if (route === "table" && currentTab === "alerts" && alertEndpointMissing(statusCode)) {
@@ -264,6 +278,7 @@ export function createServicesView(root) {
       }
       if (route === "portsRows") { portsState.ports = result.value; portsState.supported = true; tabs.children[TABS.indexOf("ports")].hidden = false; portsPanel.hidden = currentTab !== "ports"; if (currentTab === "ports") renderPorts(); }
       if (route === "stacksRows") { stacksState.stacks = result.value.stacks || []; stacksState.supported = true; tabs.children[TABS.indexOf("stacks")].hidden = false; stacksPanel.hidden = currentTab !== "stacks"; if (currentTab === "stacks") renderStacks(); }
+      if (route === "outageRows") { tabs.children[TABS.indexOf("outages")].hidden = false; outages.setData(result.value); outagesPanel.hidden = currentTab !== "outages"; }
       if (route === "controlRows") state.controlAvailable = !result.value.rows.some((row) => row.control?.actions?.length && row.control.actions.every((action) => action.reason === "Control is off."));
       if (route === "overview") { state.machines = result.value.machines.map((machine) => ({ ...machine, live: { ...machine.live, ...state.liveMachines.get(machine.id) } })); state.liveMachines.clear(); renderFigures(); paintLive(); }
       if (route === "alertRows") { state.alertSupported = true; state.alerts = result.value.alerts || []; state.mutes = result.value.mutes || []; state.alertCounts = result.value.counts || countAlerts(state.alerts); tabs.children[TABS.indexOf("alerts")].hidden = false; paintAlertTab(); if (state.data && tab() !== "alerts") renderTable(); }

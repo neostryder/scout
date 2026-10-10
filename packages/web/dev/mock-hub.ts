@@ -171,7 +171,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (/^\/api\/jobs\/\d+\/stop$/.test(path) && req.method === "POST") { const job = jobs.find((j) => j.id === Number(path.split("/")[3])); if (!job) return json(res, 404, { error: "Not found" }); if (!["queued", "preflight", "running"].includes(job.state)) return json(res, 409, { error: "Job finished" }); job.state = "stopped"; job.finishedAt = new Date().toISOString(); return json(res, 200, job); }
     if (path.startsWith("/api/")) return json(res, 404, { error: "Not found" });
     const relative = path === "/" ? "index.html" : path.slice(1);
-    if (relative.includes("..") || !["index.html", "app.js", "lib.js", "filters.js", "saved-filters.js", "theme.js", "review-reminder.js", "alerts-badge.js", "download-kinds.js", "styles.css", "services.js", "services-diagram.js", "services-model.js", "services.css"].includes(relative)) return json(res, 404, { error: "Not found" });
+    if (relative.includes("..") || !["index.html", "app.js", "lib.js", "filters.js", "saved-filters.js", "theme.js", "review-reminder.js", "alerts-badge.js", "download-kinds.js", "styles.css", "services.js", "services-diagram.js", "outages.js", "outages-model.js", "services-model.js", "services.css"].includes(relative)) return json(res, 404, { error: "Not found" });
     try { const bytes = await readFile(resolve(publicDir, relative)); res.writeHead(200, { "content-type": extname(relative) === ".css" ? "text/css" : extname(relative) === ".js" ? "text/javascript" : "text/html", "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'" }); res.end(bytes); } catch { json(res, 404, { error: "Not found" }); }
   });
   server.on("close", () => filtersDb.close());
@@ -450,6 +450,24 @@ function createServicesMock(options: { noModels?: boolean; controlOff?: boolean;
       if (path.startsWith("/api/services/ports") && options.portsMissing) { json(res, 404, { error: "not found" }); return true; }
       if (path.startsWith("/api/services/stacks") && options.stacksMissing) { json(res, 404, { error: "not found" }); return true; }
       if (path.startsWith("/api/services/health") && options.healthMissing) { json(res, 404, { error: "not found" }); return true; }
+      if (path.startsWith("/api/services/outages")) {
+        const sub = path.slice("/api/services/outages".length);
+        if (sub === "" && req.method === "GET") { json(res, 200, outagesMock(now())); return true; }
+        if (req.method === "POST") {
+          let raw = ""; for await (const chunk of req) raw += chunk;
+          let body: Record<string, any>; try { body = JSON.parse(raw || "{}"); } catch { json(res, 400, { error: "Invalid JSON" }); return true; }
+          if (sub === "/test") { json(res, 200, { results: [{ channel: "discord", ok: true }, { channel: "desktop", ok: true }] }); return true; }
+          if (sub === "/watch") {
+            if ("pausedUntil" in body) outageConfig.pausedUntil = body.pausedUntil;
+            else if (typeof body.check === "string") (outageConfig.checks as Record<string, boolean>)[body.check] = body.watched;
+            else if (typeof body.machine === "string") (outageConfig.machines as Record<string, boolean>)[body.machine] = body.watched;
+            else if (typeof body.item === "string") (outageConfig.items as Record<string, boolean>)[body.item] = body.watched;
+            else { json(res, 400, { error: "unknown change" }); return true; }
+            json(res, 200, { config: outageConfig }); return true;
+          }
+        }
+        json(res, 404, { error: "not found" }); return true;
+      }
       if (path === "/api/services/ports" && req.method === "GET") { json(res, 200, options.portsEmpty ? { ranges: [], reserved: [], clashes: [], file: { path: ".scout-data/ports.json", exists: false, error: null }, generatedAt: now() } : ports); return true; }
       if (path === "/api/services/ports/next" && req.method === "GET") {
         const range = ports.ranges.find((item) => item.name === url.searchParams.get("range"));
@@ -746,4 +764,21 @@ function createDiscoveryMock() {
     } catch (error) { json(res, 400, { error: (error as Error).message }); }
     return true;
   };
+}
+
+const outageConfig: { checks: Record<string, boolean>; machines: Record<string, boolean>; items: Record<string, boolean>; pausedUntil: string | null; fileError: string | null } = { checks: { machine: true, url: true, service: true }, machines: {}, items: {}, pausedUntil: null, fileError: null };
+
+function outagesMock(at: string) {
+  const ago = (minutes: number) => new Date(Date.parse(at) - minutes * 60_000).toISOString();
+  const outages = [
+    { id: 3, kind: "service", state: "not-running", label: "Cogitator on Hub", startedAt: ago(14), endedAt: null, durationMs: 14 * 60_000, detail: "Stopped." },
+    { id: 2, kind: "machine", state: "hung", label: "Gamemaster", startedAt: ago(500), endedAt: ago(380), durationMs: 120 * 60_000, detail: "The ssh port accepted a connection but sent no greeting." },
+    { id: 1, kind: "monitor-gap", state: "monitor-gap", label: "Hub", startedAt: ago(2000), endedAt: ago(1960), durationMs: 40 * 60_000, detail: "Scout was not running." },
+  ];
+  const items = [
+    { kind: "machine", key: "machine:gamemaster", machineId: "gamemaster", label: "Gamemaster", watched: outageConfig.machines.gamemaster !== false, failures: 0 },
+    { kind: "url", key: "url:example.test", machineId: null, label: "example.test", watched: outageConfig.items["url:example.test"] !== false, failures: 0 },
+    { kind: "service", key: "service:hub:cogitator", machineId: "hub", label: "Cogitator on Hub", watched: outageConfig.items["service:hub:cogitator"] !== false, failures: 2 },
+  ];
+  return { outages, open: 1, items, config: outageConfig, watch: { running: true, intervalMs: 120_000, lastCycleAt: ago(1), paused: Boolean(outageConfig.pausedUntil), channels: { discord: false, desktop: true } }, generatedAt: at };
 }

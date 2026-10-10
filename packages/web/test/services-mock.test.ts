@@ -16,7 +16,7 @@ const get = async (base: string, path: string) => {
 };
 
 test("the mock serves service assets and seeded contract shapes for every machine", async () => mock(async (base) => {
-  for (const asset of ["services.js", "services-model.js", "services-diagram.js", "services.css"]) {
+  for (const asset of ["services.js", "services-model.js", "services-diagram.js", "outages.js", "outages-model.js", "services.css"]) {
     const response = await fetch(`${base}/${asset}`);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), asset.endsWith("css") ? "text/css" : "text/javascript");
@@ -541,4 +541,14 @@ test("the live stream sends hello, probe progress, a changed row and a heartbeat
     assert.deepEqual(seen.get("changed")![0].tables, ["services", "listeners"]);
     assert.equal(seen.get("probe")!.at(-1).phase, "done");
   } finally { abort.abort(); await reader.cancel().catch(() => {}); }
+}));
+
+test("the outages mock lists outages, edits the watch config and reports a test notice", async () => mock(async (base) => {
+  const listing = await get(base, "/api/services/outages");
+  assert.equal(listing.open, 1);
+  assert.deepEqual(listing.outages.map((outage: any) => outage.state), ["not-running", "hung", "monitor-gap"]);
+  const post = async (path: string, body: unknown) => (await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
+  assert.equal((await post("/api/services/outages/watch", { check: "service", watched: false })).config.checks.service, false);
+  assert.deepEqual((await post("/api/services/outages/test", {})).results.map((row: any) => row.channel), ["discord", "desktop"]);
+  await post("/api/services/outages/watch", { check: "service", watched: true });
 }));

@@ -252,3 +252,13 @@
 #services .stack-plan-steps > li { margin-block: 10px; }
 #services .stack-plan-steps code { display: block; overflow-wrap: anywhere; }
 #services .stack-filter { display: flex; align-items: center; gap: 8px; }
+#services .outages-panel { min-width: 0; overflow-x: auto; }
+#services .outage-controls { display: grid; gap: 8px; margin: 12px 0; }
+#services .outage-controls p { margin: 0; }
+#services .outage-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+#services .outage-table { min-width: 680px; }
+#services .outages-panel h3 { margin: 18px 0 8px; }
+#services .outages-panel h4 { margin: 14px 0 6px; color: var(--muted); font-size: 13px; }
+#services .watch-switches { margin: 18px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; }
+#services .watch-switches fieldset { border: 0; margin: 10px 0; padding: 0; display: grid; gap: 4px; }
+#services .watch-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
