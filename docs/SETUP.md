@@ -228,7 +228,7 @@ With `--live` or `--production`, the hub checks for outages every 2 minutes. A m
 Everything below is watched by default:
 
 - Every machine in `machines.json`, through its ssh port.
-- Every public hostname from the Cloudflare reader that is already a health target.
+- Every public hostname from the Cloudflare reader that is already a health target and has answered a probe at least once. A hostname that has never answered, such as one used only through Tailscale that returns HTTP 530 from outside, is not watched until its first answer, and any outage already open for it is closed without a notice.
 - Every service and listening port seen running that is meant to stay up at all times: Windows services that start automatically or at boot, launchd jobs with KeepAlive set, the ports those services listen on, ports served by a container, and ports that a published Cloudflare hostname points to. An item that stops qualifying has its open outage closed without a notice.
 
 Scheduled tasks, services you start by hand, system plumbing, essential system services, browser debug ports, and ports opened by dev servers and other apps are not watched, so closing an app on purpose raises no alert. To watch one of them anyway, set it to `true` under `items` in `.scout-data/watch.json`.

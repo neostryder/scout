@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isWatched, listOutages, openCatalog, outageNotice, outagesResponse, parseWatchConfig, recordListeners, recordMonitorGap, recordObservations, recordServices, resetWatchCounters, serviceObservations, serviceWatchKey, settleUnwatched, updateWatchFile, upsertMachine, watchFileReader, type Db, type Observation, type ServiceFact } from "../src/index.ts";
+import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isWatched, listOutages, openCatalog, outageNotice, outagesResponse, parseWatchConfig, recordListeners, recordMonitorGap, recordObservations, recordServices, resetWatchCounters, serviceObservations, serviceWatchKey, settleUnwatched, urlObservations, updateWatchFile, upsertMachine, watchFileReader, type Db, type Observation, type ServiceFact } from "../src/index.ts";
 
 const AT = "2026-10-10T00:00:00.000Z";
 const stamp = (minutes: number): string => new Date(Date.parse(AT) + minutes * 60_000).toISOString();
@@ -237,4 +237,12 @@ test("only items meant to stay up are watched: automatic services, launchd keep-
   assert.deepEqual(labels(), [...stays, "Port 8003 (msedge) on Server"].sort());
   const forced = parseWatchConfig({ items: { "listener:gm:8004:helper": true } });
   assert.ok(serviceObservations(db, "gm", forced, stamp(1)).some((obs) => obs.label === "Port 8004 (helper) on Server"));
+});
+
+test("a hostname that never answered a probe is not watched, and one that answered once is", (t) => {
+  const db = seed(t);
+  const put = db.prepare("INSERT INTO health_targets (key, kind, label, machine_id, port, url, state, failures, last_ok_at, last_probe_at, last_status, last_error) VALUES (?, 'domain', ?, NULL, NULL, ?, 'failing', 1, ?, ?, 530, 'HTTP 530')");
+  put.run("domain:never.example.test", "never.example.test", "https://never.example.test/", null, stamp(5));
+  put.run("domain:once.example.test", "once.example.test", "https://once.example.test/", stamp(1), stamp(5));
+  assert.deepEqual(urlObservations(db, defaultWatchConfig(), stamp(6)).map((obs) => obs.label), ["once.example.test"]);
 });

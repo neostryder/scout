@@ -311,10 +311,10 @@ export function watchedKeys(observations: readonly Observation[]): Set<string> {
 
 /**
  * One check for each public hostname the health probes cover, taken from the latest probe. The health cycle already counts failures, so the
- * probe's own time is the check time: a probe read twice is one check. Unproven hostnames (`not-http`, `unknown`) are left out like they are for alerts.
+ * probe's own time is the check time: a probe read twice is one check. Unproven hostnames (`not-http`, `unknown`) are left out like they are for alerts, and so is a hostname that has never answered a probe: like a service never seen running, it cannot have gone down.
  */
 export function urlObservations(db: Db, config: WatchConfig, at: string): Observation[] {
-  const rows = db.prepare("SELECT label, state, last_probe_at AS probedAt, last_error AS error FROM health_targets WHERE kind = 'domain' AND gone_at IS NULL AND last_probe_at IS NOT NULL").all() as { label: string; state: string; probedAt: string; error: string | null }[];
+  const rows = db.prepare("SELECT label, state, last_probe_at AS probedAt, last_error AS error FROM health_targets WHERE kind = 'domain' AND gone_at IS NULL AND last_probe_at IS NOT NULL AND last_ok_at IS NOT NULL").all() as { label: string; state: string; probedAt: string; error: string | null }[];
   const out: Observation[] = [];
   for (const row of rows) {
     if (row.state === "not-http" || row.state === "unknown") continue;
