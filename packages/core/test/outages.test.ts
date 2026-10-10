@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isWatched, listOutages, openCatalog, outageNotice, outagesResponse, parseWatchConfig, recordMonitorGap, recordObservations, recordServices, resetWatchCounters, serviceObservations, serviceWatchKey, settleUnwatched, updateWatchFile, upsertMachine, watchFileReader, type Db, type Observation, type ServiceFact } from "../src/index.ts";
+import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isWatched, listOutages, openCatalog, outageNotice, outagesResponse, parseWatchConfig, recordListeners, recordMonitorGap, recordObservations, recordServices, resetWatchCounters, serviceObservations, serviceWatchKey, settleUnwatched, updateWatchFile, upsertMachine, watchFileReader, type Db, type Observation, type ServiceFact } from "../src/index.ts";
 
 const AT = "2026-10-10T00:00:00.000Z";
 const stamp = (minutes: number): string => new Date(Date.parse(AT) + minutes * 60_000).toISOString();
@@ -214,4 +214,27 @@ test("an item that never passed a check says so, and a recovery reports no last-
   const [done] = recordObservations(db, [machine(10, true)]);
   assert.equal(done!.outage.lastOkAt, null);
   assert.doesNotMatch(outageNotice(done!).body, /since the last successful check/);
+});
+
+test("only items meant to stay up are watched: automatic services, launchd keep-alive jobs, and listeners they own, containers, or routes serve", (t) => {
+  const db = seed(t);
+  const task: ServiceFact = { ...service, kind: "scheduled-task", name: "\Nightly", displayName: "Nightly", pid: null, startMode: null };
+  const agent: ServiceFact = { ...service, kind: "launchd", name: "tools.example.keeper", displayName: null, domain: "gui", program: "/opt/keeper", pid: 77, startMode: null, keepAlive: true };
+  const helper: ServiceFact = { ...service, kind: "launchd", name: "tools.example.helper", displayName: null, domain: "gui", program: "/opt/helper", pid: 78, startMode: null, keepAlive: false };
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [service, task, agent, helper] }, stamp(0));
+  const listener = (port: number, pid: number | null, processName: string, processPath: string | null, container: { name: string; image: string; containerPort: number } | null = null) => ({ port, protocol: "tcp" as const, address: "0.0.0.0", bind: "all" as const, pid, processName, processPath, container });
+  recordListeners(db, "gm", { origin: "listeners", status: "ok", facts: [
+    listener(8001, 42, "worker", "C:/Tools/worker.exe"),
+    listener(8002, 77, "keeper", "/opt/keeper"),
+    listener(8003, 900, "msedge", "C:/Program Files/Edge/msedge.exe"),
+    listener(8004, 78, "helper", "/opt/helper"),
+    listener(8005, 901, "docker-proxy", null, { name: "web-1", image: "web", containerPort: 80 }),
+  ] }, stamp(0));
+  const labels = (): string[] => serviceObservations(db, "gm", defaultWatchConfig(), stamp(1)).map((obs) => obs.label).sort();
+  const stays = ["Port 8001 (worker) on Server", "Port 8002 (keeper) on Server", "Port 8005 (docker-proxy) on Server", "Worker on Server", "tools.example.keeper on Server"];
+  assert.deepEqual(labels(), stays);
+  db.prepare("INSERT INTO meta (key, value) VALUES ('alert_routes', ?)").run(JSON.stringify({ "app.example.test:": { state: "ok", machineId: "gm", listenerId: null, serviceId: null, port: 8003 } }));
+  assert.deepEqual(labels(), [...stays, "Port 8003 (msedge) on Server"].sort());
+  const forced = parseWatchConfig({ items: { "listener:gm:8004:helper": true } });
+  assert.ok(serviceObservations(db, "gm", forced, stamp(1)).some((obs) => obs.label === "Port 8004 (helper) on Server"));
 });

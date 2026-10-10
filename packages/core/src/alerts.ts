@@ -8,7 +8,7 @@ import { formatLocal, sinceLastCheck } from "./time.ts";
 import { buildHealthTargets, healthAlertCandidates, healthTarget, type SharedListings } from "./health.ts";
 import { portClashes, portsFileReader, type PortRegistry, type RegistryFile } from "./ports.ts";
 import { recipesResponse } from "./recipes.ts";
-import { listenerWatchKey, listOutages, serviceWatchKey } from "./outages.ts";
+import { listenerWatchKey, listOutages, serviceWatchable, serviceWatchKey, watchContext } from "./outages.ts";
 import { isWatched, type WatchConfig } from "./watch-file.ts";
 
 export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "machine-outage", "service-outage"] as const;
@@ -159,6 +159,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   const healthKeys = new Set(buildHealthTargets(db, options.tunnelHosts, shared).map((target) => target.key));
   candidates.push(...healthCandidates);
   const watch = options.loadWatch?.();
+  const context = watchContext(db, services);
   // An item the outage watch has seen running is reported by that watch after two checks, so a restart does not raise an alert of its own.
   const outageWatched = (row: Service | Listener): boolean => {
     if (!watch) return false;
@@ -166,7 +167,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
     return db.prepare("SELECT 1 FROM watch_state WHERE key = ? AND last_state = 'up' OR key = ? AND failures > 0").get(key, key) !== undefined && isWatched(watch, "service", row.machineId, key, now);
   };
   const add = (kind: AlertKind, row: Service | Listener, severity: Alert["severity"], title: string, detail: string, condition: Condition = {}): void => {
-    if (kind === "service-down" && outageWatched(row)) return;
+    if (kind === "service-down" && (outageWatched(row) || !serviceWatchable(db, row, context))) return;
     const type = "port" in row ? "listener" : "service";
     const identity = "port" in row ? `${row.port}:${row.processName ?? row.containerName ?? "unknown"}${row.containerName && row.processName ? `:${row.containerName}` : ""}` : `${row.kind}:${row.domain}:${row.name}`;
     candidates.push({ at: now, kind, severity, machineId: row.machineId, machineName: row.machineName, key: `${kind}:${row.machineId}:${kind === "service-down" ? `${type}:` : ""}${identity}`, title, detail, target: { type, id: row.id }, condition });

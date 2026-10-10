@@ -229,7 +229,9 @@ Everything below is watched by default:
 
 - Every machine in `machines.json`, through its ssh port.
 - Every public hostname from the Cloudflare reader that is already a health target.
-- Every service and listening port that the live reads have seen running. A service that has never been seen running is not watched, so it never raises an alert.
+- Every service and listening port seen running that is meant to stay up at all times: Windows services that start automatically or at boot, launchd jobs with KeepAlive set, the ports those services listen on, ports served by a container, and ports that a published Cloudflare hostname points to. An item that stops qualifying has its open outage closed without a notice.
+
+Scheduled tasks, services you start by hand, system plumbing, essential system services, browser debug ports, and ports opened by dev servers and other apps are not watched, so closing an app on purpose raises no alert. To watch one of them anyway, set it to `true` under `items` in `.scout-data/watch.json`.
 
 An outage is confirmed after 2 failed checks in a row, and its start time is the first failed check, so a quick restart or update raises nothing. One recovery notice follows, with how long the outage lasted. A machine or address that fails 3 separate times within 30 minutes is marked flapping. Service checks count at most once per 2-minute window, even while an open Services page refreshes them more often, and an incomplete read never counts as a failure.
 

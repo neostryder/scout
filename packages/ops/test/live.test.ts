@@ -33,8 +33,9 @@ test("listener scans evaluate changes and return alert changes to their subscrib
     assert.deepEqual(changes, []);
     port = 8090;
     await collectListeners(db, windows, { run, alerts });
-    assert.equal(alertsSummary(db).open, 2);
-    assert.deepEqual(changes, ["created", "created"]);
+    // The new port raises its alert; the old one was an ad hoc node listener no service keeps up, so its disappearance raises none.
+    assert.equal(alertsSummary(db).open, 1);
+    assert.deepEqual(changes, ["created"]);
   } finally { db.close(); }
 });
 

@@ -228,10 +228,47 @@ function ephemeral(row: Service | Listener): boolean {
   return "port" in row ? row.bind === "loopback" && row.port >= 49152 : row.kind === "launchd" && /\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^application\.|\.\d{4,}\.\d{4,}$/i.test(row.name);
 }
 
-/** Whether an item is one Scout watches for outages: visible, not plumbing, not started on demand, not marked as expected to be down. */
-export function serviceWatchable(db: Db, row: Service | Listener): boolean {
+/** What the stays-up rule looks at besides the row itself: the services it may belong to and the ports that published routes land on. */
+export interface WatchContext { services: Service[]; routeListeners: Set<number>; routePorts: Set<string> }
+
+export function watchContext(db: Db, services: Service[]): WatchContext {
+  const saved = db.prepare("SELECT value FROM meta WHERE key = 'alert_routes'").get() as { value: string } | undefined;
+  let routes: { listenerId?: number | null; machineId?: string | null; port?: number | null }[] = [];
+  try { if (saved) routes = Object.values(JSON.parse(saved.value)); } catch { /* A damaged snapshot means no route evidence until the next evaluation. */ }
+  const routeListeners = new Set<number>();
+  const routePorts = new Set<string>();
+  for (const route of routes) {
+    if (typeof route.listenerId === "number") routeListeners.add(route.listenerId);
+    if (route.machineId && typeof route.port === "number") routePorts.add(`${route.machineId}:${route.port}`);
+  }
+  return { services, routeListeners, routePorts };
+}
+
+/** A service meant to run all the time: a Windows service that starts automatically or a launchd job that launchd keeps alive. Scheduled tasks and on-demand services run and stop by design. */
+function staysUpService(row: Service): boolean {
+  if (row.kind === "windows-service") return row.startMode === "auto" || row.startMode === "boot";
+  if (row.kind === "launchd") return row.keepAlive === true;
+  return false;
+}
+
+function owns(service: Service, listener: Listener): boolean {
+  if (service.machineId !== listener.machineId) return false;
+  if (service.pid !== null) return service.pid === listener.pid;
+  const same = (path: string): string => path.replaceAll("\\", "/").toLowerCase();
+  return service.program !== null && listener.processPath !== null && same(service.program) === same(listener.processPath);
+}
+
+/** A listener is meant to stay up when a container serves it, a published route lands on it, or a service that stays up owns it. A browser debug port or a dev server does not qualify. */
+function staysUp(row: Service | Listener, context: WatchContext): boolean {
+  if (!("port" in row)) return staysUpService(row);
+  return row.containerName !== null || context.routeListeners.has(row.id) || context.routePorts.has(`${row.machineId}:${row.port}`) || context.services.some((service) => staysUpService(service) && owns(service, row));
+}
+
+/** Whether an item is one Scout watches for outages: visible, not plumbing, not marked as expected to be down, and (given a context) meant to run at all times. */
+export function serviceWatchable(db: Db, row: Service | Listener, context?: WatchContext): boolean {
   if (row.classification.hidden || row.classification.class === "essential" || ephemeral(row)) return false;
   if ("startMode" in row && row.startMode === "manual") return false;
+  if (context && !staysUp(row, context)) return false;
   const table = "port" in row ? "listeners" : "services";
   return (db.prepare(`SELECT expected_down AS value FROM ${table} WHERE id = ?`).get(row.id) as { value: number } | undefined)?.value !== 1;
 }
@@ -250,12 +287,16 @@ export function serviceObservations(db: Db, machineId: string, config: WatchConf
     if (!running && !proven.has(key) && !failing.has(key)) return;
     out.push({ key, kind: "service", machineId, label, ok: running, state: running ? "up" : "not-running", detail, at });
   };
-  for (const row of listServices(db, { machine: machineId }, descriptions)) {
-    if (!serviceWatchable(db, row)) continue;
+  const services = listServices(db, { machine: machineId }, descriptions);
+  const context = watchContext(db, services);
+  // A watch switch set to true in the watch file names an item that stays up even though the rule would skip it.
+  const forced = (key: string): boolean => config.items[key] === true;
+  for (const row of services) {
+    if (!forced(serviceWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
     add(serviceWatchKey(row), `${row.displayName ?? row.name} on ${row.machineName}`, row.goneAt === null && row.state === "running", row.goneAt ? "The service is gone." : `The service state is ${row.state}.`);
   }
   for (const row of listListeners(db, { machine: machineId }, descriptions)) {
-    if (!serviceWatchable(db, row)) continue;
+    if (!forced(listenerWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
     add(listenerWatchKey(row), `Port ${row.port} (${row.processName ?? row.containerName ?? "unknown"}) on ${row.machineName}`, row.goneAt === null, "Nothing is listening on the port.");
   }
   return out;
