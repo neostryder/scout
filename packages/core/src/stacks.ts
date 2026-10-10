@@ -1,6 +1,6 @@
 import { hubMachineId } from "./hub.ts";
 import type { Db } from "./db.ts";
-import { listServices, type ServiceKind } from "./services.ts";
+import { listServices, type Service, type ServiceKind } from "./services.ts";
 import { recipesResponse } from "./recipes.ts";
 import { registryFileReader, registryObject, registryPort, type RegistryFile } from "./ports.ts";
 
@@ -50,9 +50,19 @@ export function validateStacks(data: unknown): { config: Stack[]; fileError: str
 
 export const stacksFileReader = (path = ".scout-data/stacks.json") => registryFileReader(path, () => [] as Stack[], validateStacks);
 
-export function resolveStack(db: Db, stack: Stack): ResolvedStack {
-  const services = listServices(db, { includeHidden: true });
-  const recipes = recipesResponse(db).recipes;
+/** Rows a stack resolves against. Listing them is the cost, so a response that resolves several stacks reads them once. */
+interface StackRows { services: Service[]; recipes: ReturnType<typeof recipesResponse>["recipes"] }
+
+function stackRows(db: Db, stacks: Stack[]): StackRows {
+  const members = stacks.flatMap((stack) => stack.members);
+  return {
+    services: members.some((member) => member.type === "service") ? listServices(db, { gone: "present", includeHidden: true }) : [],
+    recipes: members.some((member) => member.type === "recipe") ? recipesResponse(db).recipes : [],
+  };
+}
+
+export function resolveStack(db: Db, stack: Stack, rows: StackRows = stackRows(db, [stack])): ResolvedStack {
+  const { services, recipes } = rows;
   const members = stack.members.map((member, index): ResolvedStackMember => {
     const common = { order: index + 1, type: member.type, waitPort: member.waitPort ?? null, waitSeconds: member.waitSeconds };
     if (member.type === "service") {
@@ -70,8 +80,9 @@ export function resolveStack(db: Db, stack: Stack): ResolvedStack {
 }
 
 export function stacksResponse(db: Db, file: RegistryFile<Stack[]>, at = new Date().toISOString()) {
+  const rows = stackRows(db, file.config);
   return { stacks: file.config.map((stack) => {
-    const resolved = resolveStack(db, stack);
+    const resolved = resolveStack(db, stack, rows);
     return { ...resolved, members: resolved.members.map(({ rowId, ...member }) => member) };
   }), file: { path: ".scout-data/stacks.json", exists: file.exists, error: file.fileError }, generatedAt: at };
 }

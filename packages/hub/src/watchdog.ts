@@ -2,6 +2,7 @@ import { readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Notifier } from "./notify.ts";
+import { formatLocal } from "@scout/core";
 
 // Watches the hub from outside it. The hub writes .scout-data/heartbeat.json every 30 seconds; this process alerts when the file goes quiet and again when it moves.
 // It runs on Windows, macOS, and Linux, uses the same Discord and desktop channels as the hub, and never reads the catalog.
@@ -51,7 +52,7 @@ export class Watchdog {
     if (age > limit && this.silentSince === null) {
       this.silentSince = at;
       log(`heartbeat is ${Math.round(age / 1000)} s old`);
-      await this.options.notifier.send({ title: "Scout hub is not responding", body: `The hub has not written a heartbeat since ${new Date(at).toLocaleString()}. Outage checks are not running.`, severity: "high" });
+      await this.options.notifier.send({ title: "Scout hub is not responding", body: `The hub has not written a heartbeat since ${formatLocal(new Date(at).toISOString())}. Outage checks are not running.`, severity: "high" });
       return "silent";
     }
     if (age <= limit && this.silentSince !== null) {

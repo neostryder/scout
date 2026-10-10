@@ -12,6 +12,8 @@ export interface HealthProbeOptions {
   tls?: HealthTlsReader;
   now?: () => number;
   timeoutMs?: number;
+  /** Starts a stall meter and returns a function that stops it and gives the worst event-loop stall in milliseconds. Tests replace it. */
+  watchStall?: () => () => number;
 }
 export interface HealthCycleOptions extends HealthProbeOptions {
   tunnelHosts?: Record<string, string>;
@@ -61,7 +63,32 @@ function nonHttp(error: unknown): boolean {
   return typeof row.code === "string" && (/^HPE_/.test(row.code) || ["UND_ERR_SOCKET", "ECONNRESET"].includes(row.code)) || row.cause !== undefined && nonHttp(row.cause);
 }
 
+/** A failed probe is tried again once when this process stalled for at least this long while it ran, since the stall, not the address, may have used up the time. */
+export const STALL_RETRY_MS = 750;
+const STALL_TICK_MS = 100;
+
+function watchLoopStall(): () => number {
+  let last = performance.now();
+  let worst = 0;
+  const timer = setInterval(() => {
+    const at = performance.now();
+    worst = Math.max(worst, at - last - STALL_TICK_MS);
+    last = at;
+  }, STALL_TICK_MS);
+  timer.unref();
+  return () => { clearInterval(timer); return worst; };
+}
+
 export async function probeHealth(target: HealthIdentity, options: HealthProbeOptions = {}): Promise<HealthSample> {
+  const stop = (options.watchStall ?? watchLoopStall)();
+  const first = await probeOnce(target, options);
+  const stalled = stop();
+  const retryable = !first.ok && !first.notHttp && (first.error === "timeout" || first.error === "connection error" || first.error === "TLS connection error");
+  if (!retryable || stalled < STALL_RETRY_MS) return first;
+  return probeOnce(target, options);
+}
+
+async function probeOnce(target: HealthIdentity, options: HealthProbeOptions = {}): Promise<HealthSample> {
   const now = options.now ?? Date.now;
   const started = now();
   const sample: HealthSample = { at: new Date(started).toISOString(), ok: false, status: null, latencyMs: null, error: null, tlsNotAfter: null };

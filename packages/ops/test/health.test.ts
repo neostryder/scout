@@ -193,3 +193,32 @@ test("an evaluator failure keeps samples and emits cycle completion", async (t) 
   assert.deepEqual(notices.at(-1)!.data, { running: false, done: 1, total: 1 });
   assert.deepEqual(logs, ["Alert evaluation failed; the next probe cycle will retry."]);
 });
+
+test("a timeout while this process stalled is tried once more, and a quiet process keeps its first result", async () => {
+  let calls = 0;
+  const fetch: HealthFetch = async (_url, options) => {
+    calls++;
+    if (calls === 1) return new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("aborted"))));
+    return { status: 200, body: { cancel: async () => {} } };
+  };
+  const stalled = await probeHealth(listener, { now, timeoutMs: 5, fetch, watchStall: () => () => 2500 });
+  assert.equal(calls, 2);
+  assert.equal(stalled.ok, true);
+  calls = 0;
+  const quiet = await probeHealth(listener, { now, timeoutMs: 5, fetch, watchStall: () => () => 20 });
+  assert.equal(calls, 1);
+  assert.equal(quiet.ok, false);
+  assert.equal(quiet.error, "timeout");
+});
+
+test("a stalled probe retries only once and a server error is never retried", async () => {
+  let calls = 0;
+  const hang: HealthFetch = async (_url, options) => { calls++; return new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("aborted")))); };
+  const result = await probeHealth(listener, { now, timeoutMs: 5, fetch: hang, watchStall: () => () => 3000 });
+  assert.equal(calls, 2);
+  assert.equal(result.error, "timeout");
+  calls = 0;
+  const broken: HealthFetch = async () => { calls++; return { status: 503, body: { cancel: async () => {} } }; };
+  assert.equal((await probeHealth(listener, { now, fetch: broken, watchStall: () => () => 3000 })).error, "HTTP 503");
+  assert.equal(calls, 1);
+});

@@ -247,6 +247,7 @@ CREATE TABLE IF NOT EXISTS watch_state (
   first_failed_at TEXT,
   last_state TEXT NOT NULL DEFAULT 'up',
   last_checked_at TEXT,
+  last_ok_at TEXT,
   episodes_json TEXT NOT NULL DEFAULT '[]'
 );
 

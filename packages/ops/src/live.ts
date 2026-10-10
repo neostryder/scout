@@ -1,4 +1,4 @@
-import { listListeners, listServices, recordListeners, recordServices, runProbe, type Db, type ListenerAdapter, type ListenerResult, type Probe, type ProbeOutput, type ServiceAdapter, type ServiceResult, type Transport } from "@scout/core";
+import { recordListeners, recordServices, runProbe, type Db, type ListenerAdapter, type ListenerResult, type Probe, type ProbeOutput, type ServiceAdapter, type ServiceResult, type Transport } from "@scout/core";
 import { dockerPortsAdapter, macListenersAdapter, windowsListenersAdapter } from "@scout/adapter-listeners";
 import { macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "@scout/adapter-services";
 import { alertsFileReader, evaluateAlerts, loadTunnelHosts, type AlertChange, type AlertOptions } from "@scout/core";
@@ -65,6 +65,11 @@ function serviceLine(result: ServiceResult): string {
   return `  services ${result.origin.padEnd(14)}${result.status.padEnd(8)}${String(result.facts.length).padStart(5)} facts${result.message ? `  (${result.message})` : ""}`;
 }
 
+/** True when the machine has any stored row, present or gone. Classifying every row only to count them stalled the hub for seconds on each read. */
+function hasRows(db: Db, table: "listeners" | "services", machineId: string): boolean {
+  return db.prepare(`SELECT 1 FROM ${table} WHERE machine_id = ? LIMIT 1`).get(machineId) !== undefined;
+}
+
 async function runListeners(db: Db, machine: LiveMachine, options: StoreOptions): Promise<ListenerResult[]> {
   const results: ListenerResult[] = [];
   for (const adapter of LISTENER_ADAPTERS) {
@@ -77,7 +82,7 @@ async function runListeners(db: Db, machine: LiveMachine, options: StoreOptions)
     options.log?.(listenerLine(result));
     results.push(result);
   }
-  if (listListeners(db, { machine: machine.id }).length === 0) {
+  if (!hasRows(db, "listeners", machine.id)) {
     // One initial write keeps both reader families under the machine's first-scan event suppression.
     const readable = results.filter((result) => result.status === "ok" || result.status === "partial");
     recordListeners(db, machine.id, { origin: "listeners", status: "partial", facts: readable.flatMap((result) => result.facts) }, options.now);
@@ -112,7 +117,7 @@ async function runServices(db: Db, machine: LiveMachine, options: StoreOptions):
     options.log?.(serviceLine(result));
     results.push(result);
   }
-  if (listServices(db, { machine: machine.id }).length === 0) {
+  if (!hasRows(db, "services", machine.id)) {
     // One initial write keeps every reader family under the machine's first-scan event suppression.
     const readable = results.filter((result) => result.status === "ok" || result.status === "partial");
     recordServices(db, machine.id, { origin: "services", status: "partial", facts: readable.flatMap((result) => result.facts) }, options.now);

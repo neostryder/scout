@@ -1,10 +1,11 @@
 import { hubMachineId } from "./hub.ts";
 import type { Db } from "./db.ts";
 import { listListeners } from "./listeners.ts";
-import { listRoutes } from "./cloudflare.ts";
-import { listServices } from "./services.ts";
+import { listRoutes, type RouteRow } from "./cloudflare.ts";
+import { listServices, type Service } from "./services.ts";
 import { loadDescriptionResolver } from "./descriptions.ts";
 import type { Alert } from "./alerts.ts";
+import { sinceLastCheck } from "./time.ts";
 
 export const HEALTH_STATES = ["up", "slow", "down", "failing", "not-http", "unknown"] as const;
 export type HealthState = typeof HEALTH_STATES[number];
@@ -65,10 +66,13 @@ export function healthDomain(hostname: string): boolean {
   return hostname.length <= 253 && hostname.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
 }
 
-export function buildHealthTargets(db: Db, tunnelHosts: Record<string, string> = {}): HealthIdentity[] {
+/** Listings one alert evaluation already holds, so the health pass does not read and classify the same rows again. */
+export interface SharedListings { descriptions?: ReturnType<typeof loadDescriptionResolver>; routes?: RouteRow[]; services?: Service[] }
+
+export function buildHealthTargets(db: Db, tunnelHosts: Record<string, string> = {}, shared: SharedListings = {}): HealthIdentity[] {
   const targets = new Map<string, HealthIdentity>();
-  const descriptions = loadDescriptionResolver(db, { hints: [] });
-  for (const row of listRoutes(db, { tunnelHosts }, descriptions)) {
+  const descriptions = shared.descriptions ?? loadDescriptionResolver(db, { hints: [] });
+  for (const row of shared.routes ?? listRoutes(db, { tunnelHosts }, descriptions)) {
     if (!healthDomain(row.hostname)) continue;
     const key = `domain:${row.hostname}`;
     if (!targets.has(key)) targets.set(key, { key, kind: "domain", label: row.hostname, machineId: row.machineId, port: null, url: `https://${row.hostname}/` });
@@ -170,14 +174,14 @@ export function healthSummary(db: Db, now = new Date().toISOString(), tunnelHost
 
 export type HealthAlertCandidate = Omit<Alert, "id" | "state" | "acknowledgedAt" | "resolvedAt" | "muted"> & { condition: { healthKey?: string; hostname?: string } };
 
-export function healthAlertCandidates(db: Db, now: string, tunnelHosts: Record<string, string> = {}): HealthAlertCandidate[] {
+export function healthAlertCandidates(db: Db, now: string, tunnelHosts: Record<string, string> = {}, shared: SharedListings = {}): HealthAlertCandidate[] {
   const candidates: HealthAlertCandidate[] = [];
   const names = new Map((db.prepare("SELECT id, name FROM machines").all() as { id: string; name: string }[]).map((row) => [row.id, row.name]));
-  for (const identity of buildHealthTargets(db, tunnelHosts)) {
+  for (const identity of buildHealthTargets(db, tunnelHosts, shared)) {
     const target = healthTarget(db, identity.key, now);
     if (!target || target.state === "not-http") continue;
     const base = { at: now, machineId: identity.machineId, machineName: names.get(identity.machineId ?? "") ?? null, target: { type: identity.kind === "domain" ? "route" as const : "listener" as const, id: identity.kind === "listener" ? (db.prepare("SELECT id FROM listeners WHERE machine_id = ? AND port = ? AND gone_at IS NULL ORDER BY id LIMIT 1").get(hubMachineId(), identity.port!) as { id: number } | undefined)?.id ?? null : null }, condition: { healthKey: target.key, ...(identity.kind === "domain" ? { hostname: identity.label } : {}) } };
-    if (target.state === "down") candidates.push({ ...base, kind: "unhealthy", key: `unhealthy:${target.key}`, severity: target.kind === "domain" ? "high" : "warn", title: `Unhealthy endpoint: ${target.label}`, detail: `${target.label} has not answered for ${target.failures} checks (${target.error ?? "connection error"})` });
+    if (target.state === "down") candidates.push({ ...base, kind: "unhealthy", key: `unhealthy:${target.key}`, severity: target.kind === "domain" ? "high" : "warn", title: `Unhealthy endpoint: ${target.label}`, detail: `${target.label} has not answered for ${target.failures} checks (${target.error ?? "connection error"}) ${sinceLastCheck(target.lastOkAt, now)}.` });
     if (target.kind === "domain" && target.tlsDaysLeft !== null && target.tlsDaysLeft <= 14) candidates.push({ ...base, kind: "cert-expiring", key: `cert-expiring:${target.label}`, severity: target.tlsDaysLeft <= 3 ? "high" : "warn", title: `Certificate expiring: ${target.label}`, detail: `The certificate for ${target.label} ends in ${target.tlsDaysLeft} days` });
   }
   const since = new Date(Date.parse(now) - 30 * 60_000).toISOString();
@@ -189,7 +193,7 @@ export function healthAlertCandidates(db: Db, now: string, tunnelHosts: Record<s
     const key = JSON.stringify([event.machineId, detail.kind, detail.domain, detail.name]);
     flips.set(key, (flips.get(key) ?? 0) + 1);
   }
-  for (const row of listServices(db, { gone: "present" }, loadDescriptionResolver(db, { hints: [] }))) {
+  for (const row of shared.services?.filter((service) => service.goneAt === null) ?? listServices(db, { gone: "present" }, shared.descriptions ?? loadDescriptionResolver(db, { hints: [] }))) {
     const count = flips.get(JSON.stringify([row.machineId, row.kind, row.domain, row.name])) ?? 0;
     // On-demand and system plumbing services start and stop by design, so only a service meant to stay up counts.
     if (count < 3 || row.startMode === "manual" || row.classification.hidden || row.classification.class === "essential") continue;

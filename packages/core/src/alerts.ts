@@ -4,7 +4,8 @@ import { listListeners, type Listener } from "./listeners.ts";
 import { listServices, type Service } from "./services.ts";
 import { listRoutes, type RouteRow } from "./cloudflare.ts";
 import { loadDescriptionResolver } from "./descriptions.ts";
-import { buildHealthTargets, healthAlertCandidates, healthTarget } from "./health.ts";
+import { formatLocal, sinceLastCheck } from "./time.ts";
+import { buildHealthTargets, healthAlertCandidates, healthTarget, type SharedListings } from "./health.ts";
 import { portClashes, portsFileReader, type PortRegistry, type RegistryFile } from "./ports.ts";
 import { recipesResponse } from "./recipes.ts";
 import { listenerWatchKey, listOutages, serviceWatchKey } from "./outages.ts";
@@ -69,10 +70,10 @@ function muted(candidate: { key: string; kind: AlertKind; target: Alert["target"
   return candidate.kind === "exposure-change" && ([...(condition.hostnames ?? []), ...routes.filter((route) => route.listener?.id === candidate.target.id).map((route) => route.hostname)]).some((hostname) => file.ungatedHosts.includes(hostname.toLowerCase()));
 }
 
-export function refreshAlertMutes(db: Db, options: AlertOptions = {}): AlertChange[] {
+export function refreshAlertMutes(db: Db, options: AlertOptions = {}, shared: SharedListings = {}): AlertChange[] {
   const file = options.loadMutes?.() ?? EMPTY;
   const mutes = alertMutes(db, file);
-  const routes = listRoutes(db, { tunnelHosts: options.tunnelHosts }, loadDescriptionResolver(db, { hints: [] }));
+  const routes = shared.routes ?? listRoutes(db, { tunnelHosts: options.tunnelHosts }, shared.descriptions ?? loadDescriptionResolver(db, { hints: [] }));
   const changes: AlertChange[] = [];
   for (const row of db.prepare(SELECT).all() as unknown as StoredAlert[]) {
     const alert = alertObject(row);
@@ -150,11 +151,12 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   for (const row of openOutages) {
     const kind: AlertKind = row.kind === "service" ? "service-outage" : "machine-outage";
     const title = row.kind === "flapping" ? `Flapping: ${row.label}` : row.kind === "service" ? `Not running: ${row.label}` : `Machine ${row.state}: ${row.label}`;
-    candidates.push({ at: row.confirmedAt, kind, severity: row.kind === "service" ? "warn" : "high", machineId: row.machineId, machineName: machineName(row.machineId), key: `${kind}:${row.key}`, title, detail: `${row.detail} Since ${row.startedAt}.`.trim(), target: { type: null, id: null }, condition: { outageKey: row.key } });
+    candidates.push({ at: row.confirmedAt, kind, severity: row.kind === "service" ? "warn" : "high", machineId: row.machineId, machineName: machineName(row.machineId), key: `${kind}:${row.key}`, title, detail: `${row.detail} Since ${formatLocal(row.startedAt)} ${sinceLastCheck(row.lastOkAt, row.confirmedAt)}.`.trim(), target: { type: null, id: null }, condition: { outageKey: row.key } });
   }
   const openOutageKeys = new Set(openOutages.map((row) => row.key));
-  const healthCandidates = healthAlertCandidates(db, now, options.tunnelHosts);
-  const healthKeys = new Set(buildHealthTargets(db, options.tunnelHosts).map((target) => target.key));
+  const shared: SharedListings = { descriptions, routes, services };
+  const healthCandidates = healthAlertCandidates(db, now, options.tunnelHosts, shared);
+  const healthKeys = new Set(buildHealthTargets(db, options.tunnelHosts, shared).map((target) => target.key));
   candidates.push(...healthCandidates);
   const watch = options.loadWatch?.();
   // An item the outage watch has seen running is reported by that watch after two checks, so a restart does not raise an alert of its own.
@@ -248,7 +250,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
       const inserted = db.prepare(`INSERT INTO alerts (at, kind, severity, machine_id, machine_name, key, title, detail, target_type, target_id, state, muted, condition_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`).run(candidate.at, candidate.kind, candidate.severity, candidate.machineId, candidate.machineName, candidate.key, candidate.title, candidate.detail, candidate.target.type, candidate.target.id, isMuted ? 1 : 0, JSON.stringify(candidate.condition));
       changes.push({ alert: alertObject(db.prepare(`${SELECT} WHERE id = ?`).get(inserted.lastInsertRowid) as unknown as StoredAlert), change: "created" });
     }
-    changes.push(...refreshAlertMutes(db, { ...options, loadMutes: () => file }));
+    changes.push(...refreshAlertMutes(db, { ...options, loadMutes: () => file }, shared));
     db.exec("RELEASE evaluate_alerts");
     return changes;
   } catch (err) {

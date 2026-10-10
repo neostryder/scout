@@ -4,6 +4,7 @@ import { listListeners, type Listener } from "./listeners.ts";
 import { listServices, type Service } from "./services.ts";
 import type { WatchConfig } from "./watch-file.ts";
 import { isWatched } from "./watch-file.ts";
+import { formatLocal, sinceLastCheck } from "./time.ts";
 
 // An outage is a check that failed twice in a row. The recorded start is the first failed check, the end is the first check that passed,
 // and a restart that is over before the second check never becomes an outage.
@@ -41,6 +42,8 @@ export interface Outage {
   confirmedAt: string;
   endedAt: string | null;
   detail: string;
+  /** The last check that passed before an open outage began; null once it has ended or when none is on record. */
+  lastOkAt: string | null;
   durationMs: number;
 }
 
@@ -48,9 +51,10 @@ export interface OutageChange { outage: Outage; change: "confirmed" | "updated" 
 export interface OutageNotice { title: string; body: string; severity: "high" | "info" }
 
 interface OutageRow extends Omit<Outage, "durationMs"> { id: number }
-interface WatchRow { key: string; failures: number; firstFailedAt: string | null; lastState: string; lastCheckedAt: string | null; episodes: string }
+interface WatchRow { key: string; failures: number; firstFailedAt: string | null; lastState: string; lastCheckedAt: string | null; lastOkAt: string | null; episodes: string }
 
-const OUTAGE_SELECT = `SELECT id, key, kind, machine_id AS machineId, label, state, started_at AS startedAt, confirmed_at AS confirmedAt, ended_at AS endedAt, detail FROM outages`;
+const OUTAGE_SELECT = `SELECT id, key, kind, machine_id AS machineId, label, state, started_at AS startedAt, confirmed_at AS confirmedAt, ended_at AS endedAt, detail,
+  CASE WHEN ended_at IS NULL THEN (SELECT last_ok_at FROM watch_state WHERE watch_state.key = outages.key) END AS lastOkAt FROM outages`;
 
 function outage(row: OutageRow, now: string): Outage {
   const end = Date.parse(row.endedAt ?? now);
@@ -93,7 +97,7 @@ export function recordObservations(db: Db, observations: Observation[], options:
   db.exec("BEGIN");
   try {
     for (const obs of observations) {
-      const saved = db.prepare("SELECT key, failures, first_failed_at AS firstFailedAt, last_state AS lastState, last_checked_at AS lastCheckedAt, episodes_json AS episodes FROM watch_state WHERE key = ?").get(obs.key) as WatchRow | undefined;
+      const saved = db.prepare("SELECT key, failures, first_failed_at AS firstFailedAt, last_state AS lastState, last_checked_at AS lastCheckedAt, last_ok_at AS lastOkAt, episodes_json AS episodes FROM watch_state WHERE key = ?").get(obs.key) as WatchRow | undefined;
       // A late or repeated timestamp does not count as a new check.
       if (saved?.lastCheckedAt && Date.parse(obs.at) <= Date.parse(saved.lastCheckedAt)) continue;
       const cutoff = Date.parse(obs.at) - FLAP_WINDOW_MS;
@@ -127,9 +131,9 @@ export function recordObservations(db: Db, observations: Observation[], options:
         if (episodes.length >= FLAP_EPISODES && !open) changes.push({ outage: insertOutage(db, { key: flapKey, kind: "flapping", machineId: obs.machineId, label: obs.label, state: "flapping", startedAt: episodes[0]!, confirmedAt: obs.at, detail: `${episodes.length} failures in the last ${FLAP_WINDOW_MS / 60_000} minutes` }), change: "confirmed" });
         else if (open && episodes.length === 0) changes.push({ outage: closeOutage(db, open.id, obs.at), change: "recovered" });
       }
-      db.prepare(`INSERT INTO watch_state (key, kind, machine_id, label, failures, first_failed_at, last_state, last_checked_at, episodes_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, machine_id = excluded.machine_id, label = excluded.label, failures = excluded.failures, first_failed_at = excluded.first_failed_at, last_state = excluded.last_state, last_checked_at = excluded.last_checked_at, episodes_json = excluded.episodes_json`)
-        .run(obs.key, obs.kind, obs.machineId, obs.label, failures, firstFailedAt, obs.state, obs.at, JSON.stringify(episodes));
+      db.prepare(`INSERT INTO watch_state (key, kind, machine_id, label, failures, first_failed_at, last_state, last_checked_at, last_ok_at, episodes_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, machine_id = excluded.machine_id, label = excluded.label, failures = excluded.failures, first_failed_at = excluded.first_failed_at, last_state = excluded.last_state, last_checked_at = excluded.last_checked_at, last_ok_at = excluded.last_ok_at, episodes_json = excluded.episodes_json`)
+        .run(obs.key, obs.kind, obs.machineId, obs.label, failures, firstFailedAt, obs.state, obs.at, obs.ok ? obs.at : saved?.lastOkAt ?? null, JSON.stringify(episodes));
     }
     db.exec("COMMIT");
   } catch (err) {
@@ -208,10 +212,10 @@ export function outagesResponse(db: Db, config: WatchConfig, params = new URLSea
 /** The text of a notice for one change, plain ASCII, for Discord and the toast. */
 export function outageNotice(change: OutageChange): OutageNotice {
   const { outage: row } = change;
-  if (row.kind === "monitor-gap") return { title: `Scout was not running: ${row.label}`, body: `Nothing was checked from ${row.startedAt} to ${row.endedAt} (${formatDuration(row.durationMs)}).`, severity: "info" };
+  if (row.kind === "monitor-gap") return { title: `Scout was not running: ${row.label}`, body: `Nothing was checked from ${formatLocal(row.startedAt)} to ${formatLocal(row.endedAt ?? row.confirmedAt)} (${formatDuration(row.durationMs)}).`, severity: "info" };
   const what = row.kind === "machine" ? `${row.label} is ${row.state}` : row.kind === "flapping" ? `${row.label} keeps failing and recovering` : row.kind === "url" ? `${row.label} is not answering` : `${row.label} is not running`;
-  if (change.change === "recovered") return { title: `Recovered: ${row.label}`, body: `${what.replace(/ is (hung|down|not answering|not running)$/, "")} is back after ${formatDuration(row.durationMs)} (down since ${row.startedAt}).`, severity: "info" };
-  return { title: `Outage: ${what}`, body: `${row.detail || "The check failed twice in a row."} Down since ${row.startedAt}.`, severity: "high" };
+  if (change.change === "recovered") return { title: `Recovered: ${row.label}`, body: `${what.replace(/ is (hung|down|not answering|not running)$/, "")} is back after ${formatDuration(row.durationMs)} (down since ${formatLocal(row.startedAt)}).`, severity: "info" };
+  return { title: `Outage: ${what}`, body: `${row.detail || "The check failed twice in a row."} Down since ${formatLocal(row.startedAt)} ${sinceLastCheck(row.lastOkAt, row.confirmedAt)}.`, severity: "high" };
 }
 
 // ---- service and listener checks -------------------------------------------------------------------------------------

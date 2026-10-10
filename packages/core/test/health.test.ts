@@ -116,7 +116,7 @@ test("unhealthy alerts use stable keys and domain and listener severity and reso
   }
   const alerts = alertsResponse(db, new URLSearchParams("kind=unhealthy"), AT).alerts;
   assert.deepEqual(alerts.map((row) => [row.key, row.severity]).sort(), [["unhealthy:domain:scout.example.test", "high"], ["unhealthy:listener:hub:8080", "warn"]]);
-  assert.equal(alerts.find((row) => row.severity === "high")!.detail, "scout.example.test has not answered for 3 checks (timeout)");
+  assert.equal(alerts.find((row) => row.severity === "high")!.detail, "scout.example.test has not answered for 3 checks (timeout) (no successful check on record).");
   assert.equal(alertsSummary(db).open, 2);
   assert.deepEqual(evaluateAlerts(db, AT), []);
   acknowledgeAlerts(db, { all: true, kind: "unhealthy" }, AT);

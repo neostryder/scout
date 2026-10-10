@@ -192,3 +192,26 @@ test("the outages response lists open and past outages with the watched items an
   assert.throws(() => outagesResponse(db, defaultWatchConfig(), new URLSearchParams("state=bogus")), /invalid state/);
   assert.deepEqual([45_000, 125_000, 3_720_000, 200_000_000].map(formatDuration), ["45 s", "2 min", "1 h 2 min", "2 d 7 h"]);
 });
+
+test("an outage notice and alert give local time to the second and the minutes since the last passing check", (t) => {
+  const db = seed(t);
+  recordObservations(db, [machine(0, true)]);
+  recordObservations(db, [machine(2, false)]);
+  const [opened] = recordObservations(db, [machine(4, false)]);
+  const body = outageNotice(opened!).body;
+  assert.match(body, /Down since \d{4}-\d\d-\d\d \d\d:\d\d:\d\d \S+ \(4 minutes since the last successful check\)\./);
+  assert.doesNotMatch(body, /T\d\d:\d\d:\d\d\.\d{3}Z/);
+  evaluateAlerts(db, stamp(5));
+  const alert = alertsResponse(db, new URLSearchParams("kind=machine-outage"), stamp(5)).alerts[0]!;
+  assert.match(alert.detail, /\(4 minutes since the last successful check\)\.$/);
+});
+
+test("an item that never passed a check says so, and a recovery reports no last-check text", (t) => {
+  const db = seed(t);
+  recordObservations(db, [machine(0, false)]);
+  const [opened] = recordObservations(db, [machine(2, false)]);
+  assert.match(outageNotice(opened!).body, /\(no successful check on record\)\./);
+  const [done] = recordObservations(db, [machine(10, true)]);
+  assert.equal(done!.outage.lastOkAt, null);
+  assert.doesNotMatch(outageNotice(done!).body, /since the last successful check/);
+});

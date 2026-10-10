@@ -78,17 +78,57 @@ export function classifyService(fact: ServiceFact, exposed = false): Classificat
   return classify(fact.kind, fact.name, fact.program, exposed);
 }
 
+type JoinFact = ServiceFact & { machineId?: string };
+interface ServiceIndex { byPid: Map<string, number>; byPath: Map<string, number>; byLowerPath: Map<string, number> }
+
+// A listing joins every listener to the services on its machine. Scanning the whole service list per listener took seconds of CPU on a busy machine, so the list is indexed once per array. Each entry keeps the position of its first fact, so the first match in list order still wins.
+const indexes = new WeakMap<JoinFact[], ServiceIndex>();
+
+function serviceIndex(facts: JoinFact[]): ServiceIndex {
+  const cached = indexes.get(facts);
+  if (cached) return cached;
+  const index: ServiceIndex = { byPid: new Map(), byPath: new Map(), byLowerPath: new Map() };
+  facts.forEach((fact, position) => {
+    const machine = fact.machineId ?? "*";
+    if (fact.pid !== null) {
+      const key = `${machine}|${fact.pid}`;
+      if (!index.byPid.has(key)) index.byPid.set(key, position);
+    } else if (fact.program !== null) {
+      const exact = `${machine}|${fact.program}`;
+      if (!index.byPath.has(exact)) index.byPath.set(exact, position);
+      const lower = `${machine}|${fact.program.toLowerCase()}`;
+      if (!index.byLowerPath.has(lower)) index.byLowerPath.set(lower, position);
+    }
+  });
+  indexes.set(facts, index);
+  return index;
+}
+
+function earliest(map: Map<string, number>, machineId: string, value: string): number | undefined {
+  const own = map.get(`${machineId}|${value}`);
+  const any = map.get(`*|${value}`);
+  return own === undefined ? any : any === undefined ? own : Math.min(own, any);
+}
+
+/** The first service fact that owns this listener: the same pid, else a pid-less fact with the same program path. */
+function joinedService(row: Listener, facts: JoinFact[]): JoinFact | undefined {
+  if (facts.length === 0) return undefined;
+  const index = serviceIndex(facts);
+  if (row.pid !== null) {
+    const byPid = earliest(index.byPid, row.machineId, String(row.pid));
+    if (byPid !== undefined) return facts[byPid];
+  }
+  if (row.processPath === null) return undefined;
+  const windows = /^[a-z]:[\\/]/i.test(row.processPath);
+  const position = windows ? earliest(index.byLowerPath, row.machineId, row.processPath.toLowerCase()) : earliest(index.byPath, row.machineId, row.processPath);
+  return position === undefined ? undefined : facts[position];
+}
+
 export function classifyListener(row: Listener, serviceFacts: (ServiceFact & { machineId?: string })[] = []): Classification {
   if (row.containerName !== null) {
     return { class: "third-party", vendor: "other", official: false, hidden: false, evidence: ["container listener"], whatBreaks: null, confidence: "rule" };
   }
-  const samePath = (path: string | null): boolean => {
-    if (row.processPath === null || path === null) return false;
-    const windows = /^[a-z]:[\\/]/i.test(row.processPath);
-    return windows ? row.processPath.toLowerCase() === path.toLowerCase() : row.processPath === path;
-  };
-  const sameMachine = (fact: ServiceFact & { machineId?: string }): boolean => fact.machineId === undefined || fact.machineId === row.machineId;
-  const service = serviceFacts.find((fact) => sameMachine(fact) && row.pid !== null && fact.pid === row.pid) ?? serviceFacts.find((fact) => sameMachine(fact) && fact.pid === null && samePath(fact.program));
+  const service = joinedService(row, serviceFacts);
   const exposed = row.bind !== "loopback";
   if (service) {
     const result = classifyService(service, exposed);

@@ -71,3 +71,24 @@ test("a protected Windows process with no readable path is trusted by name only 
   assert.equal(other.class, "third-party");
   assert.ok(other.evidence.includes("program path unreadable"));
 });
+
+test("the indexed service join returns the same first match as a linear scan", () => {
+  let seed = 7;
+  const next = (n: number): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const machines = ["hub", "mini", undefined];
+  const programs = ["C:/Windows/System32/svchost.exe", "c:/windows/system32/SVCHOST.exe", "/usr/bin/node", "/usr/bin/Node", null];
+  const facts = Array.from({ length: 60 }, (_, i) => ({ ...service({ name: `s${i}`, pid: next(3) === 0 ? null : next(8), program: programs[next(programs.length)]! }), machineId: machines[next(machines.length)] }));
+  const reference = (row: Listener): string | undefined => {
+    const samePath = (path: string | null): boolean => {
+      if (row.processPath === null || path === null) return false;
+      return /^[a-z]:[\/]/i.test(row.processPath) ? row.processPath.toLowerCase() === path.toLowerCase() : row.processPath === path;
+    };
+    const sameMachine = (fact: { machineId?: string | undefined }): boolean => fact.machineId === undefined || fact.machineId === row.machineId;
+    return (facts.find((fact) => sameMachine(fact) && row.pid !== null && fact.pid === row.pid) ?? facts.find((fact) => sameMachine(fact) && fact.pid === null && samePath(fact.program)))?.name;
+  };
+  for (let i = 0; i < 400; i++) {
+    const row = listener({ machineId: machines[next(2)]!, pid: next(4) === 0 ? null : next(8), processPath: programs[next(programs.length)] ?? null });
+    const joined = classifyListener(row, facts as (ServiceFact & { machineId?: string })[]).evidence.find((line) => line.startsWith("joined service: "))?.slice("joined service: ".length);
+    assert.equal(joined, reference(row), JSON.stringify({ machine: row.machineId, pid: row.pid, path: row.processPath }));
+  }
+});

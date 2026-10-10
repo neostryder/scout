@@ -20,6 +20,13 @@ export function openCatalog(path: string): Db {
     const columns = db.prepare("PRAGMA table_info(listeners)").all() as { name: string }[];
     if (!columns.some((column) => column.name === "expected_down")) db.exec("ALTER TABLE listeners ADD COLUMN expected_down INTEGER NOT NULL DEFAULT 0");
   }
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'watch_state'").get()) {
+    const columns = db.prepare("PRAGMA table_info(watch_state)").all() as { name: string }[];
+    if (!columns.some((column) => column.name === "last_ok_at")) {
+      db.exec("ALTER TABLE watch_state ADD COLUMN last_ok_at TEXT");
+      db.exec("UPDATE watch_state SET last_ok_at = last_checked_at WHERE failures = 0");
+    }
+  }
   const hadFts = db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'packages_fts'").get() !== undefined;
   db.exec(SCHEMA_SQL);
   const descriptionColumns = db.prepare("PRAGMA table_info(descriptions)").all() as { name: string }[];
