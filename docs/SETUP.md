@@ -266,6 +266,40 @@ The hub writes `.scout-data/heartbeat.json` every 30 seconds. The watchdog (`pnp
 
 When the hub starts and finds its last heartbeat more than 5 minutes old, it records a `monitor-gap` outage, "Scout was not running", that covers the silence. An outage of the hub machine itself shows up this way once the machine is back. While the whole hub machine is down, nothing can send a notice: the watchdog covers a hub process that hangs or stops.
 
+## Provenance flags
+
+The page shows small flags beside installs, services, and listeners. Hover over a flag to see the evidence behind it, or open the detail panel, where the Provenance list shows the same evidence. There are four kinds:
+
+- Odd location: installed in or running from a temp folder, a Downloads or Desktop folder, the shared Public folder, or the Recycle Bin. macOS package receipts are skipped because they record a build prefix instead of where the files live.
+- No publisher: a Windows uninstall entry that names no publisher. System components are left out.
+- Not signed: a Store-format app package (appx) with no signature at all. Packages signed by their developer are not flagged.
+- Mine: the item lives under one of your projects or has a homepage under your GitHub account, or it is a listener or service on a port used by an approved or proposed launch recipe from one of your projects.
+
+A flag is information only. It never starts, stops, disables, or removes anything.
+
+The Mine flag needs a profile. Create `.scout-data/mine.json` with your GitHub account and organization names and the email addresses you commit with:
+
+```json
+{
+  "owners": ["your-github-account", "your-org"],
+  "emails": ["you@example.com"]
+}
+```
+
+A project counts as yours when the owner of its git remote matches one of the owners, ignoring case, or when its last commit's author email matches one of the emails. Without the file nothing is marked Mine, and the other three flags still work. If the file is malformed, Scout reports the problem and ignores it.
+
+The hub reads each project's git remote and last commit at startup and every 6 hours, in the project folders on the hub machine that launch recipes come from. It keeps only the host, owner, and repository name of the remote, and strips any credentials in the remote URL before anything is stored.
+
+The CLI shows the same information:
+
+```
+node packages/cli/src/main.ts provenance
+node packages/cli/src/main.ts provenance scan
+node packages/cli/src/main.ts provenance flags --machine mac-mini --kind odd-location
+```
+
+`provenance` lists your projects with their remote, last author, and whether each one counts as yours, and explains how to add a profile when there is none. `provenance scan` reads the git facts again right away and prints counts. `provenance flags` prints a table of flagged installs with their evidence and a count. `--machine` takes a machine id, and `--kind` takes `odd-location`, `no-publisher`, `unsigned`, or `mine`.
+
 ## Local state
 
 Everything Scout writes lives in `.scout-data/`:
@@ -278,6 +312,7 @@ Everything Scout writes lives in `.scout-data/`:
 | `stacks.json` | Optional stacks: ordered lists of recipes and services with wait-for-port steps. |
 | `alerts.json` | Alert mutes. |
 | `watch.json` | Outage watch switches, set from the Outages tab or the `outages watch` and `unwatch` commands. Everything is watched until a switch is turned off. |
+| `mine.json` | Optional profile for the Mine flag: your GitHub account and organization names (`owners`) and git author emails (`emails`). Git ignores it. |
 | `heartbeat.json` | The hub's heartbeat, rewritten every 30 seconds. The watchdog reads it, and the hub reads it at startup to record a monitor gap. |
 | `tunnel-hosts.json` | Optional tunnel name to machine id map. |
 | `cogitator.json` | Optional local AI gateway settings. |

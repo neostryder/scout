@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { hubMachineId, cloudflareReader, listListeners, listServices, type Db, type Listener, type ListenerBind, type Service, type ServiceClass, type ServiceKind, type ServiceState } from "@scout/core";
+import { hubMachineId, cloudflareReader, emptyProvenance, listListeners, listServices, programFlags, type Flag, type ProvenanceContext, type Db, type Listener, type ListenerBind, type Service, type ServiceClass, type ServiceKind, type ServiceState } from "@scout/core";
 import type { CloudflareSchedule } from "./cloudflare.ts";
 import type { LiveMachineState, LiveSchedule } from "./live.ts";
 import { DESCRIPTION_SOURCES, describeRow, descriptionsOverview, loadDescriptionResolver, setHandDescription, validateHandDescription } from "@scout/core";
@@ -166,7 +166,14 @@ function compareServices(a: Service, b: Service, sort: string, dir: Dir): number
   return (dir === "desc" ? -cmp : cmp) || a.id - b.id;
 }
 
-function servicesResponse(db: Db, params: URLSearchParams, control?: ServicesControl): unknown {
+/** Flags for a running program from its path and every port it holds, without repeating one. */
+function rowFlags(context: ProvenanceContext, machineId: string, path: string | null, ports: number[]): Flag[] {
+  const seen = new Set<string>();
+  return [programFlags(machineId, path, null, context), ...ports.map((port) => programFlags(machineId, path, port, context))].flat().filter((flag) => !seen.has(flag.kind + flag.evidence) && seen.add(flag.kind + flag.evidence));
+}
+
+function servicesResponse(db: Db, params: URLSearchParams, control?: ServicesControl, provenance?: () => ProvenanceContext): unknown {
+  const flagContext = provenance?.() ?? emptyProvenance();
   const context = control?.context() ?? {};
   const query = serviceQuery(params);
   const gone = params.get("gone") === "gone" ? "gone" : "present";
@@ -189,7 +196,7 @@ function servicesResponse(db: Db, params: URLSearchParams, control?: ServicesCon
   return {
     total: visible.length,
     hiddenCount: matched.filter((row) => row.classification.hidden).length,
-    rows: ordered.slice(offset, offset + limit).map((row) => ({ ...row, exposure: exposureOf(row.ports), control: rowControl(controlRow(row), context, control?.runner != null) })),
+    rows: ordered.slice(offset, offset + limit).map((row) => ({ ...row, exposure: exposureOf(row.ports), flags: rowFlags(flagContext, row.machineId, row.program, row.ports.map((port) => port.port)), control: rowControl(controlRow(row), context, control?.runner != null) })),
     facets: {
       description: facet(facetRows("desc").map((row) => ({ value: row.description?.source ?? "none", label: row.description?.source ?? "none" }))),
       machine: facet(facetRows("machine").map((row) => ({ value: row.machineId, label: row.machineName }))),
@@ -221,7 +228,8 @@ function joinedService(listener: Listener, services: Service[]): { serviceName: 
   return { serviceName: service?.name ?? null, serviceKind: service?.kind ?? null };
 }
 
-function listenersResponse(db: Db, params: URLSearchParams, control?: ServicesControl): unknown {
+function listenersResponse(db: Db, params: URLSearchParams, control?: ServicesControl, provenance?: () => ProvenanceContext): unknown {
+  const flagContext = provenance?.() ?? emptyProvenance();
   const context = control?.context() ?? {};
   const query: ListenerQuery = {
     desc: descriptionQuery(params),
@@ -251,7 +259,7 @@ function listenersResponse(db: Db, params: URLSearchParams, control?: ServicesCo
   return {
     total: visible.length,
     hiddenCount: matched.filter((row) => row.classification.hidden).length,
-    rows: visible.slice(offset, offset + limit).map((row) => ({ ...row, ...joinedService(row, services), control: rowControl(controlRow(row, services), context, control?.runner != null) })),
+    rows: visible.slice(offset, offset + limit).map((row) => ({ ...row, ...joinedService(row, services), flags: rowFlags(flagContext, row.machineId, row.processPath, [row.port]), control: rowControl(controlRow(row, services), context, control?.runner != null) })),
     facets: {
       description: facet(facetRows("desc").map((row) => ({ value: row.description?.source ?? "none", label: row.description?.source ?? "none" }))),
       machine: facet(facetRows("machine").map((row) => ({ value: row.machineId, label: row.machineName }))),
@@ -460,7 +468,7 @@ async function readJson(req: IncomingMessage, res: ServerResponse, hostAllowed: 
   }
 }
 
-export async function servicesApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, live: LiveSchedule | undefined, heartbeatMs: number, cloudflare?: CloudflareSchedule, descriptions?: DescriptionRun, control?: ServicesControl, alerts?: HubAlerts, recipes?: HubRecipes, health?: HealthSchedule, registries?: ServicesRegistries, watch?: HubWatch): Promise<void> {
+export async function servicesApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, live: LiveSchedule | undefined, heartbeatMs: number, cloudflare?: CloudflareSchedule, descriptions?: DescriptionRun, control?: ServicesControl, alerts?: HubAlerts, recipes?: HubRecipes, health?: HealthSchedule, registries?: ServicesRegistries, watch?: HubWatch, provenance?: () => ProvenanceContext): Promise<void> {
   const path = url.pathname;
   if (path === "/api/services/outages" || path === "/api/services/outages/watch" || path === "/api/services/outages/test") {
     const post = path !== "/api/services/outages";
@@ -616,8 +624,8 @@ export async function servicesApi(db: Db, req: IncomingMessage, url: URL, res: S
   }
   if (req.method !== "GET" && req.method !== "HEAD") return json(res, 405, { error: "method not allowed" });
   if (path === "/api/services/descriptions/overview") return json(res, 200, descriptions ? await descriptions.overview() : descriptionsOverview(db));
-  if (path === "/api/services") return json(res, 200, servicesResponse(db, url.searchParams, control));
-  if (path === "/api/listeners") return json(res, 200, listenersResponse(db, url.searchParams, control));
+  if (path === "/api/services") return json(res, 200, servicesResponse(db, url.searchParams, control, provenance));
+  if (path === "/api/listeners") return json(res, 200, listenersResponse(db, url.searchParams, control, provenance));
   if (path === "/api/services/events") return json(res, 200, eventsResponse(db, url.searchParams));
   if (path === "/api/services/overview") return json(res, 200, overviewResponse(db, live));
   return json(res, 404, { error: "no such route" });

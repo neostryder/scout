@@ -1,4 +1,5 @@
 import type { CatalogFilter, Db, FacetDimension } from "@scout/core";
+import { emptyProvenance, installFlags, type Flag, type ProvenanceContext } from "@scout/core";
 import { changelogSummaryFor, countInstalls, decideProposal, dependentsOf, facetCounts, needsOf, openProposals, queryInstalls, queryUpdates, supportWindowsOf, updatesView, type UpdateBump, type UpdateSort, type UpdateStatus } from "@scout/core";
 import { confirmDependencyProposal, rejectDependencyProposal, type DependencyProposalSubject } from "@scout/core";
 
@@ -63,11 +64,22 @@ export function filterFromQuery(q: URLSearchParams): CatalogFilter {
 
 const FACETS: FacetDimension[] = ["machine", "source", "kind", "category", "ecosystem", "publisher", "scope", "descriptionSource"];
 
-export function installsResponse(db: Db, q: URLSearchParams): unknown {
+/** Flags for one install. The stored details matter only for Windows uninstall entries and Store packages, so they are parsed for those alone. */
+function flagsOf(row: { machineId: string; ecosystem: string; location: string; publisher: string | null; homepage: string | null }, details: unknown, context: ProvenanceContext): Flag[] {
+  return installFlags({ ...row, details: details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : null }, context);
+}
+
+export function installsResponse(db: Db, q: URLSearchParams, context: ProvenanceContext = emptyProvenance()): unknown {
   const filter = filterFromQuery(q);
+  const rows = queryInstalls(db, filter);
+  const needDetails = rows.filter((row) => row.ecosystem === "arp" || row.ecosystem === "appx").map((row) => row.installId);
+  const stored = new Map<number, unknown>();
+  if (needDetails.length) for (const found of db.prepare(`SELECT id, details_json AS details FROM installs WHERE id IN (${needDetails.map(() => "?").join(",")})`).all(...needDetails) as { id: number; details: string }[]) {
+    try { stored.set(found.id, JSON.parse(found.details)); } catch { /* A malformed details column simply yields no detail-based flag. */ }
+  }
   return {
     total: countInstalls(db, filter),
-    rows: queryInstalls(db, filter),
+    rows: rows.map((row) => ({ ...row, flags: flagsOf(row, stored.get(row.installId), context) })),
     facets: Object.fromEntries(FACETS.map((d) => [d, facetCounts(db, filter, d)])),
   };
 }
@@ -124,7 +136,7 @@ export function coverageResponse(db: Db): unknown {
     .all();
 }
 
-export function installDetail(db: Db, id: number): unknown | null {
+export function installDetail(db: Db, id: number, context: ProvenanceContext = emptyProvenance()): unknown | null {
   const row = db
     .prepare(
       `SELECT i.id, i.machine_id AS machineId, s.kind AS sourceKind, s.location AS sourceRoot, p.id AS packageId, p.ecosystem, p.key, p.name,
@@ -163,7 +175,9 @@ export function installDetail(db: Db, id: number): unknown | null {
   const target = update?.updatable ? update.available : update?.upstream;
   const summary = target ? changelogSummaryFor(db, row.packageId, target) : null;
   const changelog = summary ? { summary: summary.summary, sourceUrl: summary.sourceUrl, model: summary.model, createdAt: summary.createdAt } : null;
-  return { ...row, details: JSON.parse(row.details), usage, constraints, relations, sameSoftware, dependencies: { needs: needsOf(db, id), neededBy: dependentsOf(db, id) }, supportWindows: supportWindowsOf(db, row.packageId), changelog };
+  const details = JSON.parse(row.details) as unknown;
+  const flags = flagsOf(row as unknown as Parameters<typeof flagsOf>[0], details, context);
+  return { ...row, details, flags, usage, constraints, relations, sameSoftware, dependencies: { needs: needsOf(db, id), neededBy: dependentsOf(db, id) }, supportWindows: supportWindowsOf(db, row.packageId), changelog };
 }
 
 /** Review evidence includes the live installs because identities can have several copies. */

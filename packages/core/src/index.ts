@@ -48,3 +48,4 @@ export * from "./health.ts";
 export * from "./ports.ts";
 export * from "./hub.ts";
 export * from "./stacks.ts";
+export * from "./provenance.ts";

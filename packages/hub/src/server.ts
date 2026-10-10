@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, changelogSummaryFor, protectedFileReader, type Db } from "@scout/core";
+import { hubMachineId, changelogSummaryFor, mineFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
@@ -59,6 +59,8 @@ export interface HubOptions {
   portsPath?: string;
   stacksPath?: string;
   protectedPath?: string;
+  /** JSON file of the owners and author emails that count as the user. Absent means no project is marked as theirs. */
+  minePath?: string;
   downloads?: DownloadsOptions;
   research?: ResearchSchedule;
   /** Live listener and service reads. Omit it and the stream still says hello, while refresh answers 404. */
@@ -158,6 +160,8 @@ export function createHub(options: HubOptions): Server {
   const recipes = new HubRecipes(db, options.recipeProjects ?? (() => []));
   recipes.scan();
   const unsubscribeRecipeDescriptions = options.descriptions?.subscribe((event) => { if (event.scope === "project" && event.state !== "running") recipes.scan(); });
+  const mineFile = mineFileReader(options.minePath ?? ".scout-data/mine.json");
+  const provenance = () => provenanceContext(db, mineFile().profile);
   const readPorts = portsFileReader(options.portsPath);
   const stacksPath = options.stacksPath ?? (options.control ? options.control.stacksPath : undefined);
   const stacks = new HubStacks(db, stacksPath);
@@ -201,7 +205,7 @@ export function createHub(options: HubOptions): Server {
       return routesApi(db, req, url, res, hostAllowed, json, options.cloudflare, options.tunnelHostsPath);
     }
     if (url.pathname === "/api/listeners" || url.pathname === "/api/services" || url.pathname.startsWith("/api/services/")) {
-      return servicesApi(db, req, url, res, hostAllowed, json, options.live, options.streamHeartbeatMs ?? 15_000, options.cloudflare, options.descriptions, control, alerts, recipes, health, registries, options.watch);
+      return servicesApi(db, req, url, res, hostAllowed, json, options.live, options.streamHeartbeatMs ?? 15_000, options.cloudflare, options.descriptions, control, alerts, recipes, health, registries, options.watch, provenance);
     }
     if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");
@@ -215,7 +219,8 @@ export function createHub(options: HubOptions): Server {
       }
       if (options.research && url.pathname === "/api/research/status") return json(res, 200, options.research.status());
       if (url.pathname === "/api/summary") return json(res, 200, summaryResponse(db));
-      if (url.pathname === "/api/installs") return json(res, 200, installsResponse(db, url.searchParams));
+      if (url.pathname === "/api/installs") return json(res, 200, installsResponse(db, url.searchParams, provenance()));
+      if (url.pathname === "/api/provenance") return json(res, 200, provenanceResponse(db, mineFile()));
       if (url.pathname === "/api/updates") return json(res, 200, updatesResponse(db, url.searchParams));
       if (runner && url.pathname === "/api/updates/plan") {
         const plan = planResponse(db, runner, Number(url.searchParams.get("installId")), url.searchParams.get("alsoInstallIds"));
@@ -238,7 +243,7 @@ export function createHub(options: HubOptions): Server {
       if (url.pathname === "/api/proposals") return json(res, 200, proposalsResponse(db));
       const m = /^\/api\/installs\/(\d+)$/.exec(url.pathname);
       if (m) {
-        const detail = installDetail(db, Number(m[1]));
+        const detail = installDetail(db, Number(m[1]), provenance());
         return detail ? json(res, 200, detail) : json(res, 404, { error: "no such install" });
       }
       if (url.pathname.startsWith("/api/")) return json(res, 404, { error: "no such route" });
@@ -259,6 +264,13 @@ export function createHub(options: HubOptions): Server {
   });
   if (options.health && options.health.scheduled) server.once("listening", () => health?.start());
   if (options.watch) server.once("listening", () => options.watch?.start());
+  // Git facts of the projects are read once the hub is listening and every 6 hours after, only where project roots are configured.
+  let gitTimer: ReturnType<typeof setInterval> | undefined;
+  if (options.recipeProjects) {
+    const readGit = (): void => { void refreshProjectGit(db, options.recipeProjects!()).catch(() => undefined); };
+    server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
+    server.once("close", () => clearInterval(gitTimer));
+  }
   server.once("close", () => { controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

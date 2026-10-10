@@ -13,6 +13,7 @@ import { outagesCommand } from "./outages.ts";
 import { alertsFileReader } from "@scout/core";
 import { healthCommand } from "./health.ts";
 import { portsCommand } from "./ports.ts";
+import { provenanceCommand } from "./provenance.ts";
 import { stacksCommand } from "./stacks.ts";
 
 const STATES = ["ok", "origin-down", "dns-dangling", "no-origin", "unknown"];
@@ -116,6 +117,16 @@ async function main(): Promise<void> {
     } finally { db.close(); }
     return;
   }
+  if (args[0] === "provenance") {
+    const db = openCatalog(dbPath);
+    try {
+      await provenanceCommand(db, args.slice(1), { minePath: resolve(root, ".scout-data/mine.json"), projects: () => {
+        const machine = loadMachines(resolve(root, "machines.json")).find((item) => item.id === hubMachineId() && item.transport.type === "local") as { id: string; projectRoots?: string[] } | undefined;
+        return machine ? findProjects(machine.id, machine.projectRoots ?? []) : [];
+      } });
+    } finally { db.close(); }
+    return;
+  }
   if (args[0] === "control") {
     if (args[1] === "run" && !args.includes("--yes")) throw new Error("control run requires --yes");
     const db = openCatalog(dbPath);
@@ -150,6 +161,7 @@ async function main(): Promise<void> {
   console.error("       node packages/cli/src/main.ts outages pause <minutes> | resume | watch|unwatch <machine|check|item> <name> [--db path]");
   console.error("       node packages/cli/src/main.ts health [refresh] [--state state] [--kind kind] [--db path]");
   console.error("       node packages/cli/src/main.ts ports [next <range>] [--db path]");
+  console.error("       node packages/cli/src/main.ts provenance [scan | flags [--machine id] [--kind kind]] [--db path]");
   console.error("       node packages/cli/src/main.ts stacks [plan <name> | start <name> --yes] [--db path]");
   process.exitCode = 1;
 }
@@ -157,7 +169,7 @@ async function main(): Promise<void> {
 const entry = process.argv[1];
 if (entry !== undefined && resolve(entry) === fileURLToPath(import.meta.url)) {
   main().catch((err: unknown) => {
-    console.error(["control", "recipes", "ports", "stacks"].includes(process.argv[2] ?? "") && err instanceof Error ? err.message : "command failed");
+    console.error(["control", "recipes", "ports", "stacks", "provenance"].includes(process.argv[2] ?? "") && err instanceof Error ? err.message : "command failed");
     process.exitCode = 1;
   });
 }

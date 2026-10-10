@@ -1,4 +1,4 @@
-import { $, h, marked, safeUrl, defaultDir, riskBadge, updateDialogModel, updatePlanQuery } from "./lib.js";
+import { $, h, flagRow, marked, safeUrl, defaultDir, riskBadge, updateDialogModel, updatePlanQuery } from "./lib.js";
 import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 import { createServicesView } from "./services.js";
@@ -101,7 +101,7 @@ function noteSummary(row) {
   if (notes.length === 0) return [];
   return h("div", { class: "muted note", title: notes.join("\n") }, notes.length === 1 ? notes[0] : `${notes[0]} (and ${notes.length - 1} more)`);
 }
-function nameCell(row) { return h("td", { class: "name" }, h("div", { class: "t" }, marked(row.name, value("q"))), h("div", { class: "d" }, marked(row.description || "No description yet", value("q")))); }
+function nameCell(row) { return h("td", { class: "name" }, h("div", { class: "t" }, marked(row.name, value("q"))), h("div", { class: "d" }, marked(row.description || "No description yet", value("q"))), ...flagRow(row.flags)); }
 function rowBase(row, cells) { return h("tr", { tabindex: 0, "aria-selected": String(state.detailId === row.installId), onclick: () => openDetail(row.installId), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) openDetail(row.installId); } }, ...cells); }
 function jobText(job) {
   if (!job) return "";
@@ -174,6 +174,7 @@ async function openDetail(id) {
     const source = safeUrl(d.changelog.sourceUrl);
     sections.push(h("h3", {}, "Release notes"), h("p", { class: "release-summary" }, d.changelog.summary), source ? h("p", {}, h("a", { href: source, target: "_blank", rel: "noopener noreferrer" }, "Source")) : [], h("small", { class: "muted" }, d.changelog.model));
   }
+  if (d.flags?.length) sections.push(h("h3", {}, "Provenance"), h("ul", {}, d.flags.map((flag) => h("li", {}, `${flag.label}: ${flag.evidence}`))));
   const rawHeading = panel.children[panel.children.length - 2];
   for (const section of sections.flat(Infinity)) panel.insertBefore(section, rawHeading);
   panel.hidden = false; panel.scrollTop = 0;

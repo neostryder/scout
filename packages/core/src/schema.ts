@@ -531,6 +531,20 @@ CREATE TABLE IF NOT EXISTS cf_worker_routes (
   script  TEXT
 );
 
+-- Git facts of the projects found under projectRoots. The remote is stored as host, owner and repository only, never as the raw URL.
+CREATE TABLE IF NOT EXISTS project_git (
+  machine_id     TEXT NOT NULL REFERENCES machines(id),
+  root           TEXT NOT NULL,
+  remote_url     TEXT,
+  remote_host    TEXT,
+  remote_owner   TEXT,
+  remote_repo    TEXT,
+  author_email   TEXT,
+  last_commit_at TEXT,
+  read_at        TEXT NOT NULL,
+  PRIMARY KEY (machine_id, root)
+);
+
 CREATE TABLE IF NOT EXISTS cf_reader (
   id           INTEGER PRIMARY KEY CHECK (id = 1),
   state        TEXT NOT NULL CHECK (state IN ('never','fresh','stale','failed','off')),

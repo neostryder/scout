@@ -15,6 +15,11 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+/** Provenance flags as small tags, wrapped in one row; the evidence is the tooltip. Nothing renders when there are none. */
+export function flagRow(flags) {
+  return flags?.length ? [h("div", { class: "flags" }, flags.map((flag) => h("span", { class: `tag flag flag-${flag.kind}`, title: flag.evidence }, flag.label)))] : [];
+}
+
 export function marked(value, query) {
   const text = String(value ?? "");
   const terms = [...new Set(query.trim().split(/\s+/).filter(Boolean))].sort((a, b) => b.length - a.length);
