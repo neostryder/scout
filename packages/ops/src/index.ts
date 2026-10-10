@@ -7,3 +7,4 @@ export * from "./secrets.ts";
 export * from "./cogitator.ts";
 export * from "./control.ts";
 export * from "./health.ts";
+export * from "./watch.ts";

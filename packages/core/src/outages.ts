@@ -261,3 +261,22 @@ export function serviceObservations(db: Db, machineId: string, config: WatchConf
 export function watchedKeys(observations: readonly Observation[]): Set<string> {
   return new Set(observations.map((obs) => obs.key));
 }
+
+// ---- web addresses ---------------------------------------------------------------------------------------------------
+
+/**
+ * One check for each public hostname the health probes cover, taken from the latest probe. The health cycle already counts failures, so the
+ * probe's own time is the check time: a probe read twice is one check. Unproven hostnames (`not-http`, `unknown`) are left out like they are for alerts.
+ */
+export function urlObservations(db: Db, config: WatchConfig, at: string): Observation[] {
+  const rows = db.prepare("SELECT label, state, last_probe_at AS probedAt, last_error AS error FROM health_targets WHERE kind = 'domain' AND gone_at IS NULL AND last_probe_at IS NOT NULL").all() as { label: string; state: string; probedAt: string; error: string | null }[];
+  const out: Observation[] = [];
+  for (const row of rows) {
+    if (row.state === "not-http" || row.state === "unknown") continue;
+    const key = `url:${row.label}`;
+    if (!isWatched(config, "url", null, key, at)) continue;
+    const ok = row.state === "up" || row.state === "slow";
+    out.push({ key, kind: "url", machineId: null, label: row.label, ok, state: ok ? "up" : "unhealthy", detail: `${row.label} did not answer (${row.error ?? "connection error"}).`, at: row.probedAt });
+  }
+  return out;
+}
