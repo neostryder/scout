@@ -42,3 +42,16 @@ test("spans read in seconds, minutes, and hours", () => {
   assert.equal(formatSpan(300_000), "5 min");
   assert.equal(formatSpan(3_900_000), "1 h 5 min");
 });
+
+test("a stored webhook is read through the decrypt step only on Windows and only when the file exists", async () => {
+  const { readStoredWebhook } = await import("../src/notify.ts");
+  const dir = mkdtempSync(join(tmpdir(), "scout-stored-"));
+  try {
+    const path = join(dir, "discord-webhook.dpapi");
+    assert.equal(readStoredWebhook(path, () => "never"), undefined, "no file, no read");
+    writeFileSync(path, "x");
+    const read = readStoredWebhook(path, () => " https://discord.com/api/webhooks/1/abc \n");
+    assert.equal(read, process.platform === "win32" ? "https://discord.com/api/webhooks/1/abc" : undefined);
+    assert.equal(readStoredWebhook(path, () => { throw new Error("bad blob"); }), undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

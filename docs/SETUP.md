@@ -237,7 +237,7 @@ Each outage is stored in the `outages` table of `.scout-data/catalog.db` with wh
 
 ### Notices
 
-Each confirmed outage and each recovery shows a desktop notification on the hub machine: a tray balloon on Windows, an `osascript` notification on macOS, and `notify-send` on Linux. For a Discord post as well, create a webhook in the Discord channel's settings (Integrations, Webhooks, New Webhook), copy its URL, and set it as `SCOUT_DISCORD_WEBHOOK` in the hub's environment. Scout accepts only `discord.com` and `discordapp.com` webhook addresses, and its posts never mention anyone. The address is read from the environment only, and Scout never writes it to a file or shows it on the page.
+Each confirmed outage and each recovery shows a desktop notification on the hub machine: a tray balloon on Windows, an `osascript` notification on macOS, and `notify-send` on Linux. For a Discord post as well, create a webhook in the Discord channel's settings (Integrations, Webhooks, New Webhook), copy its URL, and set it as `SCOUT_DISCORD_WEBHOOK` in the hub's environment. Scout accepts only `discord.com` and `discordapp.com` webhook addresses, and its posts never mention anyone. Scout reads the address from the environment, and on Windows it also reads `.scout-data/discord-webhook.dpapi` when the variable is unset, a file encrypted for your Windows account that you create yourself (`ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString`). Scout never writes the address to a file or shows it on the page.
 
 To check the setup, press Send a test notice on the Outages tab. The same tab shows the status of each notice channel.
 
@@ -299,11 +299,11 @@ Register-ScheduledTask -TaskName "Scout hub" -Action $action -Trigger $trigger -
 
 The zero time limit matters: the supervisor never exits, and the default limit would stop it after three days. Set any optional environment variables (`SCOUT_AI_TOOLKIT`, `BWS_ACCESS_TOKEN`, and so on) at the top of the script, since a logon task does not run your shell profile. For local mode at login, make a copy of the script that runs `pnpm --filter @scout/hub start -- --live` instead.
 
-`pnpm --filter @scout/hub watchdog` is the outage watchdog. On Windows, register it as a second logon task beside the hub, with the same environment variables as the hub so it can send the Discord post. It runs until logoff too, so it needs the same zero time limit:
+`pnpm --filter @scout/hub watchdog` is the outage watchdog, and `tools/run-watchdog.ps1` runs it and restarts it after any exit. On Windows, register that script as a second logon task beside the hub, with the same environment variables as the hub (or the `.scout-data/discord-webhook.dpapi` file) so it can send the Discord post. It runs until logoff too, so it needs the same zero time limit:
 
 ```powershell
-$node = (Get-Command node).Source
-$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"$node`" src/watchdog.ts" -WorkingDirectory "C:\Projects\scout\packages\hub"
+$pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
+$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"$pwsh`" -NoProfile -NonInteractive -File C:\Projects\scout\tools\run-watchdog.ps1"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName "Scout watchdog" -Action $action -Trigger $trigger -Settings $settings

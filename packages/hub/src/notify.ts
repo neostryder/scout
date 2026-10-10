@@ -1,4 +1,7 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { OutageNotice } from "@scout/core";
 
 // Notices leave the hub two ways: a Discord webhook whose address lives only in the environment (SCOUT_DISCORD_WEBHOOK), and a desktop
@@ -40,15 +43,33 @@ export function desktopNotice(notice: OutageNotice): Promise<void> {
   });
 }
 
+/** On Windows the address may sit in .scout-data/discord-webhook.dpapi, encrypted for this user with DPAPI, so no logon-task script has to hold it. */
+const STORED_WEBHOOK = join(dirname(fileURLToPath(import.meta.url)), "../../../.scout-data/discord-webhook.dpapi");
+const DECRYPT_SCRIPT = "[Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR((ConvertTo-SecureString (Get-Content -Raw -LiteralPath $env:SCOUT_STORED_WEBHOOK).Trim())))";
+
+export function readStoredWebhook(path: string = STORED_WEBHOOK, decrypt: (path: string) => string = decryptWithDpapi): string | undefined {
+  if (process.platform !== "win32" || !existsSync(path)) return undefined;
+  try { return decrypt(path).trim() || undefined; } catch { return undefined; }
+}
+
+function decryptWithDpapi(path: string): string {
+  return execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", DECRYPT_SCRIPT], { env: { ...process.env, SCOUT_STORED_WEBHOOK: path }, encoding: "utf8", windowsHide: true, timeout: 15_000 });
+}
+
 export class Notifier {
   private options: NotifierOptions;
+  private stored: string | undefined;
 
   constructor(options: NotifierOptions = {}) {
     this.options = options;
   }
 
   private webhook(): string | undefined {
-    return (this.options.webhook ?? (() => process.env["SCOUT_DISCORD_WEBHOOK"]))()?.trim() || undefined;
+    if (this.options.webhook !== undefined) return this.options.webhook()?.trim() || undefined;
+    const fromEnv = process.env["SCOUT_DISCORD_WEBHOOK"]?.trim();
+    if (fromEnv) return fromEnv;
+    this.stored ??= readStoredWebhook();
+    return this.stored;
   }
 
   /** Which channels are set up, for the page. */

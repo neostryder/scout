@@ -125,7 +125,7 @@ If they want it, walk them through: a tunnel routing the hostname to `http://127
 
 - Cloudflare reader: a read-only API token in `SCOUT_CLOUDFLARE_TOKEN`, or a Bitwarden Secrets Manager secret named `CLOUDFLARE_SCOUT_READ` read through `bws`. Check it with `node packages/cli/src/main.ts cloudflare read`, which prints counts and never the token.
 - GitHub token in `SCOUT_GITHUB_TOKEN` for GitHub release lookups.
-- Discord outage notices: a webhook address in `SCOUT_DISCORD_WEBHOOK`. Only `discord.com` and `discordapp.com` addresses work. Check it with Send a test notice on the Outages tab.
+- Discord outage notices: a webhook address in `SCOUT_DISCORD_WEBHOOK`, or on Windows a DPAPI-encrypted `.scout-data/discord-webhook.dpapi`. Only `discord.com` and `discordapp.com` addresses work. Check it with Send a test notice on the Outages tab.
 - AI toolkit: `SCOUT_AI_TOOLKIT` pointing at a PowerShell script, plus `SCOUT_MODEL_ROUTE_PUBLIC` and `SCOUT_MODEL_ROUTE_INTERNAL`. Capped at 30 calls an hour.
 - A local OpenAI-compatible gateway for project descriptions, configured in `.scout-data/cogitator.json` with its key in `SCOUT_COGITATOR_KEY`.
 
