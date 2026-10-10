@@ -262,7 +262,7 @@ node packages/cli/src/main.ts outages watch machine mac-mini
 
 ### When the hub itself stops
 
-The hub writes `.scout-data/heartbeat.json` every 30 seconds. On Windows, `tools/watch-hub.ps1` reads it every 60 seconds, and when it is more than 180 seconds old the script sends the Discord post and the desktop notification, then a recovery notice with the duration once the heartbeat moves again. The script never touches the catalog. Run it as a second logon task (see [Run the hub at login](#run-the-hub-at-login)).
+The hub writes `.scout-data/heartbeat.json` every 30 seconds. The watchdog (`pnpm --filter @scout/hub watchdog`) reads it every 60 seconds, and when it is more than 180 seconds old it sends the Discord post and the desktop notification, then a recovery notice with the duration once the heartbeat moves again. It never touches the catalog and runs the same way on Windows, macOS, and Linux. Run it as a second login service (see [Run the hub at login](#run-the-hub-at-login)). `--stale <seconds>` and `--interval <seconds>` change the two thresholds.
 
 When the hub starts and finds its last heartbeat more than 5 minutes old, it records a `monitor-gap` outage, "Scout was not running", that covers the silence. An outage of the hub machine itself shows up this way once the machine is back. While the whole hub machine is down, nothing can send a notice: the watchdog covers a hub process that hangs or stops.
 
@@ -299,11 +299,11 @@ Register-ScheduledTask -TaskName "Scout hub" -Action $action -Trigger $trigger -
 
 The zero time limit matters: the supervisor never exits, and the default limit would stop it after three days. Set any optional environment variables (`SCOUT_AI_TOOLKIT`, `BWS_ACCESS_TOKEN`, and so on) at the top of the script, since a logon task does not run your shell profile. For local mode at login, make a copy of the script that runs `pnpm --filter @scout/hub start -- --live` instead.
 
-`tools/watch-hub.ps1` is the outage watchdog. Register it as a second logon task beside the hub, with the same environment variables as the hub so it can send the Discord post. It runs until logoff too, so it needs the same zero time limit:
+`pnpm --filter @scout/hub watchdog` is the outage watchdog. On Windows, register it as a second logon task beside the hub, with the same environment variables as the hub so it can send the Discord post. It runs until logoff too, so it needs the same zero time limit:
 
 ```powershell
-$pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
-$action = New-ScheduledTaskAction -Execute $pwsh -Argument '-NoProfile -WindowStyle Hidden -File "C:\Projects\scout\tools\watch-hub.ps1"'
+$node = (Get-Command node).Source
+$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"$node`" src/watchdog.ts" -WorkingDirectory "C:\Projects\scout\packages\hub"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName "Scout watchdog" -Action $action -Trigger $trigger -Settings $settings

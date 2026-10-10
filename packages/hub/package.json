@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test test/*.test.ts",
     "start": "node src/main.ts",
-    "start:production": "node src/main.ts --production --schedule-models"
+    "start:production": "node src/main.ts --production --schedule-models",
+    "watchdog": "node src/watchdog.ts"
   },
   "dependencies": {
     "@scout/core": "workspace:*",

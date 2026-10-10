@@ -135,7 +135,7 @@ The user sets every token and key in their own environment.
 
 On Windows, `tools/run-hub.ps1` runs the production command and restarts the hub 10 seconds after any exit, logging to `.scout-data/hub.log`. For local mode they need a copy that runs `pnpm --filter @scout/hub start -- --live` instead. Registering a logon task changes the machine, so show the `Register-ScheduledTask` command from `docs/SETUP.md` and get a yes first. The task needs the full path to `pwsh.exe` and a zero execution time limit, and any optional environment variables belong in the script. On macOS or Linux, offer a launchd agent or a systemd user unit that runs the same command from the repository folder.
 
-On Windows, also offer the outage watchdog, `tools/watch-hub.ps1`, as a second logon task. It sends a notice when the hub stops writing its heartbeat. It needs the same environment variables as the hub and the same zero time limit. Registering it is another machine change, so show the command from `docs/SETUP.md` and get a yes first.
+Also offer the outage watchdog, `pnpm --filter @scout/hub watchdog`, as a second login service (a logon task on Windows, a launchd agent on macOS, a systemd user unit on Linux). It sends a notice when the hub stops writing its heartbeat. It needs the same environment variables as the hub and the same zero time limit. Registering it is another machine change, so show the command from `docs/SETUP.md` and get a yes first.
 
 ## Troubleshooting
 
