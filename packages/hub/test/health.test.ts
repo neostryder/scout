@@ -46,7 +46,7 @@ function seed(t: TestContext) {
 }
 
 test("health flags preserve the default, minimum, disabled and unscheduled configurations", () => {
-  assert.deepEqual(healthOptionsFromArgs([]), { intervalSeconds: 300, scheduled: true });
+  assert.deepEqual(healthOptionsFromArgs([]), { intervalSeconds: 120, scheduled: true });
   assert.deepEqual(healthOptionsFromArgs(["--health-interval", "30", "--no-schedule"]), { intervalSeconds: 30, scheduled: false });
   assert.equal(healthOptionsFromArgs(["--no-health"]), false);
   for (const args of [["--health-interval"], ["--health-interval", "--no-health"], ["--health-interval", "29"], ["--health-interval", "30.5"]]) assert.throws(() => healthOptionsFromArgs(args), /at least 30/);
@@ -62,7 +62,7 @@ test("the scheduler follows watchers, returns to its configured cadence and stop
   schedule.start();
   await settle();
   assert.equal(calls.length, 1);
-  assert.equal(schedule.status().intervalSeconds, 300);
+  assert.equal(schedule.status().intervalSeconds, 120);
   const unwatch = schedule.watch();
   const unwatchSecond = schedule.watch();
   assert.equal(schedule.status().intervalSeconds, 60);
@@ -72,8 +72,8 @@ test("the scheduler follows watchers, returns to its configured cadence and stop
   unwatch();
   assert.equal(schedule.status().intervalSeconds, 60);
   unwatchSecond();
-  assert.equal(schedule.status().intervalSeconds, 300);
-  await clock.advance(299_999);
+  assert.equal(schedule.status().intervalSeconds, 120);
+  await clock.advance(119_999);
   assert.equal(calls.length, 2);
   await clock.advance(1);
   assert.equal(calls.length, 3);
@@ -81,7 +81,7 @@ test("the scheduler follows watchers, returns to its configured cadence and stop
   schedule.stop();
   assert.equal(clock.timers.size, 0);
   assert.equal(schedule.status().nextRunAt, null);
-  await clock.advance(300_000);
+  await clock.advance(120_000);
   assert.equal(calls.length, 3);
   assert.equal(schedule.refresh(), true);
   await settle();
@@ -118,7 +118,7 @@ test("the scheduler locks a running cycle, publishes progress and retries a fail
   assert.equal(schedule.status().running, false);
   assert.equal(logs.length, 1);
   assert.equal(notices.length, 1);
-  await clock.advance(300_000);
+  await clock.advance(120_000);
   assert.equal(calls, 3);
 });
 
@@ -162,7 +162,7 @@ test("health endpoints return the contract shape, filter rows and reject overlap
   assert.equal(listed.status, 200);
   assert.equal(listed.body.targets.length, 2);
   assert.deepEqual(listed.body.counts, { up: 0, slow: 0, failing: 0, down: 0, "not-http": 0, unknown: 2 });
-  assert.deepEqual(listed.body.probe, { running: false, lastRunAt: null, nextRunAt: null, intervalSeconds: 300 });
+  assert.deepEqual(listed.body.probe, { running: false, lastRunAt: null, nextRunAt: null, intervalSeconds: 120 });
   assert.equal((await call("/api/services/health?kind=listener&state=unknown")).body.targets.length, 1);
   assert.equal((await call("/api/services/health?state=wrong")).status, 400);
   assert.equal((await call("/api/services/health?kind=wrong")).status, 400);
@@ -246,8 +246,8 @@ test("the services stream sends hello.health, probe progress, target changes and
   await call("/api/services/health/refresh", {});
   await settle();
   disconnect();
-  for (let i = 0; i < 50 && (await call("/api/services/health")).body.probe.intervalSeconds !== 300; i++) await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.equal((await call("/api/services/health")).body.probe.intervalSeconds, 300);
+  for (let i = 0; i < 50 && (await call("/api/services/health")).body.probe.intervalSeconds !== 120; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal((await call("/api/services/health")).body.probe.intervalSeconds, 120);
 });
 
 test("an unscheduled hub permits manual cycles and a scheduled hub uses fake probes on start", async (t) => {

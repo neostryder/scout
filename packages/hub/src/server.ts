@@ -20,6 +20,7 @@ import { HubRecipes } from "./recipes.ts";
 import type { Project } from "@scout/core";
 import { HubAlerts, type HubAlertOptions } from "./alerts.ts";
 import { HealthSchedule, type HealthScheduleOptions } from "./health.ts";
+import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import { HubStacks } from "./stacks.ts";
 
@@ -68,6 +69,8 @@ export interface HubOptions {
   tunnelHostsPath?: string;
   alerts?: HubAlertOptions;
   health?: HealthScheduleOptions | false;
+  /** Outage watch: machine, web address and service checks, notices and the heartbeat. Omit it and the outage routes answer with an empty, read-only record. */
+  watch?: HubWatch;
   /** Heartbeat comment interval for /api/services/live. Tests pass a short one. */
   streamHeartbeatMs?: number;
   changelog?: Pick<ChangelogOptions, "summarize" | "fetch">;
@@ -159,7 +162,9 @@ export function createHub(options: HubOptions): Server {
   const stacksPath = options.stacksPath ?? (options.control ? options.control.stacksPath : undefined);
   const stacks = new HubStacks(db, stacksPath);
   const registries = { ports: () => portsResponse(db, readPorts()), stacks };
-  const alerts = new HubAlerts(db, { tunnelHostsPath: options.tunnelHostsPath, loadPorts: readPorts, ...options.alerts });
+  const alerts = new HubAlerts(db, { tunnelHostsPath: options.tunnelHostsPath, loadPorts: readPorts, ...(options.watch ? { loadWatch: options.watch.configReader() } : {}), ...options.alerts });
+  options.watch?.attachAlerts(alerts);
+  const unsubscribeWatchLive = options.live?.subscribeStored((read) => { if (read.status === "ok") options.watch?.observeServices(read.machineId, read.at); });
   const unsubscribeStacksLive = options.live?.subscribeStored(() => stacks.evaluate());
   const unsubscribeStacksReads = subscribeServiceReads(db, () => stacks.evaluate());
   const health = options.health === false ? undefined : new HealthSchedule(db, {
@@ -196,7 +201,7 @@ export function createHub(options: HubOptions): Server {
       return routesApi(db, req, url, res, hostAllowed, json, options.cloudflare, options.tunnelHostsPath);
     }
     if (url.pathname === "/api/listeners" || url.pathname === "/api/services" || url.pathname.startsWith("/api/services/")) {
-      return servicesApi(db, req, url, res, hostAllowed, json, options.live, options.streamHeartbeatMs ?? 15_000, options.cloudflare, options.descriptions, control, alerts, recipes, health, registries);
+      return servicesApi(db, req, url, res, hostAllowed, json, options.live, options.streamHeartbeatMs ?? 15_000, options.cloudflare, options.descriptions, control, alerts, recipes, health, registries, options.watch);
     }
     if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");
@@ -253,6 +258,7 @@ export function createHub(options: HubOptions): Server {
     if (address && typeof address !== "string") { controlPort = address.port; controlRunner?.setContext({ port: address.port }); }
   });
   if (options.health && options.health.scheduled) server.once("listening", () => health?.start());
-  server.once("close", () => { controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  if (options.watch) server.once("listening", () => options.watch?.start());
+  server.once("close", () => { controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

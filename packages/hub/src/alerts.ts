@@ -1,4 +1,4 @@
-import { alertMutes, alertsFileReader, evaluateAlerts, loadTunnelHosts, refreshAlertMutes, type AlertChange, type AlertOptions, type Db } from "@scout/core";
+import { alertMutes, alertsFileReader, evaluateAlerts, loadTunnelHosts, refreshAlertMutes, type AlertChange, type AlertOptions, type Db, type WatchConfig } from "@scout/core";
 
 export interface HubAlertOptions {
   alertsPath?: string;
@@ -6,6 +6,8 @@ export interface HubAlertOptions {
   evaluate?: typeof evaluateAlerts;
   log?: (line: string) => void;
   loadPorts?: AlertOptions["loadPorts"];
+  /** The outage watch's config, so a service it reports is not also reported the moment it stops. */
+  loadWatch?: () => WatchConfig;
 }
 
 export class HubAlerts {
@@ -22,7 +24,7 @@ export class HubAlerts {
   }
 
   options(): AlertOptions {
-    return { loadMutes: this.loadMutes, loadPorts: this.config.loadPorts, tunnelHosts: loadTunnelHosts(this.config.tunnelHostsPath) };
+    return { loadMutes: this.loadMutes, loadPorts: this.config.loadPorts, tunnelHosts: loadTunnelHosts(this.config.tunnelHostsPath), ...(this.config.loadWatch ? { loadWatch: this.config.loadWatch } : {}) };
   }
 
   subscribe(listener: (change: AlertChange) => void): () => void {

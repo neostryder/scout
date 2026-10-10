@@ -226,7 +226,7 @@ test("overview counts visible present rows and reports live as never when refres
   assert.equal(hub?.services.optionalRunning, 0);
   assert.equal(hub?.services.thirdParty, 1);
   assert.deepEqual(hub?.listeners, { total: 1, loopback: 0, lan: 0, all: 1 });
-  assert.deepEqual(hub?.live, { state: "never", lastLiveAt: null, cadenceMs: 300_000, error: null });
+  assert.deepEqual(hub?.live, { state: "never", lastLiveAt: null, cadenceMs: 120_000, error: null });
   assert.equal(body.machines[1]?.listeners.loopback, 1);
   assert.equal(body.machines[1]?.listeners.all, 1);
 });
@@ -364,7 +364,7 @@ test("the live stream says hello, reports a real change, heartbeats, and drops t
     stream.stop();
     for (let i = 0; i < 300 && live.watcherCount() !== 0; i++) await new Promise((resolve) => setTimeout(resolve, 10));
     assert.equal(live.watcherCount(), 0);
-    assert.equal(live.status().find((machine) => machine.id === "hub")?.cadenceMs, 300_000);
+    assert.equal(live.status().find((machine) => machine.id === "hub")?.cadenceMs, 120_000);
   } finally {
     live.stop();
     liveServer.close();

@@ -13,7 +13,7 @@ export interface HealthScheduleOptions {
 
 export function healthOptionsFromArgs(args: string[]): HealthScheduleOptions | false {
   const index = args.indexOf("--health-interval");
-  const value = index < 0 ? "300" : args[index + 1];
+  const value = index < 0 ? "120" : args[index + 1];
   const intervalSeconds = Number(value);
   if (!value || value.startsWith("--") || !Number.isInteger(intervalSeconds) || intervalSeconds < 30) throw new Error("health interval must be an integer of at least 30 seconds");
   return args.includes("--no-health") ? false : { intervalSeconds, scheduled: !args.includes("--no-schedule") };
@@ -44,7 +44,7 @@ export class HealthSchedule {
   private startedAt: number | null = null;
 
   constructor(db: Db, options: HealthScheduleOptions = {}) {
-    const interval = options.intervalSeconds ?? 300;
+    const interval = options.intervalSeconds ?? 120;
     if (!Number.isInteger(interval) || interval < 30) throw new Error("health interval must be an integer of at least 30 seconds");
     this.db = db;
     this.options = options;

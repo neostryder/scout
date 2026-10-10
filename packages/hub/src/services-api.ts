@@ -7,12 +7,13 @@ import { idleDescriptionStatus, type DescriptionRun } from "./descriptions.ts";
 import { controlRow, joinedInstall, listActions, protectedResponse, rowControl, uninstallInstructions, type ProtectedContext, type ProtectedFile } from "@scout/core";
 import { resolveControlRow, type ControlRunner } from "@scout/ops";
 import { controlPlanResponse, controlRunResponse } from "./control-api.ts";
-import { acknowledgeAlerts, alertMutes, alertsResponse, alertsSummary, setAlertMute } from "@scout/core";
+import { acknowledgeAlerts, alertMutes, alertsResponse, alertsSummary, defaultWatchConfig, outagesResponse, setAlertMute } from "@scout/core";
 import { RecipeError, recipesResponse } from "@scout/core";
 import type { HubRecipes } from "./recipes.ts";
 import type { HubAlerts } from "./alerts.ts";
 import { healthResponse, healthSummary } from "@scout/core";
 import type { HealthSchedule } from "./health.ts";
+import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import type { HubStacks } from "./stacks.ts";
 
@@ -36,7 +37,7 @@ const SERVICE_SORTS = ["name", "machine", "kind", "state", "class", "lastSeen", 
 const BINDS = ["loopback", "lan", "all"] as const;
 const EVENT_KINDS = ["service_new", "service_gone", "service_changed", "listener_new", "listener_gone", "listener_changed"] as const;
 const MAX_BODY = 4096;
-const SLOW_CADENCE_MS = 300_000;
+const SLOW_CADENCE_MS = 120_000;
 const WIDTH: Record<Exclude<Exposure, "none">, number> = { loopback: 0, lan: 1, all: 2 };
 
 // Same policy headers as the other hub responses, plus the buffering flags the stream needs.
@@ -459,8 +460,24 @@ async function readJson(req: IncomingMessage, res: ServerResponse, hostAllowed: 
   }
 }
 
-export async function servicesApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, live: LiveSchedule | undefined, heartbeatMs: number, cloudflare?: CloudflareSchedule, descriptions?: DescriptionRun, control?: ServicesControl, alerts?: HubAlerts, recipes?: HubRecipes, health?: HealthSchedule, registries?: ServicesRegistries): Promise<void> {
+export async function servicesApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, live: LiveSchedule | undefined, heartbeatMs: number, cloudflare?: CloudflareSchedule, descriptions?: DescriptionRun, control?: ServicesControl, alerts?: HubAlerts, recipes?: HubRecipes, health?: HealthSchedule, registries?: ServicesRegistries, watch?: HubWatch): Promise<void> {
   const path = url.pathname;
+  if (path === "/api/services/outages" || path === "/api/services/outages/watch" || path === "/api/services/outages/test") {
+    const post = path !== "/api/services/outages";
+    if (post ? req.method !== "POST" : req.method !== "GET" && req.method !== "HEAD") return json(res, 405, { error: "method not allowed" });
+    if (post && !watch) return json(res, 404, { error: "the outage watch is off" });
+    const body = post ? await readJson(req, res, hostAllowed, json) : {};
+    if (!body) return;
+    try {
+      if (path.endsWith("/watch")) { watch!.update(body); return json(res, 200, { ...outagesResponse(db, watch!.config(), new URLSearchParams("limit=1")), watch: watch!.status() }); }
+      if (path.endsWith("/test")) {
+        if (Object.keys(body).length) return json(res, 400, { error: "body must be {}" });
+        return json(res, 200, { results: await watch!.testNotice() });
+      }
+      const config = watch?.config() ?? defaultWatchConfig();
+      return json(res, 200, { ...outagesResponse(db, config, url.searchParams), watch: watch?.status() ?? null });
+    } catch (error) { return json(res, 400, { error: (error as Error).message }); }
+  }
   if (path === "/api/services/ports" || path === "/api/services/ports/next" || path === "/api/services/stacks") {
     if (req.method !== "GET" && req.method !== "HEAD") return json(res, 405, { error: "method not allowed" });
     if (path === "/api/services/stacks") return json(res, 200, registries?.stacks.response() ?? { stacks: [], file: { path: ".scout-data/stacks.json", exists: false, error: null }, generatedAt: new Date().toISOString() });

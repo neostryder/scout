@@ -6,7 +6,7 @@ import { LiveSchedule, type LiveClock, type LiveMachineConfig, type LiveNotice, 
 const START = Date.parse("2026-10-06T00:00:00.000Z");
 const FAST_WINDOWS_MS = 3_000;
 const FAST_OTHER_MS = 20_000;
-const SLOW_MS = 300_000;
+const SLOW_MS = 120_000;
 const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 const local: Transport = { type: "local" };
 const ok = { changed: false, tables: [] as ("services" | "listeners")[], status: "ok" as const, error: null };

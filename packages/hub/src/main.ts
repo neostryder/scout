@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Start the hub on loopback. Usage: node packages/hub/src/main.ts [--port 4870] [--db path] [--production] [--no-jobs] [--no-control] [--schedule] [--no-schedule] [--no-models] [--schedule-models] [--live] [--no-live] [--no-cloudflare] [--cloudflare-secret KEY]
+// Start the hub on loopback. Usage: node packages/hub/src/main.ts [--port 4870] [--db path] [--production] [--no-jobs] [--no-control] [--schedule] [--no-schedule] [--no-models] [--schedule-models] [--live] [--no-live] [--no-cloudflare] [--cloudflare-secret KEY] [--no-watch] [--watch-interval SECONDS]
+// The outage watch runs wherever live reads run (--production or --live) and checks every machine, public hostname and service every 2 minutes; --no-watch turns it off.
+// Notices go to the Discord webhook in SCOUT_DISCORD_WEBHOOK, when set, and to a desktop notification on this machine.
 // Models are off unless SCOUT_AI_TOOLKIT is set (see models.ts). The discovery button and the release-note refresh route use one on request; --no-models removes it. Release-note summaries and vendor-page reading spend model quota on their own schedule only with --schedule-models.
 // --production answers only the public host in access.json and only requests that carry a valid Cloudflare Access
 // token. The tunnel (cloudflared on this machine) is the only thing that should reach it; it still listens on loopback.
@@ -10,7 +12,7 @@ import { openCatalog } from "@scout/core";
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare } from "@scout/ops";
+import { configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { changelogSummarizer, createAiModelRunner, vendorVersionExtractor } from "./models.ts";
@@ -18,6 +20,7 @@ import { summarizeChangelogs } from "@scout/research";
 import { DescriptionRun } from "./descriptions.ts";
 import { configuredProjects, createProjectDescriptionSource } from "./descriptions-project.ts";
 import { healthOptionsFromArgs } from "./health.ts";
+import { HubWatch, WATCH_INTERVAL_MS } from "./watch.ts";
 
 function liveMachineList(path: string): LiveMachineConfig[] {
   return loadMachines(path).map((machine) => {
@@ -49,6 +52,9 @@ const control = args.includes("--no-control") ? false : { machines: liveMachineL
 // Live reads run with --production or --live. --no-live leaves them off. A development hub stays off so it does not open ssh by itself.
 const liveOn = !args.includes("--no-live") && (args.includes("--production") || args.includes("--live"));
 const live = liveOn ? new LiveSchedule(db, { machines: liveMachineList(resolve(root, "machines.json")) }) : undefined;
+const watchSeconds = Number(opt("--watch-interval") ?? WATCH_INTERVAL_MS / 1000);
+if (!Number.isInteger(watchSeconds) || watchSeconds < 30) throw new Error("watch interval must be an integer of at least 30 seconds");
+const watch = liveOn && !args.includes("--no-watch") ? new HubWatch(db, { intervalMs: watchSeconds * 1000, machines: () => watchMachines(loadMachines(resolve(root, "machines.json"))), configPath: resolve(root, ".scout-data/watch.json"), heartbeatPath: resolve(root, ".scout-data/heartbeat.json") }) : undefined;
 const cloudflareOn = liveOn && !args.includes("--no-cloudflare");
 const cloudflareSecret = opt("--cloudflare-secret");
 // The lookup errors name the failure and never a value, so the reason is safe to print.
@@ -64,7 +70,7 @@ const scheduled = !args.includes("--no-schedule") && (access || args.includes("-
 if (scheduled) research.start();
 // Release-note summaries run a few minutes after start and then daily, a small batch each time, only where the schedule runs.
 const summaries = model && scheduled && modelsOnSchedule ? [setTimeout(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 600_000), setInterval(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 86_400_000)] : [];
-const server = createHub({ db, recipeProjects: () => configuredProjects(resolve(root, "machines.json")), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, alerts: { alertsPath: resolve(root, ".scout-data/alerts.json") }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
+const server = createHub({ db, recipeProjects: () => configuredProjects(resolve(root, "machines.json")), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json") }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
 live?.start();
 cloudflareSchedule?.start();
 server.once("close", () => { research.stop(); live?.stop(); cloudflareSchedule?.stop(); for (const timer of summaries) clearTimeout(timer); });

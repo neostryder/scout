@@ -4,7 +4,8 @@ import { readLive, type LiveProbeUpdate, type LiveReadResult } from "@scout/ops"
 // The hub machine is read directly and the page polls it closely. Other machines are reached over ssh, so they stay slower.
 const FAST_WINDOWS_MS = 3_000;
 const FAST_OTHER_MS = 20_000;
-const SLOW_MS = 300_000;
+// A read every two minutes while no page watches, so the outage watch gets a fresh check on each cadence.
+const SLOW_MS = 120_000;
 const MAX_BACKOFF_MS = 300_000;
 const PROBE_TICK_MS = 2_000;
 
@@ -30,6 +31,9 @@ export interface LiveChanged {
   tables: ("services" | "listeners")[];
   at: string;
 }
+
+/** What a stored-read subscriber hears: the read's outcome too, so a partial read is not treated as a full one. */
+export interface LiveStored extends LiveChanged { status: "ok" | "partial" | "failed" }
 
 export interface LiveProbeEvent {
   machineId: string;
@@ -105,7 +109,7 @@ export class LiveSchedule {
   private reader: LiveReader;
   private runtimes: Runtime[];
   private listeners = new Set<(notice: LiveNotice) => void>();
-  private storedListeners = new Set<(read: LiveChanged) => void>();
+  private storedListeners = new Set<(read: LiveStored) => void>();
   private watchers = 0;
   private started = false;
 
@@ -169,7 +173,7 @@ export class LiveSchedule {
     return () => this.listeners.delete(listener);
   }
 
-  subscribeStored(listener: (read: LiveChanged) => void): () => void {
+  subscribeStored(listener: (read: LiveStored) => void): () => void {
     this.storedListeners.add(listener);
     return () => { this.storedListeners.delete(listener); };
   }
@@ -331,7 +335,7 @@ export class LiveSchedule {
       // The read is finished, so a subscriber can request another one from this event.
       runtime.running = false;
       if (result.changed || result.status !== "failed") for (const listener of this.storedListeners) {
-        try { listener({ machineId: runtime.config.id, tables: result.tables, at }); } catch { /* Alert subscribers must not interrupt live reads. */ }
+        try { listener({ machineId: runtime.config.id, tables: result.tables, at, status: result.status }); } catch { /* Alert subscribers must not interrupt live reads. */ }
       }
       if (result.changed) this.emit({ kind: "changed", data: { machineId: runtime.config.id, tables: result.tables, at } });
       this.followUp(runtime);
