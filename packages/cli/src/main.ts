@@ -9,6 +9,7 @@ import { recipesCommand } from "./recipes.ts";
 import { findProjects } from "@scout/core";
 import { controlCommand } from "./control.ts";
 import { alertsCommand } from "./alerts.ts";
+import { outagesCommand } from "./outages.ts";
 import { alertsFileReader } from "@scout/core";
 import { healthCommand } from "./health.ts";
 import { portsCommand } from "./ports.ts";
@@ -100,6 +101,11 @@ async function main(): Promise<void> {
     try { alertsCommand(db, args.slice(1), { alerts: { loadMutes: alertsFileReader(resolve(root, ".scout-data/alerts.json")), tunnelHosts: loadTunnelHosts(resolve(root, ".scout-data/tunnel-hosts.json")) } }); } finally { db.close(); }
     return;
   }
+  if (args[0] === "outages") {
+    const db = openCatalog(dbPath);
+    try { outagesCommand(db, args.slice(1), { watchPath: resolve(root, ".scout-data/watch.json") }); } finally { db.close(); }
+    return;
+  }
   if (args[0] === "recipes") {
     const db = openCatalog(dbPath);
     try {
@@ -140,6 +146,8 @@ async function main(): Promise<void> {
   console.error("       node packages/cli/src/main.ts control <plan|run|log|protected|uninstall> [arguments] [--db path]");
   console.error("       node packages/cli/src/main.ts alerts [--state state] [--kind kind] [--machine id] [--db path]");
   console.error("       node packages/cli/src/main.ts alerts ack <id|--all> | mute <key> [--reason text] | unmute <key> [--db path]");
+  console.error("       node packages/cli/src/main.ts outages [--state open|closed|all] [--limit n] [--machine id] [--db path]");
+  console.error("       node packages/cli/src/main.ts outages pause <minutes> | resume | watch|unwatch <machine|check|item> <name> [--db path]");
   console.error("       node packages/cli/src/main.ts health [refresh] [--state state] [--kind kind] [--db path]");
   console.error("       node packages/cli/src/main.ts ports [next <range>] [--db path]");
   console.error("       node packages/cli/src/main.ts stacks [plan <name> | start <name> --yes] [--db path]");
