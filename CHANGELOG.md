@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-11
+
 ### Added
 
 - [Visible] [UI] **Scout has a new app icon, a stone watchtower with a glowing lantern on a gold hexagonal badge.** The badge sits on a dark teal rounded square, with two green banners and an emerald over the tower door. Every other size, from the favicon to the tray app's Windows and macOS icons, is generated from `packages/web/public/icon.svg` by `node tools/make-icons.mjs`. The web page now links a web app manifest, so a browser can offer to install Scout as an app. The tray app's executable, installer, and shortcuts use it too, and the status icon in the notification area is now a small gold-and-amber watchtower beside the same green, amber, red, or grey status marker.

@@ -1,1 +1,1 @@
-{"name":"@scout/adapter-winregistry","private":true,"version":"0.0.0","type":"module","exports":{".":"./src/index.ts"},"scripts":{"test":"node --test test/*.test.ts"},"dependencies":{"@scout/core":"workspace:*"}}
+{"name":"@scout/adapter-winregistry","private":true,"version":"0.1.0","type":"module","exports":{".":"./src/index.ts"},"scripts":{"test":"node --test test/*.test.ts"},"dependencies":{"@scout/core":"workspace:*"}}
