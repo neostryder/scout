@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- [Visible] [UI] **Saving the portal as an app on a phone keeps its icon.** The icons and the manifest were behind the Cloudflare Access sign-in, so an installer that fetches them without your session got a login page. They now load without one, from a bypass rule that names those seven paths, and the hub serves only those paths without a token.
+- [Visible] [UI] **Saving the portal as an app on a phone keeps its icon.** The icons and the manifest were behind the Cloudflare Access sign-in, and a phone fetches the home-screen icon in a separate process that has none, so it got a login page. The page now carries its Apple touch icon and favicon inline, and the other icons and the manifest load without a sign-in from a bypass rule that names those paths. The hub serves only those paths without a token.
 
 ## [0.1.0] - 2026-10-11
 

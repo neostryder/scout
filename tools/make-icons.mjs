@@ -2,6 +2,7 @@
 // Run: node tools/make-icons.mjs
 // The web icons come from @resvg/resvg-js; the tray and app icon set (ico, icns, and every size the bundle lists) comes from Tauri's icon generator.
 import { Resvg } from "@resvg/resvg-js";
+import jpeg from "jpeg-js";
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
@@ -31,6 +32,17 @@ const web = {
   "favicon-32.png": png(master, 32),
 };
 for (const [name, data] of Object.entries(web)) writeFileSync(join(pub, name), data);
+
+// A phone fetches the linked home-screen icon in a separate process that has no sign-in, so the page also carries the Apple touch icon (as a small opaque JPEG) and the favicon inline.
+const raw = new Resvg(bare, { fitTo: { mode: "width", value: 180 } }).render();
+const touchJpeg = jpeg.encode({ data: raw.pixels, width: raw.width, height: raw.height }, 90).data;
+const dataUri = (type, data) => `data:${type};base64,${Buffer.from(data).toString("base64")}`;
+const indexPath = join(pub, "index.html");
+const index = readFileSync(indexPath, "utf8");
+const marker = /(<!-- inline-icons -->\r?\n)[\s\S]*?(\r?\n\s*<!-- \/inline-icons -->)/;
+if (!marker.test(index)) throw new Error("index.html has no inline-icons markers");
+const links = [`  <link rel="icon" type="image/png" sizes="32x32" href="${dataUri("image/png", web["favicon-32.png"])}">`, `  <link rel="apple-touch-icon" href="${dataUri("image/jpeg", touchJpeg)}">`].join(index.includes("\r\n") ? "\r\n" : "\n");
+writeFileSync(indexPath, index.replace(marker, (_, open, close) => `${open}${links}${close}`));
 
 const scratch = join(root, ".scout-data");
 mkdirSync(scratch, { recursive: true });

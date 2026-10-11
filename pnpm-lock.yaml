@@ -115,6 +115,9 @@ importers:
       '@types/node':
         specifier: ^26.0.0
         version: 26.6.3
+      jpeg-js:
+        specifier: 0.4.4
+        version: 0.4.4
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -695,6 +698,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  jpeg-js@0.4.4:
+    resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==}
+
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -866,6 +872,8 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
+
+  jpeg-js@0.4.4: {}
 
   typescript@7.0.2:
     optionalDependencies:
