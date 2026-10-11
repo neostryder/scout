@@ -31,6 +31,19 @@ test("the first machine scan stores process and container rows without events", 
   assert.ok(rows.every((row) => row.machineName === "Hub" && row.firstSeenAt === T && row.lastSeenAt === T && row.goneAt === null));
 });
 
+test("a scan that reads the owner as process 0 keeps the last real owner and adds no second row", (t) => {
+  const db = seed(t);
+  const idle: ListenerFact = { ...listener, pid: 0, processName: "Idle", processPath: null };
+  recordListeners(db, "hub", result([listener], "ok", "listeners"), T);
+  recordListeners(db, "hub", result([idle], "ok", "listeners"), T2);
+  const rows = listListeners(db, { port: 8787 });
+  assert.equal(rows.length, 1);
+  assert.deepEqual([rows[0]!.processName, rows[0]!.pid, rows[0]!.goneAt, rows[0]!.lastSeenAt], ["node", 100, null, T2]);
+  recordListeners(db, "hub", result([idle], "ok", "listeners"), T3);
+  assert.equal(listListeners(db, { port: 8787 }).length, 1);
+  assert.equal(events(db).length, 0);
+});
+
 test("the store retains the widest bind and keeps identity across pid and path changes", (t) => {
   const db = seed(t);
   const all: ListenerFact = { ...listener, address: "::", bind: "all" };

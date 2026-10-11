@@ -85,6 +85,15 @@ export function launchLabel(processName: string | null, scriptPath: string | nul
 const width: Record<ListenerBind, number> = { loopback: 0, lan: 1, all: 2 };
 const identity = (row: { port: number; protocol: string; processName: string | null; containerName: string | null }): string => JSON.stringify([row.port, row.protocol, row.containerName ?? "", row.processName ?? ""]);
 
+/** Windows sometimes reports the owner of a loopback listener as process 0 (\"Idle\"). That reads as an unknown owner, so the port keeps the last real owner Scout saw on it instead of becoming a second row. */
+function withKnownOwner(fact: ListenerFact, previous: Listener[]): ListenerFact {
+  if (fact.container || (fact.pid !== 0 && fact.processName !== "Idle")) return fact;
+  const known = previous
+    .filter((row) => row.port === fact.port && row.protocol === fact.protocol && row.containerName === null && row.pid !== 0 && row.processName !== null && row.processName !== "Idle")
+    .sort((x, y) => y.lastSeenAt.localeCompare(x.lastSeenAt))[0];
+  return known ? { ...fact, pid: known.pid, processName: known.processName, processPath: known.processPath, scriptPath: known.scriptPath ?? null } : fact;
+}
+
 export function recordListeners(db: Db, machineId: string, result: ListenerResult, now: string): { listeners: number; gone: number } {
   const summary = { listeners: 0, gone: 0 };
   if (result.status === "failed" || result.status === "skipped") return summary;
@@ -96,7 +105,8 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
     db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)").run(baselineKey, now);
     const old = new Map(previous.map((row) => [identity(row), row]));
     const facts = new Map<string, ListenerFact>();
-    for (const fact of result.facts) {
+    for (const read of result.facts) {
+      const fact = withKnownOwner(read, previous);
       const key = identity({ ...fact, containerName: fact.container?.name ?? null });
       const existing = facts.get(key);
       if (!existing || width[fact.bind] > width[existing.bind]) facts.set(key, fact);
