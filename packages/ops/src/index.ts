@@ -9,3 +9,4 @@ export * from "./control.ts";
 export * from "./health.ts";
 export * from "./watch.ts";
 export * from "./local.ts";
+export * from "./meters.ts";

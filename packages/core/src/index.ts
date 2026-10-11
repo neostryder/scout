@@ -47,6 +47,7 @@ export * from "./tray.ts";
 export * from "./time.ts";
 export * from "./watch-file.ts";
 export * from "./health.ts";
+export * from "./meters.ts";
 export * from "./ports.ts";
 export * from "./hub.ts";
 export * from "./stacks.ts";

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
+import { hubMachineId, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { trayApi } from "./tray-api.ts";
@@ -21,6 +21,7 @@ import { HubRecipes } from "./recipes.ts";
 import type { Project } from "@scout/core";
 import { HubAlerts, type HubAlertOptions } from "./alerts.ts";
 import { HealthSchedule, type HealthScheduleOptions } from "./health.ts";
+import type { MeterSchedule } from "./meters.ts";
 import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import { HubStacks } from "./stacks.ts";
@@ -74,6 +75,8 @@ export interface HubOptions {
   tunnelHostsPath?: string;
   alerts?: HubAlertOptions;
   health?: HealthScheduleOptions | false;
+  /** Samples machine resources for /api/resources. Off when omitted. */
+  meters?: MeterSchedule;
   /** Outage watch: machine, web address and service checks, notices and the heartbeat. Omit it and the outage routes answer with an empty, read-only record. */
   watch?: HubWatch;
   /** Heartbeat comment interval for /api/services/live. Tests pass a short one. */
@@ -228,6 +231,7 @@ export function createHub(options: HubOptions): Server {
         return summary ? json(res, 200, { summary: summary.summary, sourceUrl: summary.sourceUrl, model: summary.model, createdAt: summary.createdAt }) : json(res, 404, { error: "no changelog summary" });
       }
       if (options.research && url.pathname === "/api/research/status") return json(res, 200, options.research.status());
+      if (url.pathname === "/api/resources") { options.meters?.touch(); return json(res, 200, { ...resourcesResponse(db), intervalSeconds: options.meters?.intervalSeconds() ?? null }); }
       if (url.pathname === "/api/summary") return json(res, 200, summaryResponse(db));
       if (url.pathname === "/api/installs") return json(res, 200, installsResponse(db, url.searchParams, provenance()));
       if (url.pathname === "/api/provenance") return json(res, 200, provenanceResponse(db, mineFile()));
@@ -274,6 +278,7 @@ export function createHub(options: HubOptions): Server {
   });
   if (options.health && options.health.scheduled) server.once("listening", () => health?.start());
   if (options.watch) server.once("listening", () => options.watch?.start());
+  if (options.meters) server.once("listening", () => options.meters?.start());
   // Git facts of the projects are read once the hub is listening and every 6 hours after, only where project roots are configured.
   let gitTimer: ReturnType<typeof setInterval> | undefined;
   if (options.recipeProjects) {
@@ -281,6 +286,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

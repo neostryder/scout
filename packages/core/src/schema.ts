@@ -223,6 +223,14 @@ CREATE TABLE IF NOT EXISTS health_samples (
 );
 CREATE INDEX IF NOT EXISTS health_samples_target ON health_samples(target_key, at, id);
 
+CREATE TABLE IF NOT EXISTS meter_samples (
+  id INTEGER PRIMARY KEY,
+  machine_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS meter_samples_machine ON meter_samples(machine_id, at, id);
+
 CREATE TABLE IF NOT EXISTS outages (
   id INTEGER PRIMARY KEY,
   key TEXT NOT NULL,

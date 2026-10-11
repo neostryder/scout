@@ -2,10 +2,12 @@ import { $, h, flagRow, marked, safeUrl, defaultDir, riskBadge, updateDialogMode
 import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 import { createServicesView } from "./services.js";
+import { createResourcesView } from "./resources.js";
 import { createTraySettings } from "./tray-settings.js";
 import { TEXT as TRAY_TEXT } from "./tray-text.js";
 
 let servicesView;
+let resourcesView;
 let traySettings;
 
 const PAGE = 100;
@@ -137,7 +139,7 @@ function updateRow(row) {
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
   const current = view();
-  if (current === "services" || current === "settings") return;
+  if (current === "services" || current === "resources" || current === "settings") return;
   state.controller?.abort();
   const controller = new AbortController(); state.controller = controller;
   const sequence = ++state.sequence;
@@ -283,6 +285,7 @@ function showView(next, initial = false) {
   $("review").hidden = next !== "review"; $("jobs").hidden = next !== "jobs"; $("settings").hidden = next !== "settings";
   if (next === "settings") { if (!traySettings) { traySettings = createTraySettings(); $("settings").replaceChildren(h("h1", {}, TRAY_TEXT.viewTitle), traySettings.section); } traySettings.load(); }
   if (next === "services") { servicesView ||= createServicesView($("services")); servicesView.show(state.params); } else servicesView?.hide();
+  if (next === "resources") { resourcesView ||= createResourcesView($("resources")); resourcesView.show(); } else resourcesView?.hide();
   $("toggle-filters").hidden = !["updates", "catalog"].includes(next);
   for (const button of document.querySelectorAll("[data-view]")) button.setAttribute("aria-current", String(button.dataset.view === next));
   if (["updates", "catalog"].includes(next)) { $("search").value = value("q"); renderFilters(); renderSorts(); renderChips(); }
@@ -303,7 +306,7 @@ $("select-page").addEventListener("click", () => { for (const row of state.rows)
 $("clear-selection").addEventListener("click", () => { state.selected.clear(); renderTable(); });
 $("confirm-cancel").addEventListener("click", () => $("confirm").close());
 $("confirm-submit").addEventListener("click", submitPlans);
-const initial = ["updates", "catalog", "review", "jobs", "services", "settings"].includes(view()) ? view() : "updates";
+const initial = ["updates", "catalog", "review", "jobs", "services", "resources", "settings"].includes(view()) ? view() : "updates";
 window.addEventListener("popstate", () => { state.params = new URLSearchParams(location.search); showView(view(), true); });
 const savedFilters = savedFilterControl($("saved-filters"), { view, query: () => state.params, apply: (spec) => {
   const current = view(); clearTimeout(state.timer);

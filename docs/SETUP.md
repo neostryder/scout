@@ -268,6 +268,42 @@ The hub writes `.scout-data/heartbeat.json` every 30 seconds. The watchdog (`pnp
 
 When the hub starts and finds its last heartbeat more than 5 minutes old, it records a `monitor-gap` outage, "Scout was not running", that covers the silence. An outage of the hub machine itself shows up this way once the machine is back. While the whole hub machine is down, nothing can send a notice: the watchdog covers a hub process that hangs or stops.
 
+## Resource meters
+
+The Resources view sits beside Services in the page's top navigation and shows how busy each machine is. Each machine gets a card titled with its name, showing its operating system, how old the reading is ("Updated 8 s ago"), and a one-line summary such as "Processor 12%, Memory 38%, Video memory 44%".
+
+Each card lists its meters as rows: Processor, Memory, one row per disk, Video memory and Graphics for each graphics card (NVIDIA cards only), and Network, which shows the download and upload rate. A row has a name, a detail line such as "24.0 GB of 64.0 GB", a bar, a large number, and a line chart of the last half hour. Disk and video memory rows have no chart.
+
+### Reading a meter
+
+Each bar has a tick at 85 percent. At 70 percent and above, the bar and the number turn amber and the row says "High". At 85 percent and above they turn red, the bar is striped, and the row says "Very high". The number and the word are always shown, so color is never the only signal.
+
+Select the Processor or Memory row to list the five processes using the most of that meter on that machine, by process name. When a process belongs to a running service or an open listener in the catalog, the list shows the service's display name or the listener's script and port instead, with the word "service" or "listener" beside it. Select the row again to close the list. Memory use is the private working set on Windows and resident memory on macOS and Linux.
+
+On a phone-width screen each row shows its name and number with the bar below, and the chart is hidden. Rows are buttons you can reach with the keyboard, and focus stays where it is when the readings refresh.
+
+### How often readings arrive
+
+The hub reads every machine over the connection Scout already uses for it: locally on the hub machine and over ssh for the others. It reads every 60 seconds, and every 10 seconds while the Resources page has asked for data in the last 30 seconds. An open page asks every 10 seconds and stops asking while its browser tab is hidden. A reading older than 150 seconds is marked "Stale".
+
+Network rates come from the byte counters in two readings in a row, so after a reboot or a counter reset the rate is blank for one reading.
+
+`--no-meters` on the hub command line turns metering off. Metering is also off when live reads are off.
+
+### What each system reports
+
+Every machine reports processor, memory, disks, and network. Video memory and Graphics rows come from `nvidia-smi` on Windows and Linux machines that have it. On macOS the volume that holds your data shows as `/`, and system and recovery volumes are left out. On Linux, loop, snap, boot/efi, and container mounts are left out, and loopback, container, bridge, and virtual interfaces do not count toward network.
+
+### If a machine shows Stale
+
+A machine that cannot be read keeps its last reading, the page marks that reading "Stale" once it is older than 150 seconds, and the other machines keep updating. Each failed read adds a line like this to the hub log:
+
+```
+meters bilbo       failed  (The meter read failed (exit 255).)
+```
+
+Each read has a 45 second limit. The usual causes are that ssh cannot reach the machine, the machine is asleep, or the read ran past that limit. Windows OpenSSH sometimes exits with a crash status such as 3221226356 (0xC0000374) after printing a full reading, and that reading still counts. Only empty or cut-off output counts as a failed read.
+
 ## Provenance flags
 
 The page shows small flags beside installs, services, and listeners. Hover over a flag to see the evidence behind it, or open the detail panel, where the Provenance list shows the same evidence. There are four kinds:
