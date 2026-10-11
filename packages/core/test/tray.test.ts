@@ -73,6 +73,9 @@ test("hide rules remove rows by kind, class, machine and name, and a pin brings 
   const db = seed(t);
   assert.deepEqual(labels(db, parseTrayRules({ hide: { names: [{ machine: "eru", match: "print*" }] } })), ["Worker", "Dead One"]);
   assert.deepEqual(labels(db, parseTrayRules({ hide: { kinds: ["windows-service"] } })), []);
+  const hiddenOnes = trayResponse(db, parseTrayRules({ hide: { names: [{ machine: "eru", match: "print*" }] } }), { now: AT });
+  assert.equal(hiddenOnes.hidden, 1);
+  assert.equal(hiddenOnes.machines.find((m) => m.id === "eru")!.hidden, 1);
   const all = trayResponse(db, parseTrayRules({ hide: { machines: ["eru"] } }), { now: AT });
   assert.equal(all.machines.some((m) => m.id === "eru"), false);
   const spooler = trayResponse(db, EMPTY_TRAY_RULES, { now: AT }).machines[0]!.rows.find((r) => r.label === "Print Spooler")!;

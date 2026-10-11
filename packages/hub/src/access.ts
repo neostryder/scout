@@ -117,8 +117,9 @@ export async function verifyAccessJwt(token: string | undefined, config: AccessC
   return { ok: true, claims: { email, sub, exp } };
 }
 
-/** A service token reaches only the tray panel's own endpoints and the plan and run steps of a control action, nothing else. */
+/** A service token reaches only the tray panel's own endpoints, the plan and run steps of a control action, and the action log it reads the result from. Nothing else. */
 export function serviceTokenMayReach(method: string | undefined, pathname: string): boolean {
   if (pathname === "/api/tray" || pathname.startsWith("/api/tray/")) return true;
+  if (method === "GET" && pathname === "/api/services/actions") return true;
   return method === "POST" && (pathname === "/api/services/actions/plan" || pathname === "/api/services/actions/run");
 }

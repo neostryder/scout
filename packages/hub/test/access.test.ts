@@ -76,6 +76,8 @@ test("a service token is accepted only when its client id is listed, and carries
   assert.equal(serviceTokenMayReach("GET", "/api/tray"), true);
   assert.equal(serviceTokenMayReach("PUT", "/api/tray/rules"), true);
   assert.equal(serviceTokenMayReach("POST", "/api/services/actions/run"), true);
+  assert.equal(serviceTokenMayReach("GET", "/api/services/actions"), true);
+  assert.equal(serviceTokenMayReach("POST", "/api/services/actions"), false);
   assert.equal(serviceTokenMayReach("GET", "/api/services/actions/run"), false);
   assert.equal(serviceTokenMayReach("GET", "/api/summary"), false);
   assert.equal(serviceTokenMayReach("GET", "/api/trayish"), false);

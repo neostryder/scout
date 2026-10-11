@@ -89,6 +89,10 @@ export interface TrayRow {
   label: string;
   machineId: string;
   kind: string;
+  /** essential, optional or third-party; null when the row is not classified (stacks and recipes). */
+  class: string | null;
+  /** apple, microsoft or other; null when unclassified. */
+  vendor: string | null;
   state: TrayState;
   port: number | null;
   detail: string;
@@ -109,6 +113,8 @@ export interface TrayMachine {
   lastSeen: string | null;
   worst: TrayState;
   counts: Record<TrayState, number>;
+  /** Rows the hide rules left out of this machine. */
+  hidden: number;
   rows: TrayRow[];
 }
 /** What the panel needs of a stack: the hub passes its stack response. */
@@ -148,7 +154,7 @@ const stateOf = (running: boolean, shouldRun: boolean, health: string | undefine
   return health === "slow" ? "changed" : "up";
 };
 
-export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}): { machines: TrayMachine[]; state: TrayState; openOutages: number; version: string; generatedAt: string } {
+export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}): { machines: TrayMachine[]; state: TrayState; openOutages: number; hidden: number; version: string; generatedAt: string } {
   const now = options.now ?? new Date().toISOString();
   const context = options.context ?? {};
   const descriptions = loadDescriptionResolver(db, { hints: [] });
@@ -163,10 +169,11 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
     // Like the outage watch, a stopped service counts as down only when it has been seen running; one that never ran is just stopped.
     const proven = new Set((db.prepare("SELECT key FROM watch_state WHERE machine_id = ? AND kind = 'service' AND (last_state = 'up' OR failures > 0)").all(machine.id) as { key: string }[]).map((row) => row.key));
     const rows: TrayRow[] = [];
+    let hiddenRows = 0;
     const finish = (row: Omit<TrayRow, "pinned" | "state"> & { state: TrayState }, shown: boolean, keep: boolean): void => {
       const isPinned = pinned.has(`${machine.id}|${row.key}`);
       if (!shown && !isPinned) return;
-      if (!keep && !isPinned) return;
+      if (!keep && !isPinned) { hiddenRows++; return; }
       rows.push({ ...row, state: reachable ? row.state : "unknown", pinned: isPinned });
     };
     const serviceRow = (s: Service, shouldRun: boolean): void => {
@@ -175,7 +182,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       const health = s.ports.find((p) => p.health)?.health?.state;
       const running = s.state === "running";
       finish({
-        key: serviceWatchKey(s), target: "service", id: s.id, name: s.name, label: s.displayName ?? s.name, machineId: machine.id, kind: s.kind,
+        key: serviceWatchKey(s), target: "service", id: s.id, name: s.name, label: s.displayName ?? s.name, machineId: machine.id, kind: s.kind, class: s.classification.class, vendor: s.classification.vendor,
         state: stateOf(running, shouldRun && proven.has(serviceWatchKey(s)), health), port: ports[0] ?? null,
         detail: running ? (ports.length ? `:${ports.join(", :")}` : s.kind === "launchd" ? "launchd job" : "service") : `${s.state}${s.lastResult ? `, last result ${s.lastResult}` : ""}`,
         protected: control.protected.protected, protectedReason: control.protected.reason, actions: control.actions, needsAdmin: control.needsAdmin,
@@ -191,7 +198,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       const container = l.containerName !== null;
       const name = l.processName ?? l.containerName ?? `port ${l.port}`;
       finish({
-        key: listenerWatchKey(l), target: "listener", id: l.id, name, label: container ? `${l.containerName}` : name, machineId: machine.id, kind: container ? "container" : "listener",
+        key: listenerWatchKey(l), target: "listener", id: l.id, name, label: container ? `${l.containerName}` : name, machineId: machine.id, kind: container ? "container" : "listener", class: l.classification.class, vendor: l.classification.vendor,
         state: stateOf(true, shouldRun, l.health?.state), port: l.port, detail: `:${l.port}`,
         protected: control.protected.protected, protectedReason: control.protected.reason, actions: control.actions, needsAdmin: control.needsAdmin,
         mine: options.mine?.({ machineId: machine.id, path: l.processPath, ports: [l.port] }) ?? false, spark: sparkFor(db, machine.id, [l.port]),
@@ -205,26 +212,28 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       const label = `${r.project} ${r.name}`;
       const running = r.running === true;
       finish({
-        key: `recipe:${machine.id}:${r.project}:${r.name}`, target: "recipe", id: r.id, name: r.name, label, machineId: machine.id, kind: "recipe",
+        key: `recipe:${machine.id}:${r.project}:${r.name}`, target: "recipe", id: r.id, name: r.name, label, machineId: machine.id, kind: "recipe", class: null, vendor: null,
         state: running ? "up" : "stopped", port: r.port, detail: r.port === null ? r.command : `:${r.port}`, protected: false, protectedReason: null,
         actions: [{ action: "start", available: !running, reason: running ? "Already running" : null }, { action: "stop", available: running, reason: running ? null : "Not running" }, { action: "restart", available: running, reason: running ? null : "Not running" }],
         needsAdmin: false, mine: options.mine?.({ machineId: machine.id, path: r.cwd, ports: r.port === null ? [] : [r.port] }) ?? false, spark: r.port === null ? null : sparkFor(db, machine.id, [r.port]),
       }, true, !hidden(rules, { machineId: machine.id, kind: "recipe", cls: null, vendor: null, names: [r.name, label] }));
     }
-    rows.sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.label.localeCompare(b.label));
+    rows.sort((a, b) => Number(b.pinned) - Number(a.pinned) || ORDER[a.state] - ORDER[b.state] || a.label.localeCompare(b.label));
     const counts: Record<TrayState, number> = { up: 0, changed: 0, down: 0, stopped: 0, unknown: 0 };
     for (const row of rows) counts[row.state]++;
     const worst: TrayState = counts.down ? "down" : counts.changed ? "changed" : reachable ? "up" : "unknown";
-    return { id: machine.id, name: machine.name, os: machine.os, reachable, lastSeen: machine.lastSeen, worst, counts, rows };
+    return { id: machine.id, name: machine.name, os: machine.os, reachable, lastSeen: machine.lastSeen, worst, counts, hidden: hiddenRows, rows };
   }).filter((machine) => !rules.hide.machines.includes(machine.id));
 
-  const stackRows = (options.stacks ?? []).filter((stack) => !hidden(rules, { machineId: "stacks", kind: "stack", cls: null, vendor: null, names: [stack.name, stack.label] }));
+  const allStacks = options.stacks ?? [];
+  const stackRows = allStacks.filter((stack) => !hidden(rules, { machineId: "stacks", kind: "stack", cls: null, vendor: null, names: [stack.name, stack.label] }));
+  const stackHidden = allStacks.length - stackRows.length;
   if (stackRows.length) {
     const rows: TrayRow[] = stackRows.map((stack) => {
       const running = stack.state === "running";
       const started = stack.state === "running" || stack.state === "partial";
       return {
-        key: `stack:${stack.name}`, target: "stack", id: null, name: stack.name, label: stack.label, machineId: "stacks", kind: "stack",
+        key: `stack:${stack.name}`, target: "stack", id: null, name: stack.name, label: stack.label, machineId: "stacks", kind: "stack", class: null, vendor: null,
         state: running ? "up" : stack.state === "partial" ? "changed" : stack.state === "blocked" ? "unknown" : "stopped", port: null,
         detail: `${stack.members.filter((m) => m.running === true).length} of ${stack.members.length} running`, protected: false, protectedReason: null,
         actions: [{ action: "start", available: stack.state !== "blocked" && !running, reason: stack.state === "blocked" ? "A member is unavailable" : running ? "Already running" : null }, { action: "stop", available: started, reason: started ? null : "Not running" }, { action: "restart", available: started, reason: started ? null : "Not running" }],
@@ -233,12 +242,12 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
     });
     const counts: Record<TrayState, number> = { up: 0, changed: 0, down: 0, stopped: 0, unknown: 0 };
     for (const row of rows) counts[row.state]++;
-    out.push({ id: "stacks", name: "Stacks", os: "", reachable: true, lastSeen: null, worst: counts.changed ? "changed" : "up", counts, rows });
+    out.push({ id: "stacks", name: "Stacks", os: "", reachable: true, lastSeen: null, worst: counts.changed ? "changed" : "up", counts, hidden: stackHidden, rows });
   }
 
   const openOutages = listOutages(db, { state: "open", now }).length;
   const state: TrayState = openOutages > 0 || out.some((m) => m.worst === "down") ? "down" : out.some((m) => m.worst === "changed") ? "changed" : "up";
-  const body = { machines: out, state, openOutages };
+  const body = { machines: out, state, openOutages, hidden: out.reduce((sum, machine) => sum + (machine.id === "stacks" ? 0 : machine.hidden), 0) + stackHidden };
   const version = createHash("sha1").update(JSON.stringify(body)).digest("hex").slice(0, 16);
   return { ...body, version, generatedAt: now };
 }
