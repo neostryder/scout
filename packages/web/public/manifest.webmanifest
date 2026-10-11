@@ -2,6 +2,7 @@
   "name": "Scout",
   "short_name": "Scout",
   "description": "Software and services across your machines, with live meters.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

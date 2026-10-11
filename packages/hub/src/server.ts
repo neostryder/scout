@@ -91,8 +91,8 @@ export interface HubOptions {
   descriptions?: DescriptionRun;
 }
 
-function send(res: ServerResponse, status: number, body: string | Buffer, type: string): void {
-  res.writeHead(status, { "content-type": type, ...SECURITY_HEADERS });
+function send(res: ServerResponse, status: number, body: string | Buffer, type: string, headers: Record<string, string> = {}): void {
+  res.writeHead(status, { "content-type": type, ...SECURITY_HEADERS, ...headers });
   res.end(body);
 }
 
@@ -110,7 +110,10 @@ async function serveStatic(webRoot: string, pathname: string, res: ServerRespons
   if (file !== resolve(webRoot) && !file.startsWith(resolve(webRoot) + sep)) return send(res, 403, "forbidden", "text/plain");
   try {
     const body = await readFile(file);
-    send(res, 200, body, TYPES[extname(file)] ?? "application/octet-stream");
+    const ext = extname(file);
+    // The icons and the install manifest are what a browser reads when it saves the page as an app, and some installers read them from the cache, so they may be kept for an hour. Everything else stays uncached.
+    const installAsset = ext === ".png" || ext === ".webmanifest" || file.endsWith(`${sep}icon.svg`);
+    send(res, 200, body, TYPES[ext] ?? "application/octet-stream", installAsset ? { "cache-control": "private, max-age=3600" } : {});
   } catch {
     send(res, 404, "not found", "text/plain");
   }

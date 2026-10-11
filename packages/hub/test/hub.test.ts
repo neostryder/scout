@@ -22,6 +22,7 @@ const dir = mkdtempSync(join(tmpdir(), "scout-web-"));
 writeFileSync(join(dir, "index.html"), "<!doctype html><title>t</title>");
 writeFileSync(join(dir, "manifest.webmanifest"), "{}");
 writeFileSync(join(dir, "icon-192.png"), "png");
+writeFileSync(join(dir, "sw.js"), "//");
 const server = createHub({ db, webRoot: dir });
 await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 const port = (server.address() as AddressInfo).port;
@@ -50,6 +51,13 @@ test("the install manifest and the icon images are served with their own content
   const icon = await get("/icon-192.png");
   assert.equal(icon.status, 200);
   assert.equal(icon.headers["content-type"], "image/png");
+});
+
+test("the install assets may be cached for an hour and the pages and the worker never are", async () => {
+  assert.equal((await get("/manifest.webmanifest")).headers["cache-control"], "private, max-age=3600");
+  assert.equal((await get("/icon-192.png")).headers["cache-control"], "private, max-age=3600");
+  assert.equal((await get("/")).headers["cache-control"], "no-store");
+  assert.equal((await get("/sw.js")).headers["cache-control"], "no-store");
 });
 
 test("only loopback host names are accepted", () => {
