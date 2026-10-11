@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="38%" r="70%">
+      <stop offset="0" stop-color="#1c6b6a"/>
+      <stop offset="0.55" stop-color="#0c3a3c"/>
+      <stop offset="1" stop-color="#03100f"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0a8"/>
+      <stop offset="0.3" stop-color="#e8b83a"/>
+      <stop offset="0.65" stop-color="#b57a14"/>
+      <stop offset="1" stop-color="#f3cf63"/>
+    </linearGradient>
+    <linearGradient id="goldInner" x1="1" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#8a5a0c"/>
+      <stop offset="0.5" stop-color="#d9a52c"/>
+      <stop offset="1" stop-color="#ffe58a"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8d8a80"/>
+      <stop offset="0.45" stop-color="#cfc8b4"/>
+      <stop offset="1" stop-color="#6f6c64"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#b57a14"/>
+      <stop offset="0.5" stop-color="#ffe58a"/>
+      <stop offset="1" stop-color="#a06c10"/>
+    </linearGradient>
+    <radialGradient id="flame" cx="50%" cy="60%" r="55%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.35" stop-color="#ffe27a"/>
+      <stop offset="1" stop-color="#ff9a1f"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffd35a" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffd35a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffd35a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#fff0b8" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9dffc8"/>
+      <stop offset="0.5" stop-color="#18c06a"/>
+      <stop offset="1" stop-color="#05683a"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7b5e3a"/>
+      <stop offset="1" stop-color="#2d2113"/>
+    </linearGradient>
+    <clipPath id="plate"><rect width="1024" height="1024" rx="224"/></clipPath>
+    <clipPath id="inside"><polygon points="512,182 798,347 798,677 512,842 226,677 226,347"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#plate)">
+    <rect width="1024" height="1024" fill="url(#sky)"/>
+    <rect x="10" y="10" width="1004" height="1004" rx="214" fill="none" stroke="#3fd0c0" stroke-opacity="0.55" stroke-width="20"/>
+  </g>
+
+  <g clip-path="url(#inside)">
+    <polygon points="512,182 798,347 798,677 512,842 226,677 226,347" fill="#0a2d30"/>
+    <ellipse cx="512" cy="400" rx="300" ry="230" fill="url(#halo)" opacity="0.6"/>
+    <path d="M226 640 q70 -60 140 -30 q60 -50 130 -20 q70 -40 150 10 q60 -20 152 30 V842 H226Z" fill="#0f4a48" opacity="0.7"/>
+    <g>
+      <polygon points="470,392 226,330 226,452" fill="url(#ray)" transform="translate(0 0)"/>
+      <polygon points="470,392 226,330 226,452" fill="url(#ray)" transform="translate(1024 0) scale(-1 1)"/>
+      <polygon points="470,380 280,240 330,230" fill="#ffd35a" opacity="0.28"/>
+      <polygon points="554,380 744,240 694,230" fill="#ffd35a" opacity="0.28"/>
+    </g>
+
+    <!-- rocks -->
+    <path d="M260 842 Q300 758 400 746 L624 746 Q724 758 764 842Z" fill="url(#rock)" stroke="#120b04" stroke-width="8"/>
+    <path d="M360 800 q20 -22 52 -10 M600 790 q30 -18 56 6" fill="none" stroke="#b08a55" stroke-opacity="0.5" stroke-width="6" stroke-linecap="round"/>
+
+    <!-- tower body -->
+    <path d="M418 752 L444 470 H580 L606 752Z" fill="url(#stone)" stroke="#16130d" stroke-width="10" stroke-linejoin="round"/>
+    <g stroke="#3a372e" stroke-opacity="0.5" stroke-width="5" fill="none">
+      <path d="M432 560 H592 M426 640 H598 M421 705 H603"/>
+      <path d="M480 470 V560 M544 470 V560 M455 560 V640 M512 560 V640 M572 560 V640 M468 640 V705 M530 640 V705"/>
+    </g>
+    <!-- banners -->
+    <path d="M446 505 H478 V585 L462 569 L446 585Z" fill="#1fae62" stroke="#0b3d22" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M546 505 H578 V585 L562 569 L546 585Z" fill="#1fae62" stroke="#0b3d22" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M462 524 l9 14 l-9 14 l-9 -14Z M562 524 l9 14 l-9 14 l-9 -14Z" fill="#f3cf63"/>
+    <!-- door -->
+    <path d="M480 752 V694 a32 32 0 0 1 64 0 V752Z" fill="#241608" stroke="url(#gold)" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M512 668 l15 26 l-15 28 l-15 -28Z" fill="url(#gem)" stroke="#05301c" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M512 668 l15 26 h-30Z" fill="#d6ffe8" opacity="0.5"/>
+
+    <!-- gold gallery -->
+    <path d="M426 486 L440 456 H584 L598 486Z" fill="url(#roof)" stroke="#2a1a05" stroke-width="9" stroke-linejoin="round"/>
+    <!-- lantern room -->
+    <rect x="448" y="352" width="128" height="104" fill="#e98a14" stroke="#2a1a05" stroke-width="9" stroke-linejoin="round"/>
+    <circle cx="512" cy="404" r="70" fill="url(#halo)"/>
+    <path d="M512 358 C542 390 552 414 538 438 C530 452 494 452 486 438 C472 414 484 390 512 358Z" fill="url(#flame)"/>
+    <rect x="432" y="338" width="160" height="22" fill="url(#roof)" stroke="#2a1a05" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M492 352 V456 M532 352 V456" stroke="#2a1a05" stroke-width="9"/>
+    <!-- roof -->
+    <path d="M436 340 L512 244 L588 340Z" fill="url(#roof)" stroke="#2a1a05" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M512 244 L588 340 H548Z" fill="#7a4e0a" opacity="0.45"/>
+    <circle cx="512" cy="236" r="13" fill="url(#gem)" stroke="#2a1a05" stroke-width="6"/>
+  </g>
+
+  <!-- hex frame -->
+  <path fill-rule="evenodd" d="M512 102 L867 307 V717 L512 922 L157 717 V307Z M512 182 L798 347 V677 L512 842 L226 677 V347Z" fill="url(#gold)" stroke="#1a1004" stroke-width="12" stroke-linejoin="round"/>
+  <polygon points="512,182 798,347 798,677 512,842 226,677 226,347" fill="none" stroke="url(#goldInner)" stroke-width="10" stroke-linejoin="round"/>
+  <polygon points="512,114 855,312 855,712 512,910 169,712 169,312" fill="none" stroke="#fff6c8" stroke-opacity="0.6" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="url(#gold)" stroke="#1a1004" stroke-width="8" stroke-linejoin="round">
+    <path d="M512 62 l34 42 l-34 42 l-34 -42Z"/>
+    <path d="M512 962 l34 -42 l-34 -42 l-34 42Z"/>
+    <path d="M867 265 l34 42 l-34 42 l-34 -42Z"/>
+    <path d="M157 265 l34 42 l-34 42 l-34 -42Z"/>
+    <path d="M867 675 l34 42 l-34 42 l-34 -42Z"/>
+    <path d="M157 675 l34 42 l-34 42 l-34 -42Z"/>
+  </g>
+</svg>

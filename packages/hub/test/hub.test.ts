@@ -20,6 +20,8 @@ linkIdentity(db, T);
 
 const dir = mkdtempSync(join(tmpdir(), "scout-web-"));
 writeFileSync(join(dir, "index.html"), "<!doctype html><title>t</title>");
+writeFileSync(join(dir, "manifest.webmanifest"), "{}");
+writeFileSync(join(dir, "icon-192.png"), "png");
 const server = createHub({ db, webRoot: dir });
 await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 const port = (server.address() as AddressInfo).port;
@@ -40,6 +42,15 @@ function get(path: string, host = `127.0.0.1:${port}`, method = "GET", extra: { 
     req.end(extra.body);
   });
 }
+
+test("the install manifest and the icon images are served with their own content types", async () => {
+  const manifest = await get("/manifest.webmanifest");
+  assert.equal(manifest.status, 200);
+  assert.match(String(manifest.headers["content-type"]), /^application\/manifest\+json/);
+  const icon = await get("/icon-192.png");
+  assert.equal(icon.status, 200);
+  assert.equal(icon.headers["content-type"], "image/png");
+});
 
 test("only loopback host names are accepted", () => {
   assert.ok(isLoopbackHost("localhost:4870"));
