@@ -235,7 +235,7 @@ export function listenerWatchKey(row: Listener): string { return `listener:${row
 
 // Per-connection and per-app launchd jobs and loopback ports in the dynamic range come and go all the time and carry no signal.
 function ephemeral(row: Service | Listener): boolean {
-  return "port" in row ? row.bind === "loopback" && row.port >= 49152 : row.kind === "launchd" && /\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^application\.|\.\d{4,}\.\d{4,}$/i.test(row.name);
+  return "port" in row ? row.port >= 49152 && (row.bind === "loopback" || row.containerName === null) : row.kind === "launchd" && /\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^application\.|\.\d{4,}\.\d{4,}$/i.test(row.name);
 }
 
 /** What the stays-up rule looks at besides the row itself: the services it may belong to and the ports that published routes land on. */

@@ -63,6 +63,7 @@ test("a listener a service owns does not appear twice, and an ephemeral listener
   recordListeners(db, "eru", { origin: "listeners", status: "ok", facts: [
     { port: 8001, protocol: "tcp", address: "127.0.0.1", bind: "loopback", pid: 42, processName: "worker", processPath: "C:/Tools/worker.exe", container: null },
     { port: 55555, protocol: "tcp", address: "127.0.0.1", bind: "loopback", pid: 77, processName: "chrome", processPath: "C:/Chrome/chrome.exe", container: null },
+    { port: 65084, protocol: "tcp", address: "192.168.2.100", bind: "lan", pid: 88, processName: "warp-svc", processPath: null, container: null },
   ] }, AT);
   const rows = trayResponse(db, EMPTY_TRAY_RULES, { now: AT }).machines.find((m) => m.id === "eru")!.rows;
   assert.equal(rows.filter((r) => r.kind === "listener").length, 0);
