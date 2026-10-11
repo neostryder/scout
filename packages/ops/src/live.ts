@@ -187,7 +187,7 @@ function fingerprint(db: Db, machineId: string): { services: string; listeners: 
      FROM services WHERE machine_id = ? ORDER BY id`,
   ).all(machineId);
   const listeners = db.prepare(
-    `SELECT id, port, protocol, address, bind, pid, process_name, process_path, container_name, container_image, first_seen_at, gone_at
+    `SELECT id, port, protocol, address, bind, pid, process_name, process_path, script_path, container_name, container_image, first_seen_at, gone_at
      FROM listeners WHERE machine_id = ? ORDER BY id`,
   ).all(machineId);
   return { services: JSON.stringify(services), listeners: JSON.stringify(listeners) };

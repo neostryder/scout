@@ -317,6 +317,7 @@ CREATE TABLE IF NOT EXISTS listeners (
   pid             INTEGER,
   process_name    TEXT,
   process_path    TEXT,
+  script_path     TEXT,
   container_name  TEXT,
   container_image TEXT,
   first_seen_at   TEXT NOT NULL,

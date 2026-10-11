@@ -24,7 +24,7 @@ try {
   const hidden = allRows.length - rows.length;
   const clip = (text: string | null, length: number): string => (text ?? "").replace(/\s+/g, " ").slice(0, length).padEnd(length + 2);
   console.log(`${clip("Machine", 18)}${clip("Port", 7)}${clip("Bind", 8)}${clip("Address", 24)}${clip("Process or container", 36)}Path or image`);
-  for (const row of rows) console.log(`${clip(row.machineName, 18)}${clip(String(row.port), 7)}${clip(row.bind, 8)}${clip(row.address, 24)}${clip(row.processName ?? row.containerName, 36)}${(row.processPath ?? row.containerImage ?? "").replace(/\s+/g, " ")}`);
+  for (const row of rows) console.log(`${clip(row.machineName, 18)}${clip(String(row.port), 7)}${clip(row.bind, 8)}${clip(row.address, 24)}${clip(row.label ?? row.processName ?? row.containerName, 36)}${(row.processPath ?? row.containerImage ?? "").replace(/\s+/g, " ")}`);
   console.log(`\n${rows.length} listener${rows.length === 1 ? "" : "s"}`);
   if (!args.includes("--all")) console.log(`${hidden} hidden system rows (use --all)`);
 } finally {

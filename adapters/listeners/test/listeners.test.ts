@@ -157,3 +157,25 @@ test("Docker ignores unpublished and UDP ports and marks malformed mappings part
   }
   assert.equal(dockerPortsAdapter.parse({ ports: output("bad") }).status, "failed");
 });
+
+test("runtime listeners carry the script they run and nothing else from the command line", async () => {
+  const { scriptOf } = await import("../src/index.ts");
+  assert.equal(scriptOf("node", String.raw`"C:\Program Files\nodejs\node.exe" --import tsx "C:\Users\aaron\repo\src\server.ts" --token s3cret`), "C:/Users/USER/repo/src/server.ts");
+  assert.equal(scriptOf("node", "node --max-old-space-size 4096 -r ts-node/register app.js --port 80"), "app.js");
+  assert.equal(scriptOf("python3", "/usr/bin/python3 -m http.server 8000"), "http.server");
+  assert.equal(scriptOf("java", "java -Xmx1g -jar /opt/app/app.jar --secret x"), "/opt/app/app.jar");
+  assert.equal(scriptOf("deno", "deno run -A main.ts"), "main.ts");
+  assert.equal(scriptOf("nginx", "nginx -g daemon off"), null);
+  assert.equal(scriptOf("node", null), null);
+  assert.equal(scriptOf("node", "node"), null);
+
+  const row = { address: "127.0.0.1", port: 3310, pid: 7, name: "node", path: "C:/nodejs/node.exe", cmd: String.raw`"C:\nodejs\node.exe" C:\Repositories\ark-overseer\dist\index.js --key abc` };
+  const win = windowsListenersAdapter.parse({ listeners: output(JSON.stringify([row, { ...row, port: 22, name: "sshd", cmd: null }])) });
+  assert.equal(win.status, "ok");
+  assert.equal(win.facts[0]!.scriptPath, "C:/Repositories/ark-overseer/dist/index.js");
+  assert.equal("scriptPath" in win.facts[1]!, false);
+
+  const mac = macListenersAdapter.parse({ listeners: output("p42\ncnode\nn127.0.0.1:8787\n---SCOUT-PS---\n42 /opt/homebrew/bin/node\n---SCOUT-ARGS---\n42 /opt/homebrew/bin/node /Users/me/proj/dist/worker.js --secret x\n") });
+  assert.equal(mac.status, "ok");
+  assert.equal(mac.facts[0]!.scriptPath, "/Users/USER/proj/dist/worker.js");
+});

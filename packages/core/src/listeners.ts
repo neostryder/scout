@@ -15,6 +15,8 @@ export interface ListenerFact {
   pid: number | null;
   processName: string | null;
   processPath: string | null;
+  /** The script, module, or jar a runtime such as node or python was started with; never its other arguments. */
+  scriptPath?: string | null;
   container: { name: string; image: string; containerPort: number } | null;
 }
 
@@ -43,6 +45,9 @@ export interface Listener {
   pid: number | null;
   processName: string | null;
   processPath: string | null;
+  scriptPath?: string | null;
+  /** The name to show: the process name, or what a runtime process is running. */
+  label?: string | null;
   containerName: string | null;
   containerImage: string | null;
   firstSeenAt: string;
@@ -51,6 +56,30 @@ export interface Listener {
   classification: Classification;
   description: Description | null;
   health: HealthRow | null;
+}
+
+const GENERIC_DIRS = new Set(["dist", "src", "build", "bin", "lib", "out", "cli", "server", "app", "scripts", ".bin", "esm", "cjs", "cmd", "dev"]);
+const ROOT_DIRS = new Set(["repositories", "repos", "projects", "code", "dev", "users", "home", "programdata", "program files", "opt", "usr", "var"]);
+const GENERIC_FILES = new Set(["main", "index", "server", "app", "cli", "start", "run", "serve"]);
+
+/** A row name that says what a runtime is running: `node: ark-overseer/index.js` instead of `node`. */
+export function launchLabel(processName: string | null, scriptPath: string | null | undefined): string | null {
+  if (!scriptPath) return processName;
+  const parts = scriptPath.replaceAll("\\", "/").split("/").filter((part) => part && part !== "." && part !== ".." && !/^[A-Za-z]:$/.test(part));
+  const file = parts.pop();
+  if (!file) return processName;
+  const modules = parts.lastIndexOf("node_modules");
+  let what: string;
+  if (modules >= 0 && parts[modules + 1]) {
+    const pkg = parts[modules + 1]!;
+    what = pkg.startsWith("@") && parts[modules + 2] ? pkg + "/" + parts[modules + 2] : pkg;
+  } else {
+    while (parts.length > 1 && GENERIC_DIRS.has(parts.at(-1)!.toLowerCase())) parts.pop();
+    while (parts.length > 1 && ROOT_DIRS.has(parts[0]!.toLowerCase())) parts.shift();
+    const generic = GENERIC_FILES.has(file.replace(/\.[^.]+$/, "").toLowerCase());
+    what = parts.length ? parts.slice(generic ? -2 : -1).join("/") + "/" + file : file;
+  }
+  return processName ? processName + ": " + what : what;
 }
 
 const width: Record<ListenerBind, number> = { loopback: 0, lan: 1, all: 2 };
@@ -73,10 +102,10 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
       if (!existing || width[fact.bind] > width[existing.bind]) facts.set(key, fact);
     }
     const put = db.prepare(
-      `INSERT INTO listeners (machine_id, port, protocol, address, bind, pid, process_name, process_path, container_name, container_image, first_seen_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO listeners (machine_id, port, protocol, address, bind, pid, process_name, process_path, script_path, container_name, container_image, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT DO UPDATE SET address = excluded.address, bind = excluded.bind, pid = excluded.pid,
-         process_path = excluded.process_path, container_image = excluded.container_image, last_seen_at = excluded.last_seen_at, gone_at = NULL`,
+         process_path = excluded.process_path, script_path = excluded.script_path, container_image = excluded.container_image, last_seen_at = excluded.last_seen_at, gone_at = NULL`,
     );
     const event = db.prepare("INSERT INTO events (at, machine_id, kind, detail_json) VALUES (?, ?, ?, ?)");
     const emit = (kind: string, port: number, process: string | null, oldBind: ListenerBind | null, newBind: ListenerBind | null, container: string | null) => {
@@ -84,7 +113,7 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
     };
     for (const [key, fact] of facts) {
       const before = old.get(key);
-      put.run(machineId, fact.port, fact.protocol, fact.address, fact.bind, fact.pid, fact.processName, fact.processPath, fact.container?.name ?? null, fact.container?.image ?? null, now, now);
+      put.run(machineId, fact.port, fact.protocol, fact.address, fact.bind, fact.pid, fact.processName, fact.processPath, fact.scriptPath ?? null, fact.container?.name ?? null, fact.container?.image ?? null, now, now);
       summary.listeners++;
       if (!before) emit("listener_new", fact.port, fact.processName ?? fact.container?.name ?? null, null, fact.bind, fact.container?.name ?? null);
       else if (before.bind !== fact.bind) emit("listener_changed", fact.port, fact.processName ?? fact.container?.name ?? null, before.bind, fact.bind, fact.container?.name ?? null);
@@ -127,7 +156,7 @@ export function listListeners(db: Db, filter: ListenerFilter = {}, descriptions:
   if (filter.port !== undefined) { clauses.push("l.port = ?"); params.push(filter.port); }
   const rows = db.prepare(
     `SELECT l.id, l.machine_id AS machineId, m.name AS machineName, l.port, l.protocol, l.address, l.bind, l.pid,
-       l.process_name AS processName, l.process_path AS processPath, l.container_name AS containerName, l.container_image AS containerImage,
+       l.process_name AS processName, l.process_path AS processPath, l.script_path AS scriptPath, l.container_name AS containerName, l.container_image AS containerImage,
        l.first_seen_at AS firstSeenAt, l.last_seen_at AS lastSeenAt, l.gone_at AS goneAt
      FROM listeners l JOIN machines m ON m.id = l.machine_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""} ORDER BY m.name, l.port, l.id`,
@@ -139,9 +168,9 @@ export function listListeners(db: Db, filter: ListenerFilter = {}, descriptions:
   ).all(filter.machine ?? null, filter.machine ?? null) as unknown as import("./services.ts").ServiceFact[];
   return rows.map((row) => {
     const classification = classifyListener(row as Listener, serviceRows);
-    return { ...row, classification, description: descriptions.describe(row), health: row.machineId === hubMachineId() && row.goneAt === null && !classification.hidden ? healthRow(db, `listener:${hubMachineId()}:${row.port}`) : null };
+    return { ...row, label: launchLabel(row.processName, row.scriptPath), classification, description: descriptions.describe(row), health: row.machineId === hubMachineId() && row.goneAt === null && !classification.hidden ? healthRow(db, `listener:${hubMachineId()}:${row.port}`) : null };
   }).filter((row) =>
-    (filter.q === undefined || [row.processName, row.processPath, row.containerName, row.description?.text].some((text) => text?.toLowerCase().includes(filter.q!.toLowerCase()))) &&
+    (filter.q === undefined || [row.processName, row.processPath, row.scriptPath, row.containerName, row.description?.text].some((text) => text?.toLowerCase().includes(filter.q!.toLowerCase()))) &&
     (filter.class === undefined || row.classification.class === filter.class) &&
     (filter.official === undefined || row.classification.official === filter.official) &&
     (filter.includeHidden !== false || !row.classification.hidden)

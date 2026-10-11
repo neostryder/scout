@@ -8,6 +8,41 @@ const portNumber = (value: unknown): value is number => typeof value === "number
 const pidNumber = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const path = (value: string): string => value.replaceAll("\\", "/").replace(/((?:[A-Za-z]:)?\/Users\/)[^/]+/gi, "$1USER");
 
+/** Splits a command line into words, honoring double and single quotes. */
+function words(line: string): string[] {
+  const out: string[] = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  for (let m = re.exec(line); m; m = re.exec(line)) out.push(m[1] ?? m[2] ?? m[3]!);
+  return out;
+}
+
+const VALUE_FLAGS = new Set(["--import", "--require", "-r", "--loader", "--experimental-loader", "--eval", "-e", "--print", "-p", "--env-file", "--conditions", "-c", "--max-old-space-size", "-W", "-X", "-Xmx", "-cp", "-classpath"]);
+
+/** The script, module, or jar a runtime was started with. The other arguments can hold secrets, so they are dropped here. */
+export function scriptOf(processName: string | null, commandLine: string | null, cwd: string | null = null): string | null {
+  const found = firstScript(processName, commandLine);
+  if (found === null || !cwd || /^(?:[A-Za-z]:)?[\\/]/.test(found) || !/\.(?:[cm]?[jt]sx?|py|rb|php|pl|jar)$/i.test(found)) return found;
+  return path(`${cwd.replaceAll("\\", "/").replace(/\/+$/, "")}/${found.replace(/^\.\//, "")}`);
+}
+
+function firstScript(processName: string | null, commandLine: string | null): string | null {
+  if (!processName || !commandLine) return null;
+  const runtime = processName.toLowerCase().replace(/\.exe$/, "");
+  const args = words(commandLine).slice(1);
+  const python = /^python[0-9.]*w?$/.test(runtime);
+  const java = runtime === "java" || runtime === "javaw";
+  if (!python && !java && !["node", "nodejs", "bun", "deno", "ruby", "php", "perl"].includes(runtime)) return null;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (python && arg === "-m" && args[i + 1]) return args[i + 1]!;
+    if (java && arg === "-jar" && args[i + 1]) return path(args[i + 1]!);
+    if (arg.startsWith("-")) { if (VALUE_FLAGS.has(arg) || python && arg === "-m" || java && arg === "-jar") i++; continue; }
+    if (java || ["run", "start", "serve", "task"].includes(arg) && runtime === "deno") continue;
+    return path(arg);
+  }
+  return null;
+}
+
 function address(value: string): { address: string; bind: ListenerBind } | null {
   const normalized = value.replace(/^\[(.*)\]$/, "$1").replace(/%[^%]+$/, "").toLowerCase();
   if (["*", "0.0.0.0", "::"].includes(normalized)) return { address: normalized, bind: "all" };
@@ -54,10 +89,11 @@ export const windowsListenersAdapter: ListenerAdapter = {
     const facts: ListenerFact[] = [];
     let malformed = false;
     for (const row of Array.isArray(doc) ? doc : [doc]) {
-      if (!object(row) || !portNumber(row["port"]) || !pidNumber(row["pid"]) || typeof row["address"] !== "string" || !(row["name"] === null || typeof row["name"] === "string") || !(row["path"] === null || typeof row["path"] === "string")) { malformed = true; continue; }
+      if (!object(row) || !portNumber(row["port"]) || !pidNumber(row["pid"]) || typeof row["address"] !== "string" || !(row["name"] === null || typeof row["name"] === "string") || !(row["path"] === null || typeof row["path"] === "string") || !(row["cmd"] === undefined || row["cmd"] === null || typeof row["cmd"] === "string")) { malformed = true; continue; }
       const binding = address(row["address"]);
       if (!binding) { malformed = true; continue; }
-      facts.push({ port: row["port"], protocol: "tcp", ...binding, pid: row["pid"], processName: row["name"], processPath: row["path"] === null ? null : path(row["path"]), container: null });
+      const scriptPath = scriptOf(row["name"], typeof row["cmd"] === "string" ? row["cmd"] : null, typeof row["cwd"] === "string" ? row["cwd"] : null);
+      facts.push({ port: row["port"], protocol: "tcp", ...binding, pid: row["pid"], processName: row["name"], processPath: row["path"] === null ? null : path(row["path"]), ...(scriptPath ? { scriptPath } : {}), container: null });
     }
     return finish("netconn", probe, facts, malformed);
   },
@@ -77,8 +113,13 @@ export const macListenersAdapter: ListenerAdapter = {
     const missing = unavailable(outputs, "listeners", "lsof");
     if (missing) return missing;
     const probe = outputs["listeners"]!;
-    const sections = probe.stdout.split(/^---SCOUT-PS---\r?$/m);
-    let malformed = sections.length !== 2;
+    const sections = probe.stdout.split(/^---SCOUT-(?:PS|ARGS)---\r?$/m);
+    let malformed = sections.length !== 2 && sections.length !== 3;
+    const argv = new Map<number, string>();
+    for (const line of (sections[2] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
+      const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
+      if (match) argv.set(Number(match[1]), match[2]!);
+    }
     const paths = new Map<number, string>();
     for (const line of (sections[1] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
       const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
@@ -110,7 +151,9 @@ export const macListenersAdapter: ListenerAdapter = {
         if (pid === null || !name || !binding || !portNumber(port)) { malformed = true; continue; }
         processPending = false;
         const processPath = paths.get(pid) ?? null;
-        facts.push({ port, protocol: "tcp", ...binding, pid, processName: processPath?.split("/").at(-1) ?? name, processPath, container: null });
+        const processName = processPath?.split("/").at(-1) ?? name;
+        const scriptPath = scriptOf(processName, argv.get(pid) ?? null);
+        facts.push({ port, protocol: "tcp", ...binding, pid, processName, processPath, ...(scriptPath ? { scriptPath } : {}), container: null });
       } else if (/^f\d+$/.test(line)) {
         if (filePending) malformed = true;
         filePending = true;

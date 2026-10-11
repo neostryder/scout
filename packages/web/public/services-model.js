@@ -250,7 +250,7 @@ export function serviceRow(row) {
 }
 
 export function listenerRow(row) {
-  return { ...row, exposureText: exposureLabel(row.bind), name: row.containerName || row.processName || "Unknown process", joinedText: row.serviceName || "No joined service" };
+  return { ...row, exposureText: exposureLabel(row.bind), name: row.containerName || row.label || row.processName || "Unknown process", joinedText: row.serviceName || "No joined service" };
 }
 
 export function toggleSort(params, sort) {

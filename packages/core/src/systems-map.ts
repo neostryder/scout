@@ -32,7 +32,7 @@ export function whoIs(db: Db, query: string): WhoIsMatch[] {
   const needle = text.toLowerCase();
   const descriptions = loadDescriptionResolver(db, { hints: [] });
   const matches: WhoIsMatch[] = [];
-  const listenerName = (l: Listener): string => l.processName ?? l.containerName ?? `port ${l.port}`;
+  const listenerName = (l: Listener): string => l.label ?? l.processName ?? l.containerName ?? `port ${l.port}`;
   for (const l of listListeners(db, { state: "present", includeHidden: true }, descriptions)) {
     const hit = port !== null ? l.port === port : [listenerName(l), l.containerImage, l.processPath].some((part) => (part ?? "").toLowerCase().includes(needle));
     if (!hit) continue;

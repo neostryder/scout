@@ -181,3 +181,13 @@ for (const machine of ["hub", "laptop", "server", "mini"]) {
     assert.deepEqual(events(db), []);
   });
 }
+
+test("launchLabel names what a runtime is running", async () => {
+  const { launchLabel } = await import("../src/listeners.ts");
+  assert.equal(launchLabel("node", "C:/Repositories/ark-overseer/dist/index.js"), "node: ark-overseer/index.js");
+  assert.equal(launchLabel("node", "/home/u/proj/node_modules/vite/bin/vite.js"), "node: vite");
+  assert.equal(launchLabel("node", "/home/u/proj/node_modules/@scope/tool/cli.js"), "node: @scope/tool");
+  assert.equal(launchLabel("node", "server.js"), "node: server.js");
+  assert.equal(launchLabel("node", null), "node");
+  assert.equal(launchLabel(null, null), null);
+});

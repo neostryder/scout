@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import type { Db } from "./db.ts";
 import { controlRow, rowControl, type ControlAction, type ControlTarget } from "./control.ts";
 import { loadDescriptionResolver } from "./descriptions.ts";
-import { listListeners, type Listener } from "./listeners.ts";
+import { launchLabel, listListeners, type Listener } from "./listeners.ts";
 import { listOutages, listenerWatchKey, serviceOwnsListener, serviceWatchKey, serviceWatchable, watchContext } from "./outages.ts";
 import type { ProtectedContext } from "./protected.ts";
 import { recipesResponse } from "./recipes.ts";
@@ -197,8 +197,9 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       const control = rowControl(controlRow(l, services), context);
       const container = l.containerName !== null;
       const name = l.processName ?? l.containerName ?? `port ${l.port}`;
+      const shown = container ? name : launchLabel(l.processName, l.scriptPath) ?? name;
       finish({
-        key: listenerWatchKey(l), target: "listener", id: l.id, name, label: container ? `${l.containerName}` : name, machineId: machine.id, kind: container ? "container" : "listener", class: l.classification.class, vendor: l.classification.vendor,
+        key: listenerWatchKey(l), target: "listener", id: l.id, name, label: container ? `${l.containerName}` : shown, machineId: machine.id, kind: container ? "container" : "listener", class: l.classification.class, vendor: l.classification.vendor,
         state: stateOf(true, shouldRun, l.health?.state), port: l.port, detail: `:${l.port}`,
         protected: control.protected.protected, protectedReason: control.protected.reason, actions: control.actions, needsAdmin: control.needsAdmin,
         mine: options.mine?.({ machineId: machine.id, path: l.processPath, ports: [l.port] }) ?? false, spark: sparkFor(db, machine.id, [l.port]),

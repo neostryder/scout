@@ -19,6 +19,7 @@ export function openCatalog(path: string): Db {
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'listeners'").get()) {
     const columns = db.prepare("PRAGMA table_info(listeners)").all() as { name: string }[];
     if (!columns.some((column) => column.name === "expected_down")) db.exec("ALTER TABLE listeners ADD COLUMN expected_down INTEGER NOT NULL DEFAULT 0");
+    if (!columns.some((column) => column.name === "script_path")) db.exec("ALTER TABLE listeners ADD COLUMN script_path TEXT");
   }
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'watch_state'").get()) {
     const columns = db.prepare("PRAGMA table_info(watch_state)").all() as { name: string }[];
