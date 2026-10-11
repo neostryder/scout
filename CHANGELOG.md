@@ -33,6 +33,12 @@
 - [Visible] [Security] **Production mode puts the page behind Cloudflare Access.** The hub checks every Access token itself and answers only the hostname you configure.
 - [Visible] [AI] **Optional AI helpers summarize release notes and describe projects.** They run through a toolkit script and a local gateway that you supply, stay off until you set them up, and make at most 30 calls an hour.
 - [Visible] [Docs] **New guides cover setup, the hub machine, and platform support.** The README, setup guide, architecture notes, security policy, and a scout-setup skill explain how to install Scout, why one machine in machines.json is the hub, and what works on Windows, macOS, and Linux today.
+- [Visible] [UI] **Scout now lives in the Windows tray and the macOS menu bar.** The icon's dot turns amber when something changed and red when something is down, and shows a grey cross when the hub is out of reach. Click it to see what should be running on each machine, plus your stacks.
+- [Visible] [Services] **The tray panel can start, stop, and restart services.** Stop and Restart ask before they run, and protected services never offer them. If an action needs admin rights, approve the UAC prompt on Windows, or run the sudo command the panel shows on a Mac.
+- [Visible] [UI] **Rows you do not care about can be hidden from the tray panel.** Right-click a row to hide it, hide everything of its kind or vendor, or pin it to the top. The new Settings page in the portal lists these rules and can import or export them. Hidden rows are still watched for outages.
+- [Visible] [Security] **The panel signs in with a Cloudflare Access service token.** List the token's Client ID under `allowedServiceTokens` in `access.json`, and the hub lets it reach the tray and service action endpoints and nothing else. The panel keeps the secret in Windows Credential Manager or the macOS Keychain.
+- [Internal] [Services] **The hub has `/api/tray` endpoints and a `tray.json` rules file.** `GET /api/tray` returns the panel's rows with an ETag and answers 304 when nothing changed, `GET` and `PUT /api/tray/rules` read and replace the rules, and `POST /api/tray/hide` adds a hide rule. The rules are stored in `.scout-data/tray.json`.
+- [Visible] [Docs] **The setup guide explains how to install and connect the tray panel.** It walks through the Cloudflare Access service token, the build on Windows and macOS, and starting the panel at login.
 
 ### Changed
 

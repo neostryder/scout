@@ -302,6 +302,78 @@ node packages/cli/src/main.ts provenance flags --machine mac-mini --kind odd-loc
 
 `provenance` lists your projects with their remote, last author, and whether each one counts as yours, and explains how to add a profile when there is none. `provenance scan` reads the git facts again right away and prints counts. `provenance flags` prints a table of flagged installs with their evidence and a count. `--machine` takes a machine id, and `--kind` takes `odd-location`, `no-publisher`, `unsigned`, or `mine`.
 
+## The tray panel
+
+The tray panel is a small desktop app in `packages/tray` that puts a Scout icon in the Windows system tray or the macOS menu bar. It reaches the hub through its public hostname, so it needs the hub in production mode (see [Local mode and production mode](#local-mode-and-production-mode)) and a Cloudflare Access service token on each device that runs it.
+
+The icon is a compass ring and needle with a status dot. The dot is green when everything meant to stay up is up, amber when something changed, and red when something is down. A grey cross takes its place when the hub cannot be reached or the panel is not connected yet. The icon follows the light or dark taskbar.
+
+### What the panel shows
+
+Click the icon to open a 420 by 600 panel. It has a tab for each machine, each with a count badge that turns red or amber when something needs attention, and a Stacks tab. Each row has a state dot, a name, a port, a response-time sparkline when Scout has samples, and a shield when the row is protected. Header pills count what is down and what changed, and the search box and the All, Down, and Mine chips narrow the list.
+
+By default the panel lists the services and listeners that are meant to stay up, by the same rule as the outage watch (Windows services that start automatically, launchd jobs with KeepAlive set, their ports, and container and routed ports), plus stacks and approved launch recipes. A stopped service shows as down only if Scout has seen it running, and as stopped otherwise.
+
+Hover over a row to see Start when it is stopped, or Restart and Stop when it is running. Start runs at once, and Stop and Restart ask on the row first. Each action goes through the same plan, one-time confirmation, and audit log as the page, so protected rows (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop or Restart, and the panel shows why. When an action needs admin rights, the panel asks you to approve the UAC prompt on the Windows machine, or shows a sudo command to run on the Mac.
+
+Right-click a row for Hide this row, Hide all of its kind, Hide everything from its vendor, Pin to top, and Open in Scout. The footer has Open Scout, a count of rows hidden by rules, and a theme toggle that cycles through system, dark, and light. Right-click the tray icon for Open Scout, Connection settings, and Quit. Only one copy of the panel runs at a time.
+
+The panel checks the hub every 30 seconds while it is closed and every 5 seconds while it is open.
+
+### Hide rules and pins
+
+The rules live on the hub machine in `.scout-data/tray.json`. A rule hides rows by kind (`windows-service`, `launchd`, `scheduled-task`, `listener`, `container`, `recipe`, or `stack`), by class (`essential`, `optional`, or `third-party`), by machine, by vendor (`apple`, `microsoft`, or `other`), or by name with an optional machine. Pins keep chosen rows at the top of their tab. Edit the rules from the panel's right-click menu or on the portal's Settings page, which also imports and exports them as JSON.
+
+Hide rules change only what the panel shows. The outage watch checks and alerts on the same items whether they are hidden or not.
+
+### Create a service token
+
+The hub answers its public hostname only to requests that carry an Access token, so each device that runs the panel needs a service token. One token can serve several devices, and a separate token for each device lets you revoke one without touching the others.
+
+1. In Cloudflare Zero Trust, open Access, Service Auth, Service Tokens, and create a token. Copy the Client ID and the Client Secret. Cloudflare shows the secret only once.
+2. Open the self-hosted Access application for Scout and add a policy with the action Service Auth that includes the new token.
+3. On the hub machine, add the token's Client ID to the `allowedServiceTokens` list in `access.json`, then restart the hub.
+
+```json
+{
+  "host": "scout.example.com",
+  "teamDomain": "your-team.cloudflareaccess.com",
+  "aud": "the-application-audience-tag-from-cloudflare-access",
+  "allowedEmails": ["you@example.com"],
+  "allowedServiceTokens": ["your-client-id.access"]
+}
+```
+
+A service token reaches only `/api/tray` and the paths under it, `GET /api/services/actions`, `POST /api/services/actions/plan`, and `POST /api/services/actions/run`. Any other request answers 403, and the hub refuses a token whose Client ID is not in `allowedServiceTokens`.
+
+### Connect the panel
+
+Open the connection screen from the settings button in the panel, or from Connection settings on the tray icon's right-click menu. Enter the hub address (`https://` and the hostname, with no path), the Client ID, and the Client Secret, then save. The panel keeps the secret in the system keychain (Windows Credential Manager or the macOS Keychain) and never writes it to a file.
+
+### Build and run
+
+Install Rust and pnpm, plus the Xcode command line tools on macOS. Build each platform on its own machine. There is no Linux build yet.
+
+```
+pnpm install
+pnpm --filter @scout/tray build
+pnpm --filter @scout/tray exec tauri build --no-bundle
+pnpm --filter @scout/tray dev
+```
+
+`build` makes an installer, `exec tauri build --no-bundle` makes only the executable (`src-tauri/target/release/scout-tray.exe` on Windows), and `dev` runs the panel from source. The macOS app is not notarized, so the first time you open it, right-click it and choose Open.
+
+To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui/index.html`. It runs against the mock hub in `packages/tray/dev`.
+
+### Start the panel at login
+
+On Windows, add the panel to the Startup folder. On macOS, add it to Login Items in System Settings.
+
+### Troubleshooting the panel
+
+- The icon shows a grey cross: the panel is not connected yet, cannot reach the hub, or had its token refused by Cloudflare Access. The banner in the panel says which.
+- The panel says "Cloudflare Access turned down the service token": check the Client ID and secret on the connection screen, the Service Auth policy on the Access application, and `allowedServiceTokens` in `access.json` on the hub machine.
+
 ## Local state
 
 Everything Scout writes lives in `.scout-data/`:
