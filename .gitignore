@@ -10,3 +10,4 @@ fixtures/_raw/
 target/
 packages/tray/src-tauri/gen/
 packages/tray/src-tauri/icon-source.png
+packages/hub/recipe-hub-*/
