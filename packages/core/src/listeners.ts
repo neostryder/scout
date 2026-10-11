@@ -17,6 +17,8 @@ export interface ListenerFact {
   processPath: string | null;
   /** The script, module, or jar a runtime such as node or python was started with; never its other arguments. */
   scriptPath?: string | null;
+  /** The process that started the owner, so a service can claim the listeners of the children it runs. */
+  ppid?: number | null;
   container: { name: string; image: string; containerPort: number } | null;
 }
 
@@ -46,6 +48,7 @@ export interface Listener {
   processName: string | null;
   processPath: string | null;
   scriptPath?: string | null;
+  ppid?: number | null;
   /** The name to show: the process name, or what a runtime process is running. */
   label?: string | null;
   containerName: string | null;
@@ -91,7 +94,7 @@ function withKnownOwner(fact: ListenerFact, previous: Listener[]): ListenerFact 
   const known = previous
     .filter((row) => row.port === fact.port && row.protocol === fact.protocol && row.containerName === null && row.pid !== 0 && row.processName !== null && row.processName !== "Idle")
     .sort((x, y) => y.lastSeenAt.localeCompare(x.lastSeenAt))[0];
-  return known ? { ...fact, pid: known.pid, processName: known.processName, processPath: known.processPath, scriptPath: known.scriptPath ?? null } : fact;
+  return known ? { ...fact, pid: known.pid, processName: known.processName, processPath: known.processPath, scriptPath: known.scriptPath ?? null, ppid: known.ppid ?? fact.ppid ?? null } : fact;
 }
 
 export function recordListeners(db: Db, machineId: string, result: ListenerResult, now: string): { listeners: number; gone: number } {
@@ -112,10 +115,10 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
       if (!existing || width[fact.bind] > width[existing.bind]) facts.set(key, fact);
     }
     const put = db.prepare(
-      `INSERT INTO listeners (machine_id, port, protocol, address, bind, pid, process_name, process_path, script_path, container_name, container_image, first_seen_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO listeners (machine_id, port, protocol, address, bind, pid, process_name, process_path, script_path, ppid, container_name, container_image, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT DO UPDATE SET address = excluded.address, bind = excluded.bind, pid = excluded.pid,
-         process_path = excluded.process_path, script_path = excluded.script_path, container_image = excluded.container_image, last_seen_at = excluded.last_seen_at, gone_at = NULL`,
+         process_path = excluded.process_path, script_path = excluded.script_path, ppid = excluded.ppid, container_image = excluded.container_image, last_seen_at = excluded.last_seen_at, gone_at = NULL`,
     );
     const event = db.prepare("INSERT INTO events (at, machine_id, kind, detail_json) VALUES (?, ?, ?, ?)");
     const emit = (kind: string, port: number, process: string | null, oldBind: ListenerBind | null, newBind: ListenerBind | null, container: string | null) => {
@@ -123,7 +126,7 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
     };
     for (const [key, fact] of facts) {
       const before = old.get(key);
-      put.run(machineId, fact.port, fact.protocol, fact.address, fact.bind, fact.pid, fact.processName, fact.processPath, fact.scriptPath ?? null, fact.container?.name ?? null, fact.container?.image ?? null, now, now);
+      put.run(machineId, fact.port, fact.protocol, fact.address, fact.bind, fact.pid, fact.processName, fact.processPath, fact.scriptPath ?? null, fact.ppid ?? null, fact.container?.name ?? null, fact.container?.image ?? null, now, now);
       summary.listeners++;
       if (!before) emit("listener_new", fact.port, fact.processName ?? fact.container?.name ?? null, null, fact.bind, fact.container?.name ?? null);
       else if (before.bind !== fact.bind) emit("listener_changed", fact.port, fact.processName ?? fact.container?.name ?? null, before.bind, fact.bind, fact.container?.name ?? null);
@@ -166,7 +169,7 @@ export function listListeners(db: Db, filter: ListenerFilter = {}, descriptions:
   if (filter.port !== undefined) { clauses.push("l.port = ?"); params.push(filter.port); }
   const rows = db.prepare(
     `SELECT l.id, l.machine_id AS machineId, m.name AS machineName, l.port, l.protocol, l.address, l.bind, l.pid,
-       l.process_name AS processName, l.process_path AS processPath, l.script_path AS scriptPath, l.container_name AS containerName, l.container_image AS containerImage,
+       l.process_name AS processName, l.process_path AS processPath, l.script_path AS scriptPath, l.ppid AS ppid, l.container_name AS containerName, l.container_image AS containerImage,
        l.first_seen_at AS firstSeenAt, l.last_seen_at AS lastSeenAt, l.gone_at AS goneAt
      FROM listeners l JOIN machines m ON m.id = l.machine_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""} ORDER BY m.name, l.port, l.id`,

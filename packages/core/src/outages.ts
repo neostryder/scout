@@ -263,7 +263,7 @@ function staysUpService(row: Service): boolean {
 
 export function serviceOwnsListener(service: Service, listener: Listener): boolean {
   if (service.machineId !== listener.machineId) return false;
-  if (service.pid !== null) return service.pid === listener.pid;
+  if (service.pid !== null) return service.pid === listener.pid || (listener.ppid != null && service.pid === listener.ppid);
   const same = (path: string): string => path.replaceAll("\\", "/").toLowerCase();
   return service.program !== null && listener.processPath !== null && same(service.program) === same(listener.processPath);
 }

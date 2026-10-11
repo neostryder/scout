@@ -52,7 +52,7 @@ $listen | ForEach-Object {
       if ($via) { $cmd = $via; if ($via -match '^"([^"]+)"') { $path = $Matches[1] } elseif ($via -match '^(\\S+)') { $path = $Matches[1] } }
     }
   }
-  [pscustomobject]@{ address = $_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess; name = $p.ProcessName; path = $path; cmd = $cmd; cwd = $cwd }
+  [pscustomobject]@{ address = $_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess; name = $p.ProcessName; path = $path; cmd = $cmd; cwd = $cwd; ppid = $parents[[int]$_.OwningProcess] }
 } | ConvertTo-Json -Compress
 `;
 
@@ -61,6 +61,8 @@ echo "---SCOUT-PS---"
 ps -axo pid=,comm= 2>/dev/null
 echo "---SCOUT-ARGS---"
 ps -axo pid=,args= 2>/dev/null | awk '$2 ~ /(^|\\/)(node|nodejs|bun|deno|python[0-9.]*|ruby|java|php|perl)$/'
+echo "---SCOUT-PPID---"
+ps -axo pid=,ppid= 2>/dev/null
 `;
 
 export const DOCKER_PORTS_SCRIPT = `for sock in "$HOME/.colima/default/docker.sock" "$HOME/.orbstack/run/docker.sock" /var/run/docker.sock; do

@@ -52,5 +52,5 @@ $listen | ForEach-Object {
       if ($via) { $cmd = $via; if ($via -match '^"([^"]+)"') { $path = $Matches[1] } elseif ($via -match '^(\S+)') { $path = $Matches[1] } }
     }
   }
-  [pscustomobject]@{ address = $_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess; name = $p.ProcessName; path = $path; cmd = $cmd; cwd = $cwd }
+  [pscustomobject]@{ address = $_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess; name = $p.ProcessName; path = $path; cmd = $cmd; cwd = $cwd; ppid = $parents[[int]$_.OwningProcess] }
 } | ConvertTo-Json -Compress

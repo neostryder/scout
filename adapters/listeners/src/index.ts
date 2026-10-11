@@ -93,7 +93,8 @@ export const windowsListenersAdapter: ListenerAdapter = {
       const binding = address(row["address"]);
       if (!binding) { malformed = true; continue; }
       const scriptPath = scriptOf(row["name"], typeof row["cmd"] === "string" ? row["cmd"] : null, typeof row["cwd"] === "string" ? row["cwd"] : null);
-      facts.push({ port: row["port"], protocol: "tcp", ...binding, pid: row["pid"], processName: row["name"], processPath: row["path"] === null ? null : path(row["path"]), ...(scriptPath ? { scriptPath } : {}), container: null });
+      const ppid = pidNumber(row["ppid"]) && row["ppid"] > 0 ? row["ppid"] : null;
+      facts.push({ port: row["port"], protocol: "tcp", ...binding, pid: row["pid"], processName: row["name"], processPath: row["path"] === null ? null : path(row["path"]), ...(scriptPath ? { scriptPath } : {}), ...(ppid ? { ppid } : {}), container: null });
     }
     return finish("netconn", probe, facts, malformed);
   },
@@ -113,8 +114,13 @@ export const macListenersAdapter: ListenerAdapter = {
     const missing = unavailable(outputs, "listeners", "lsof");
     if (missing) return missing;
     const probe = outputs["listeners"]!;
-    const sections = probe.stdout.split(/^---SCOUT-(?:PS|ARGS)---\r?$/m);
-    let malformed = sections.length !== 2 && sections.length !== 3;
+    const sections = probe.stdout.split(/^---SCOUT-(?:PS|ARGS|PPID)---\r?$/m);
+    let malformed = sections.length < 2 || sections.length > 4;
+    const parents = new Map<number, number>();
+    for (const line of (sections[3] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
+      const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
+      if (match && Number(match[2]) > 1) parents.set(Number(match[1]), Number(match[2]));
+    }
     const argv = new Map<number, string>();
     for (const line of (sections[2] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
       const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
@@ -153,7 +159,8 @@ export const macListenersAdapter: ListenerAdapter = {
         const processPath = paths.get(pid) ?? null;
         const processName = processPath?.split("/").at(-1) ?? name;
         const scriptPath = scriptOf(processName, argv.get(pid) ?? null);
-        facts.push({ port, protocol: "tcp", ...binding, pid, processName, processPath, ...(scriptPath ? { scriptPath } : {}), container: null });
+        const ppid = parents.get(pid);
+        facts.push({ port, protocol: "tcp", ...binding, pid, processName, processPath, ...(scriptPath ? { scriptPath } : {}), ...(ppid ? { ppid } : {}), container: null });
       } else if (/^f\d+$/.test(line)) {
         if (filePending) malformed = true;
         filePending = true;

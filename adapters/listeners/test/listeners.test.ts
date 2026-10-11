@@ -184,3 +184,10 @@ test("runtime listeners carry the script they run and nothing else from the comm
   assert.equal(mac.status, "ok");
   assert.equal(mac.facts[0]!.scriptPath, "/Users/USER/proj/dist/worker.js");
 });
+
+test("lsof reads the parent of each listening process from the ppid section", () => {
+  const stdout = ["p17215", "cpython", "f4", "n127.0.0.1:8010", "---SCOUT-PS---", "17215 /opt/venv/bin/python", "---SCOUT-ARGS---", "17215 /opt/venv/bin/python /srv/serve.py", "---SCOUT-PPID---", "17215 17214", "17214 1", ""].join("\n");
+  const parsed = macListenersAdapter.parse({ listeners: output(stdout) });
+  assert.equal(parsed.status, "ok");
+  assert.deepEqual(parsed.facts.map((fact) => [fact.port, fact.pid, fact.ppid]), [[8010, 17215, 17214]]);
+});

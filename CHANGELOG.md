@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- [Visible] [Services] **A service now claims the listeners that its child processes open.** Scout matched a listener to a service only when the service's own process held the port, so a service that starts helper programs, such as Cogitator and the two engines it runs on Bilbo, left those ports looking unowned and unwatched. The listener scan now records each listener's parent process on Windows and macOS, and a listener whose parent is a service that stays up is treated as that service's and watched for outages.
+
 ## [0.1.1] - 2026-10-11
 
 ### Fixed

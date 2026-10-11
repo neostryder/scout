@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isWatched, listOutages, openCatalog, outageNotice, outagesResponse, parseWatchConfig, recordListeners, recordMonitorGap, recordObservations, recordServices, resetWatchCounters, serviceObservations, serviceWatchKey, settleUnwatched, urlObservations, updateWatchFile, upsertMachine, watchFileReader, type Db, type Observation, type ServiceFact } from "../src/index.ts";
+import { alertsResponse, defaultWatchConfig, evaluateAlerts, formatDuration, isWatched, listOutages, openCatalog, outageNotice, outagesResponse, parseWatchConfig, recordListeners, recordMonitorGap, recordObservations, recordServices, resetWatchCounters, serviceObservations, serviceOwnsListener, serviceWatchKey, settleUnwatched, urlObservations, updateWatchFile, upsertMachine, watchFileReader, type Db, type Observation, type ServiceFact } from "../src/index.ts";
 
 const AT = "2026-10-10T00:00:00.000Z";
 const stamp = (minutes: number): string => new Date(Date.parse(AT) + minutes * 60_000).toISOString();
@@ -245,4 +245,12 @@ test("a hostname that never answered a probe is not watched, and one that answer
   put.run("domain:never.example.test", "never.example.test", "https://never.example.test/", null, stamp(5));
   put.run("domain:once.example.test", "once.example.test", "https://once.example.test/", stamp(1), stamp(5));
   assert.deepEqual(urlObservations(db, defaultWatchConfig(), stamp(6)).map((obs) => obs.label), ["once.example.test"]);
+});
+
+test("a service that stays up owns the listeners its child processes open", () => {
+  const service = { machineId: "mini", pid: 100, program: null } as never;
+  const child = { machineId: "mini", pid: 200, ppid: 100, processPath: null } as never;
+  const stranger = { machineId: "mini", pid: 300, ppid: 99, processPath: null } as never;
+  assert.equal(serviceOwnsListener(service, child), true);
+  assert.equal(serviceOwnsListener(service, stranger), false);
 });
