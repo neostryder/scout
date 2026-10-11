@@ -189,3 +189,18 @@ a.button:hover { background: var(--accent); color: var(--accent-ink); }
   .views { overflow-x: auto; max-width: 100%; }
   .views button { white-space: nowrap; }
 }
+
+.settings { max-width: 860px; margin: 0 auto; padding: 16px; }
+.settings h2 { margin: 16px 0 4px; }
+.settings h3 { margin: 20px 0 4px; font-size: 14px; }
+.settings .quiet { color: var(--muted); margin: 2px 0 8px; }
+.settings .error { color: var(--danger); }
+.settings-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.settings-checks label { display: inline-flex; align-items: center; gap: 6px; }
+.settings-add { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.settings-add input { flex: 1 1 220px; min-width: 0; }
+.settings-list { list-style: none; margin: 6px 0; padding: 0; }
+.settings-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.settings-list li code { font-family: var(--mono); }
+.settings-list li button { margin-left: auto; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 8px; }

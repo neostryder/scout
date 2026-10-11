@@ -160,6 +160,8 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
     const services = listServices(db, { machine: machine.id }, descriptions).filter((s) => s.goneAt === null);
     const listeners = listListeners(db, { machine: machine.id, state: "present" }, descriptions);
     const watch = watchContext(db, services);
+    // Like the outage watch, a stopped service counts as down only when it has been seen running; one that never ran is just stopped.
+    const proven = new Set((db.prepare("SELECT key FROM watch_state WHERE machine_id = ? AND kind = 'service' AND (last_state = 'up' OR failures > 0)").all(machine.id) as { key: string }[]).map((row) => row.key));
     const rows: TrayRow[] = [];
     const finish = (row: Omit<TrayRow, "pinned" | "state"> & { state: TrayState }, shown: boolean, keep: boolean): void => {
       const isPinned = pinned.has(`${machine.id}|${row.key}`);
@@ -174,7 +176,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       const running = s.state === "running";
       finish({
         key: serviceWatchKey(s), target: "service", id: s.id, name: s.name, label: s.displayName ?? s.name, machineId: machine.id, kind: s.kind,
-        state: stateOf(running, shouldRun, health), port: ports[0] ?? null,
+        state: stateOf(running, shouldRun && proven.has(serviceWatchKey(s)), health), port: ports[0] ?? null,
         detail: running ? (ports.length ? `:${ports.join(", :")}` : s.kind === "launchd" ? "launchd job" : "service") : `${s.state}${s.lastResult ? `, last result ${s.lastResult}` : ""}`,
         protected: control.protected.protected, protectedReason: control.protected.reason, actions: control.actions, needsAdmin: control.needsAdmin,
         mine: options.mine?.({ machineId: machine.id, path: s.program, ports }) ?? false, spark: sparkFor(db, machine.id, ports),

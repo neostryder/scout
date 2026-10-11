@@ -46,9 +46,13 @@ test("the rules file reads with a cache, ignores a damaged file with an error, a
   assert.match(damaged.fileError!, /damaged and is ignored/);
 });
 
-test("the default set holds the services meant to stay up, and a stopped one that should be up shows down", (t) => {
+test("the default set holds the services meant to stay up, and a stopped one shows down only after it has been seen running", (t) => {
   const db = seed(t);
-  const eru = trayResponse(db, EMPTY_TRAY_RULES, { now: AT }).machines.find((m) => m.id === "eru")!;
+  const rows = () => trayResponse(db, EMPTY_TRAY_RULES, { now: AT }).machines.find((m) => m.id === "eru")!;
+  assert.deepEqual(rows().rows.map((r) => [r.label, r.state]), [["Print Spooler", "up"], ["Worker", "up"], ["Dead One", "stopped"]]);
+  const key = serviceWatchKey({ machineId: "eru", kind: "windows-service", domain: "system", name: "dead" } as never);
+  db.prepare("INSERT INTO watch_state (key, kind, machine_id, label, last_state) VALUES (?, 'service', 'eru', 'Dead One', 'up')").run(key);
+  const eru = rows();
   assert.deepEqual(eru.rows.map((r) => [r.label, r.state]), [["Dead One", "down"], ["Print Spooler", "up"], ["Worker", "up"]]);
   assert.equal(eru.worst, "down");
   assert.equal(eru.counts.down, 1);
@@ -67,7 +71,7 @@ test("a listener a service owns does not appear twice, and an ephemeral listener
 
 test("hide rules remove rows by kind, class, machine and name, and a pin brings one back", (t) => {
   const db = seed(t);
-  assert.deepEqual(labels(db, parseTrayRules({ hide: { names: [{ machine: "eru", match: "print*" }] } })), ["Dead One", "Worker"]);
+  assert.deepEqual(labels(db, parseTrayRules({ hide: { names: [{ machine: "eru", match: "print*" }] } })), ["Worker", "Dead One"]);
   assert.deepEqual(labels(db, parseTrayRules({ hide: { kinds: ["windows-service"] } })), []);
   const all = trayResponse(db, parseTrayRules({ hide: { machines: ["eru"] } }), { now: AT });
   assert.equal(all.machines.some((m) => m.id === "eru"), false);
