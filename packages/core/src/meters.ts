@@ -250,6 +250,22 @@ export function meterHistory(db: Db, machineId: string, sinceIso: string, limit 
   return rows.map(decode);
 }
 
+/** The few numbers the tray panel shows for a machine: the busiest disk stands for all disks. */
+export interface TrayMeters { ageSeconds: number; cpuPct: number | null; memPct: number | null; diskPct: number | null; diskMount: string | null; vramPct: number | null; netBps: number | null }
+export function trayMeters(sample: MeterSample, now: string): TrayMeters {
+  const disk = sample.disks.map((d) => ({ mount: d.mount, pct: pct(d.usedBytes, d.totalBytes) })).sort((a, b) => b.pct - a.pct)[0];
+  const vram = sample.gpus.map((g) => g.vramUsedBytes !== null && g.vramTotalBytes !== null ? pct(g.vramUsedBytes, g.vramTotalBytes) : null).filter((v): v is number => v !== null).sort((a, b) => b - a)[0];
+  return {
+    ageSeconds: Math.max(0, Math.round((Date.parse(now) - Date.parse(sample.at)) / 1000)),
+    cpuPct: sample.cpuPct,
+    memPct: sample.memUsedBytes !== null && sample.memTotalBytes !== null ? pct(sample.memUsedBytes, sample.memTotalBytes) : null,
+    diskPct: disk?.pct ?? null,
+    diskMount: disk?.mount ?? null,
+    vramPct: vram ?? null,
+    netBps: sample.netRxBps === null && sample.netTxBps === null ? null : (sample.netRxBps ?? 0) + (sample.netTxBps ?? 0),
+  };
+}
+
 /** A process with the name and kind of the running service or open listener in the catalog that owns it, when there is one. */
 export interface ResourceProcess extends MeterProcess { label?: string; kind?: "service" | "listener" }
 export interface ResourceMachine {

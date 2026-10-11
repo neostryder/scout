@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openCatalog, parseTrayRules, recordListeners, recordServices, trayFileReader, trayResponse, upsertMachine, writeTrayRules, EMPTY_TRAY_RULES, serviceWatchKey, type Db, type ServiceFact, type TrayRules } from "../src/index.ts";
+import { openCatalog, parseTrayRules, recordListeners, recordMeterReading, recordServices, trayFileReader, trayResponse, upsertMachine, writeTrayRules, EMPTY_TRAY_RULES, serviceWatchKey, type Db, type ServiceFact, type TrayRules } from "../src/index.ts";
 
 const AT = "2026-10-10T12:00:00.000Z";
 const svc = (over: Partial<ServiceFact>): ServiceFact => ({ kind: "windows-service", name: "worker", displayName: "Worker", domain: "system", program: "C:/Tools/worker.exe", state: "running", startMode: "auto", enabled: true, pid: 42, runAs: null, triggers: null, lastRun: null, lastResult: null, ...over });
@@ -119,4 +119,16 @@ test("protected rows refuse stop and restart and carry the reason", (t) => {
   assert.equal(row.protected, true);
   assert.ok(row.protectedReason);
   assert.ok(row.actions.filter((a) => a.action !== "start").every((a) => !a.available));
+});
+
+test("a machine carries its newest meter summary, the busiest disk, and a changed reading changes the version", (t) => {
+  const db = seed(t);
+  assert.equal(trayResponse(db, EMPTY_TRAY_RULES, { now: AT }).machines.find((m) => m.id === "eru")!.meters, null);
+  const reading = { cpuPct: 12, memUsedBytes: 25, memTotalBytes: 100, disks: [{ mount: "C:", usedBytes: 60, totalBytes: 100 }, { mount: "D:", usedBytes: 90, totalBytes: 100 }], gpus: [{ name: "GPU", utilPct: 3, vramUsedBytes: 4, vramTotalBytes: 16 }], netRxBytes: 0, netTxBytes: 0, processes: [] };
+  recordMeterReading(db, "eru", reading, "2026-10-10T11:59:50.000Z");
+  const first = trayResponse(db, EMPTY_TRAY_RULES, { now: AT });
+  assert.deepEqual(first.machines.find((m) => m.id === "eru")!.meters, { ageSeconds: 10, cpuPct: 12, memPct: 25, diskPct: 90, diskMount: "D:", vramPct: 25, netBps: null });
+  assert.equal(first.machines.find((m) => m.id === "gm")!.meters, null);
+  recordMeterReading(db, "eru", { ...reading, cpuPct: 40 }, "2026-10-10T11:59:55.000Z");
+  assert.notEqual(trayResponse(db, EMPTY_TRAY_RULES, { now: AT }).version, first.version);
 });

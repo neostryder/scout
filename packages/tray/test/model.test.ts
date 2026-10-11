@@ -96,3 +96,24 @@ test("every startup string the panel looks up exists", async () => {
   for (const key of ["menuDisable", "menuEnable", "confirmDisable", "confirmYesDisable", "workingDisable", "workingEnable", "resultDisabled", "resultEnabled", "failedDisable", "failedEnable"]) assert.equal(typeof text[key], "string", key);
   assert.equal(fill(text.confirmDisable, { name: "Redis" }), "Disable Redis? It stops now and will not start at login until you enable it.");
 });
+
+// @ts-expect-error The panel's model is plain JavaScript with no declaration file.
+import { meterStrip } from "../ui/model.js";
+
+test("the meter strip lists processor, memory, the busiest disk, and video memory with a tone, and shows nothing without a reading", () => {
+  assert.deepEqual(meterStrip(undefined), []);
+  assert.deepEqual(meterStrip({ meters: null }), []);
+  const strip = meterStrip({ meters: { ageSeconds: 4, cpuPct: 12.4, memPct: 70, diskPct: 90, diskMount: "D:", vramPct: null, netBps: 2048 } });
+  assert.deepEqual(strip.map((r: any) => [r.key, r.label, r.value, r.tone, r.pct]), [
+    ["cpu", "meterCpu", "12%", "ok", 12.4],
+    ["mem", "meterMem", "70%", "warn", 70],
+    ["disk", "meterDisk", "90%", "danger", 90],
+  ]);
+  assert.equal(strip[2].mount, "D:");
+  assert.equal(meterStrip({ meters: { ageSeconds: 4, cpuPct: null, memPct: null, diskPct: null, diskMount: null, vramPct: 86, netBps: null } })[0].tone, "danger");
+});
+
+test("a meter reading older than 150 seconds is stale", () => {
+  assert.equal(meterStrip({ meters: { ageSeconds: 151, cpuPct: 1, memPct: 1, diskPct: null, diskMount: null, vramPct: null, netBps: null } })[0].stale, true);
+  assert.equal(meterStrip({ meters: { ageSeconds: 150, cpuPct: 1, memPct: 1, diskPct: null, diskMount: null, vramPct: null, netBps: null } })[0].stale, false);
+});

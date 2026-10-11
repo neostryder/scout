@@ -5,6 +5,7 @@ import type { Db } from "./db.ts";
 import { controlRow, rowControl, type ControlAction, type ControlTarget } from "./control.ts";
 import { loadDescriptionResolver } from "./descriptions.ts";
 import { launchLabel, listListeners, type Listener } from "./listeners.ts";
+import { latestMeters, trayMeters, type TrayMeters } from "./meters.ts";
 import { listOutages, listenerWatchKey, serviceOwnsListener, serviceWatchKey, serviceWatchable, watchContext } from "./outages.ts";
 import type { ProtectedContext } from "./protected.ts";
 import { recipesResponse } from "./recipes.ts";
@@ -116,6 +117,8 @@ export interface TrayMachine {
   /** Rows the hide rules left out of this machine. */
   hidden: number;
   rows: TrayRow[];
+  /** The newest meter reading, summarized; null until the hub has read the machine. */
+  meters: TrayMeters | null;
 }
 /** What the panel needs of a stack: the hub passes its stack response. */
 export interface TrayStack { name: string; label: string; state: StackState; members: { running: boolean | null }[] }
@@ -159,6 +162,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
   const context = options.context ?? {};
   const descriptions = loadDescriptionResolver(db, { hints: [] });
   const machines = db.prepare("SELECT id, name, os, state, last_seen AS lastSeen FROM machines WHERE kind = 'host' ORDER BY name").all() as { id: string; name: string; os: string; state: string; lastSeen: string | null }[];
+  const meters = new Map(latestMeters(db).map((sample) => [sample.machineId, trayMeters(sample, now)]));
   const pinned = new Set(rules.pins.map((pin) => `${pin.machine}|${pin.key}`));
   const recipes = recipesResponse(db).recipes.filter((r) => r.state === "approved" && !r.gone);
   const out: TrayMachine[] = machines.map((machine) => {
@@ -223,7 +227,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
     const counts: Record<TrayState, number> = { up: 0, changed: 0, down: 0, stopped: 0, unknown: 0 };
     for (const row of rows) counts[row.state]++;
     const worst: TrayState = counts.down ? "down" : counts.changed ? "changed" : reachable ? "up" : "unknown";
-    return { id: machine.id, name: machine.name, os: machine.os, reachable, lastSeen: machine.lastSeen, worst, counts, hidden: hiddenRows, rows };
+    return { id: machine.id, name: machine.name, os: machine.os, reachable, lastSeen: machine.lastSeen, worst, counts, hidden: hiddenRows, rows, meters: meters.get(machine.id) ?? null };
   }).filter((machine) => !rules.hide.machines.includes(machine.id));
 
   const allStacks = options.stacks ?? [];
@@ -243,7 +247,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
     });
     const counts: Record<TrayState, number> = { up: 0, changed: 0, down: 0, stopped: 0, unknown: 0 };
     for (const row of rows) counts[row.state]++;
-    out.push({ id: "stacks", name: "Stacks", os: "", reachable: true, lastSeen: null, worst: counts.changed ? "changed" : "up", counts, hidden: stackHidden, rows });
+    out.push({ id: "stacks", name: "Stacks", os: "", reachable: true, lastSeen: null, worst: counts.changed ? "changed" : "up", counts, hidden: stackHidden, rows, meters: null });
   }
 
   const openOutages = listOutages(db, { state: "open", now }).length;

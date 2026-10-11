@@ -114,6 +114,22 @@ fn icon_for(link: Link, body: Option<&str>) -> (IconState, usize) {
     }
 }
 
+/// One short line per machine with a reading, such as "Eru: 12% processor, 38% memory". Whole lines are dropped to stay inside the 127-character limit of a Windows tooltip.
+fn meter_lines(template: &str, body: Option<&str>, room: usize) -> String {
+    let Some(value) = body.and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok()) else { return String::new() };
+    let mut out = String::new();
+    for machine in value["machines"].as_array().into_iter().flatten() {
+        let (Some(name), Some(cpu), Some(mem)) = (machine["name"].as_str(), machine["meters"]["cpuPct"].as_f64(), machine["meters"]["memPct"].as_f64()) else { continue };
+        let line = template.replace("{name}", name).replace("{cpu}", &format!("{:.0}", cpu)).replace("{mem}", &format!("{:.0}", mem));
+        if out.chars().count() + 1 + line.chars().count() > room {
+            break;
+        }
+        out.push('\n');
+        out.push_str(&line);
+    }
+    out
+}
+
 fn tooltip(shared: &Shared, link: Link, state: IconState, n: usize) -> String {
     match (link, state) {
         (Link::Unconfigured, _) => shared.line("tipUnconfigured"),
@@ -127,7 +143,11 @@ fn tooltip(shared: &Shared, link: Link, state: IconState, n: usize) -> String {
 fn paint(app: &AppHandle, shared: &Shared, snapshot: &Snapshot) {
     let (state, n) = icon_for(snapshot.link, snapshot.body.as_deref());
     let dark = bar_is_dark(app);
-    let tip = tooltip(shared, snapshot.link, state, n);
+    let mut tip = tooltip(shared, snapshot.link, state, n);
+    if snapshot.link == Link::Ok {
+        let room = 120usize.saturating_sub(tip.chars().count());
+        tip.push_str(&meter_lines(&shared.line("tipMeters"), snapshot.body.as_deref(), room));
+    }
     let wanted = (state, dark, tip.clone());
     let Ok(mut shown) = shared.shown.lock() else { return };
     if shown.as_ref() == Some(&wanted) {
@@ -425,4 +445,31 @@ fn open_portal_inner(app: &AppHandle, shared: &Handle) -> Result<(), String> {
         return Ok(());
     }
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::meter_lines;
+
+    const BODY: &str = r#"{"machines":[{"name":"Eru","meters":{"cpuPct":12.4,"memPct":38.2}},{"name":"Bilbo","meters":null},{"name":"Stacks","meters":null},{"name":"Gamemaster","meters":{"cpuPct":62,"memPct":74}}]}"#;
+
+    #[test]
+    fn one_line_per_machine_with_a_reading() {
+        assert_eq!(meter_lines("{name}: {cpu}% processor, {mem}% memory", Some(BODY), 200), "
+Eru: 12% processor, 38% memory
+Gamemaster: 62% processor, 74% memory");
+    }
+
+    #[test]
+    fn whole_lines_are_dropped_when_there_is_no_room() {
+        assert_eq!(meter_lines("{name}: {cpu}% processor, {mem}% memory", Some(BODY), 40), "
+Eru: 12% processor, 38% memory");
+        assert_eq!(meter_lines("{name}: {cpu}%", Some(BODY), 3), "");
+    }
+
+    #[test]
+    fn no_body_or_unreadable_body_adds_nothing() {
+        assert_eq!(meter_lines("{name}", None, 100), "");
+        assert_eq!(meter_lines("{name}", Some("not json"), 100), "");
+    }
 }

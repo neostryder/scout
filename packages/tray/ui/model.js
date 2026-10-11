@@ -142,3 +142,22 @@ export function actionOutcome(record) {
   if (state === "done") return { done: true, ok: true };
   return { done: true, ok: false, reason: record.message || state || "unknown" };
 }
+
+const WARN_PCT = 70;
+const DANGER_PCT = 85;
+const STALE_SECONDS = 150;
+const toneOf = (pct) => (pct >= DANGER_PCT ? "danger" : pct >= WARN_PCT ? "warn" : "ok");
+
+/** The rows of the meter strip for a machine: processor, memory, the busiest disk, and video memory, each with its tone. A machine the hub has not read yet has no strip. */
+export function meterStrip(machine) {
+  const m = machine?.meters;
+  if (!m) return [];
+  const stale = !Number.isFinite(m.ageSeconds) || m.ageSeconds > STALE_SECONDS;
+  const row = (key, label, pct, extra = {}) => ({ key, label, pct, value: `${Math.round(pct)}%`, tone: toneOf(pct), stale, ...extra });
+  const rows = [];
+  if (m.cpuPct != null) rows.push(row("cpu", "meterCpu", m.cpuPct));
+  if (m.memPct != null) rows.push(row("mem", "meterMem", m.memPct));
+  if (m.diskPct != null) rows.push(row("disk", "meterDisk", m.diskPct, { mount: m.diskMount }));
+  if (m.vramPct != null) rows.push(row("vram", "meterVram", m.vramPct));
+  return rows;
+}

@@ -1,4 +1,4 @@
-import { actionOutcome, ago, applyRule, contextEntries, fill, hiddenTotal, needsConfirm, pickTab, planBody, rowActions, sparkRuns, tabs, totals, visibleRows } from "./model.js";
+import { actionOutcome, ago, applyRule, contextEntries, fill, hiddenTotal, meterStrip, needsConfirm, pickTab, planBody, rowActions, sparkRuns, tabs, totals, visibleRows } from "./model.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const ICONS = {
@@ -133,6 +133,16 @@ function notices() {
   return out;
 }
 
+function meters() {
+  const rows = meterStrip(currentMachine());
+  if (!rows.length) return null;
+  const word = { warn: t("meterHigh"), danger: t("meterVeryHigh") };
+  return h("div", { class: `meters${rows[0].stale ? " stale" : ""}`, role: "group", "aria-label": rows[0].stale ? t("meterStaleLabel") : t("meterLabel") }, rows.map((r) => h("div", { class: `meter ${r.tone}`, role: "meter", "aria-label": r.mount ? t(r.label, { mount: r.mount }) : t(r.label), "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(r.pct)), "aria-valuetext": `${r.value}${word[r.tone] ? `, ${word[r.tone]}` : ""}` },
+    h("span", { class: "m-label" }, r.mount ? t(r.label, { mount: r.mount }) : t(r.label)),
+    h("span", { class: "m-bar" }, h("span", { class: "m-fill", style: `width:${Math.min(100, Math.max(0, r.pct))}%` })),
+    h("span", { class: "m-value" }, r.value, word[r.tone] ? h("span", { class: "m-word" }, word[r.tone]) : null))));
+}
+
 function sparkline(row) {
   const runs = sparkRuns(row.spark);
   if (!runs.length) return h("span", { class: "spark" });
@@ -221,7 +231,7 @@ function showError(err) {
 function render() {
   if (ui.connect) { renderConnect(); return; }
   const list = h("div", { class: "list" });
-  root.replaceChildren(...[header(), tools(), tabBar(), ...notices(), list, footer(), ui.menu ? menuView() : null, ui.toast ? h("div", { class: "toast", role: "status" }, ui.toast) : null].filter(Boolean));
+  root.replaceChildren(...[header(), tools(), tabBar(), meters(), ...notices(), list, footer(), ui.menu ? menuView() : null, ui.toast ? h("div", { class: "toast", role: "status" }, ui.toast) : null].filter(Boolean));
   renderList();
 }
 
