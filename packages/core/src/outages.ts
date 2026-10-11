@@ -251,7 +251,7 @@ function staysUpService(row: Service): boolean {
   return false;
 }
 
-function owns(service: Service, listener: Listener): boolean {
+export function serviceOwnsListener(service: Service, listener: Listener): boolean {
   if (service.machineId !== listener.machineId) return false;
   if (service.pid !== null) return service.pid === listener.pid;
   const same = (path: string): string => path.replaceAll("\\", "/").toLowerCase();
@@ -261,7 +261,7 @@ function owns(service: Service, listener: Listener): boolean {
 /** A listener is meant to stay up when a container serves it, a published route lands on it, or a service that stays up owns it. A browser debug port or a dev server does not qualify. */
 function staysUp(row: Service | Listener, context: WatchContext): boolean {
   if (!("port" in row)) return staysUpService(row);
-  return row.containerName !== null || context.routeListeners.has(row.id) || context.routePorts.has(`${row.machineId}:${row.port}`) || context.services.some((service) => staysUpService(service) && owns(service, row));
+  return row.containerName !== null || context.routeListeners.has(row.id) || context.routePorts.has(`${row.machineId}:${row.port}`) || context.services.some((service) => staysUpService(service) && serviceOwnsListener(service, row));
 }
 
 /** Whether an item is one Scout watches for outages: visible, not plumbing, not marked as expected to be down, and (given a context) meant to run at all times. */

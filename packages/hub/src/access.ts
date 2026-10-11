@@ -14,6 +14,11 @@ export interface AccessConfig {
   aud: string;
   /** When set, the JWT's email must be one of these (case-insensitive). The Access policy already says who may sign in. */
   allowedEmails?: string[];
+  /**
+   * Client ids of Access service tokens (the tray apps) that may sign in. Access gives such a token a JWT with a
+   * common_name and no email, and the hub scopes it to the tray and the control actions (see serviceTokenMayReach).
+   */
+  allowedServiceTokens?: string[];
 }
 
 export interface Jwk {
@@ -28,6 +33,8 @@ export type KeySource = (force: boolean) => Promise<Jwk[]>;
 
 export interface AccessClaims {
   email: string;
+  /** The service token's client id when the request came from one; such a request has no email. */
+  serviceToken?: string;
   sub: string;
   exp: number;
 }
@@ -99,7 +106,19 @@ export async function verifyAccessJwt(token: string | undefined, config: AccessC
   const nbf = claims["nbf"];
   if (typeof nbf === "number" && nbf - SKEW_SECONDS > nowSeconds) return { ok: false, reason: "token not yet valid" };
   const email = typeof claims["email"] === "string" ? claims["email"] : "";
+  const sub = typeof claims["sub"] === "string" ? claims["sub"] : "";
+  const commonName = typeof claims["common_name"] === "string" ? claims["common_name"] : "";
+  if (email === "" && commonName !== "") {
+    if (!config.allowedServiceTokens?.includes(commonName)) return { ok: false, reason: "service token is not allowed" };
+    return { ok: true, claims: { email: "", serviceToken: commonName, sub, exp } };
+  }
   if (email === "") return { ok: false, reason: "token has no email" };
   if (config.allowedEmails && !config.allowedEmails.some((e) => e.toLowerCase() === email.toLowerCase())) return { ok: false, reason: "email is not allowed" };
-  return { ok: true, claims: { email, sub: typeof claims["sub"] === "string" ? claims["sub"] : "", exp } };
+  return { ok: true, claims: { email, sub, exp } };
+}
+
+/** A service token reaches only the tray panel's own endpoints and the plan and run steps of a control action, nothing else. */
+export function serviceTokenMayReach(method: string | undefined, pathname: string): boolean {
+  if (pathname === "/api/tray" || pathname.startsWith("/api/tray/")) return true;
+  return method === "POST" && (pathname === "/api/services/actions/plan" || pathname === "/api/services/actions/run");
 }

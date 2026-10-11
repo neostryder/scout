@@ -1,10 +1,11 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, changelogSummaryFor, mineFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
+import { hubMachineId, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
-import { verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
+import { trayApi } from "./tray-api.ts";
+import { serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
 import { ControlRunner, Runner, runHealthCycle, subscribeServiceReads, type ControlRunnerDeps, type RunnerDeps } from "@scout/ops";
 import { createDownloadJobsResponse, createJobsResponse, jobResponse, planResponse } from "./jobs-api.ts";
@@ -61,6 +62,8 @@ export interface HubOptions {
   protectedPath?: string;
   /** JSON file of the owners and author emails that count as the user. Absent means no project is marked as theirs. */
   minePath?: string;
+  /** The tray panel's hide rules and pins. */
+  trayPath?: string;
   downloads?: DownloadsOptions;
   research?: ResearchSchedule;
   /** Live listener and service reads. Omit it and the stream still says hello, while refresh answers 404. */
@@ -162,6 +165,8 @@ export function createHub(options: HubOptions): Server {
   const unsubscribeRecipeDescriptions = options.descriptions?.subscribe((event) => { if (event.scope === "project" && event.state !== "running") recipes.scan(); });
   const mineFile = mineFileReader(options.minePath ?? ".scout-data/mine.json");
   const provenance = () => provenanceContext(db, mineFile().profile);
+  const trayPath = options.trayPath ?? ".scout-data/tray.json";
+  const trayFile = trayFileReader(trayPath);
   const readPorts = portsFileReader(options.portsPath);
   const stacksPath = options.stacksPath ?? (options.control ? options.control.stacksPath : undefined);
   const stacks = new HubStacks(db, stacksPath);
@@ -197,8 +202,13 @@ export function createHub(options: HubOptions): Server {
         access.log?.(`refused ${req.method} ${req.url}: ${checked.reason}`);
         return send(res, 403, "forbidden", "text/plain");
       }
+      if (checked.claims.serviceToken !== undefined && !serviceTokenMayReach(req.method, new URL(req.url ?? "/", "http://localhost").pathname)) {
+        access.log?.(`refused ${req.method} ${req.url}: a service token may reach only the tray and control actions`);
+        return send(res, 403, "forbidden", "text/plain");
+      }
     }
     const url = new URL(req.url ?? "/", "http://localhost");
+    if (url.pathname === "/api/tray" || url.pathname.startsWith("/api/tray/")) return trayApi(db, req, url, res, hostAllowed, json, { rulesPath: trayPath, read: trayFile, stacks: () => stacks.response().stacks, provenance, live: options.live, control: { context: () => control.context() } });
     if (url.pathname === "/api/filters" || url.pathname.startsWith("/api/filters/")) return filtersApi(db, req, url, res, hostAllowed, json);
     // Refresh is a POST. The generic POST handler answers every other post it does not know with "read only".
     if (url.pathname === "/api/services/routes" || url.pathname === "/api/services/routes/overview" || url.pathname === "/api/services/routes/refresh") {

@@ -43,6 +43,7 @@ export * from "./uninstall.ts";
 export * from "./alerts.ts";
 export * from "./alerts-file.ts";
 export * from "./outages.ts";
+export * from "./tray.ts";
 export * from "./time.ts";
 export * from "./watch-file.ts";
 export * from "./health.ts";

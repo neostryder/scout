@@ -7,10 +7,10 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { request } from "node:http";
 import { openCatalog } from "@scout/core";
-import { certsKeySource, verifyAccessJwt, type AccessConfig, type Jwk, type KeySource } from "../src/access.ts";
+import { certsKeySource, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type Jwk, type KeySource } from "../src/access.ts";
 import { createHub } from "../src/server.ts";
 
-const config: AccessConfig = { host: "scout.example.test", teamDomain: "team.example.test", aud: "aud-tag-1", allowedEmails: ["user@example.test"] };
+const config: AccessConfig = { host: "scout.example.test", teamDomain: "team.example.test", aud: "aud-tag-1", allowedEmails: ["user@example.test"], allowedServiceTokens: ["tray-eru.access"] };
 const NOW = 1_800_000_000;
 
 const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -64,6 +64,23 @@ test("an unknown key id forces one key refresh, and a rotated key is then found"
   assert.equal(calls, 2);
 });
 
+test("a service token is accepted only when its client id is listed, and carries no email", async () => {
+  const r = await check(token({ email: undefined, common_name: "tray-eru.access", type: "app" }));
+  assert.ok(r.ok);
+  assert.equal(r.ok && r.claims.serviceToken, "tray-eru.access");
+  assert.equal(r.ok && r.claims.email, "");
+  const refused = await check(token({ email: undefined, common_name: "someone-else.access" }));
+  assert.equal(refused.ok ? "accepted" : refused.reason, "service token is not allowed");
+  const unlisted = await verifyAccessJwt(token({ email: undefined, common_name: "tray-eru.access" }), { ...config, allowedServiceTokens: undefined }, keys, NOW);
+  assert.equal(unlisted.ok ? "accepted" : unlisted.reason, "service token is not allowed");
+  assert.equal(serviceTokenMayReach("GET", "/api/tray"), true);
+  assert.equal(serviceTokenMayReach("PUT", "/api/tray/rules"), true);
+  assert.equal(serviceTokenMayReach("POST", "/api/services/actions/run"), true);
+  assert.equal(serviceTokenMayReach("GET", "/api/services/actions/run"), false);
+  assert.equal(serviceTokenMayReach("GET", "/api/summary"), false);
+  assert.equal(serviceTokenMayReach("GET", "/api/trayish"), false);
+});
+
 test("the certs key source caches and refuses a bad response", async () => {
   let n = 0;
   const source = certsKeySource("team.example.test", async (url) => {
@@ -83,7 +100,7 @@ const dir = mkdtempSync(join(tmpdir(), "scout-access-"));
 writeFileSync(join(dir, "index.html"), "<!doctype html><title>scout</title>");
 const db = openCatalog(":memory:");
 const log: string[] = [];
-const server = createHub({ db, webRoot: dir, access: { config, keys, log: (l) => log.push(l) } });
+const server = createHub({ db, webRoot: dir, trayPath: join(dir, "tray.json"), access: { config, keys, log: (l) => log.push(l) } });
 await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 const port = (server.address() as AddressInfo).port;
 after(() => {
@@ -125,4 +142,16 @@ test("a decision post needs the token and an origin on the public host", async (
   assert.equal((await call("POST", "/api/proposals/1", { host: config.host, "content-type": "application/json" }, "{\"accept\":true}")).status, 403);
   assert.equal((await call("POST", "/api/proposals/1", { ...headers, origin: "https://evil.example.test" }, "{\"accept\":true}")).status, 403);
   assert.equal((await call("POST", "/api/proposals/1", { ...headers, origin: `https://${config.host}` }, "{\"accept\":true}")).status, 400); // passes the gates; no such proposal
+});
+
+test("a service token reaches the tray and the control actions and nothing else", async () => {
+  const sign = (extra: Record<string, unknown> = {}): Record<string, string> => ({ host: config.host, "content-type": "application/json", "cf-access-jwt-assertion": live({ email: undefined, common_name: "tray-eru.access", ...extra }) });
+  const tray = await call("GET", "/api/tray", sign());
+  assert.equal(tray.status, 200);
+  assert.ok(Array.isArray(JSON.parse(tray.body).machines));
+  assert.equal((await call("GET", "/api/summary", sign())).status, 403);
+  assert.equal((await call("GET", "/api/installs", sign())).status, 403);
+  assert.equal((await call("POST", "/api/services/actions/plan", sign(), "{}")).status === 403, false);
+  assert.equal((await call("GET", "/api/tray", sign({ common_name: "unlisted.access" }))).status, 403);
+  assert.ok(log.some((l) => l.includes("a service token may reach only the tray")));
 });
