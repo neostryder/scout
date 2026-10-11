@@ -352,13 +352,21 @@ By default the panel lists the services and listeners that are meant to stay up,
 
 Hover over a row to see Start when it is stopped, or Restart and Stop when it is running. Right-click a launchd job or scheduled task to disable or enable it. Start and Enable run at once, and Stop, Restart, and Disable ask on the row first. Each action goes through the same plan, one-time confirmation, and audit log as the page, so protected rows (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop, Restart, or Disable, and the panel shows why. A disabled row does not start; enable it first. When an action needs admin rights, the panel asks you to approve the UAC prompt on the Windows machine, or shows a sudo command to run on the Mac.
 
-Right-click a row for Hide this row, Hide all of its kind, Hide everything from its vendor, Pin to top, and Open in Scout. The footer has Open Scout, a count of rows hidden by rules, and a theme toggle that cycles through system, dark, and light. Right-click the tray icon for Open Scout, Connection settings, and Quit. Only one copy of the panel runs at a time.
+Right-click a row for Hide this row, Hide all of its kind, Hide everything from its vendor, Pin to top, and Open in Scout. The footer has Open Scout, a count of rows hidden by rules, and a theme toggle that cycles through system, dark, and light. Right-click the tray icon for Open Scout, Connection settings, Start at login, and Quit. Only one copy of the panel runs at a time.
 
 The panel checks the hub every 30 seconds while it is closed and every 5 seconds while it is open.
 
 Under the machine tabs, a strip shows how busy the selected machine is in up to four small rows: Processor, Memory, Disk, and Video memory. Disk is the busiest disk, labeled with its mount (for example "Disk C:"), and Video memory is the highest of the machine's graphics cards. Each row has a name, a bar, and a percentage, colored as on the Resources page (see [Reading a meter](#reading-a-meter)): amber with the word "High" at 70 percent and above, and red with "Very high" at 85 percent and above. A reading older than 150 seconds is dimmed, and the strip is labeled as out of date for screen readers. The strip is hidden for a machine the hub has not read yet.
 
 When the pointer rests on the tray icon, the tooltip adds one line for each machine that has a reading, for example "Eru: 12% processor, 38% memory". A Windows tooltip holds at most 127 characters, so a line that would not fit is left out whole. These lines appear only while the hub is reachable.
+
+### Start at login and Quit
+
+The installed panel starts when you sign in and starts again if it crashes. On Windows it registers a per-user scheduled task named "Scout Tray" that runs at logon without admin rights, never starts a second copy, and restarts the panel every minute after a failed exit, up to 999 times. On macOS it writes the LaunchAgent `~/Library/LaunchAgents/dev.neostryder.scout-tray.plist`, which runs at login and restarts the panel after any exit that is not clean, waiting at least 10 seconds between starts. macOS loads the agent at the next login. The panel registers itself each time the installed app starts, and a development build (a cargo debug build or `pnpm --filter @scout/tray dev`) never registers anything.
+
+"Start at login" on the tray icon's right-click menu carries a check mark and is on by default. Uncheck it to remove the scheduled task or LaunchAgent, and the panel saves `autostartDisabled: true` in `config.json` in its config folder. Check it again to register the entry again.
+
+Quit on the same menu opens the panel and asks "Quit Scout?", with the note "The tray stays closed until the next time you sign in." Keep it running has the focus, and Escape does the same thing. Quit Scout exits cleanly, and neither the scheduled task nor the LaunchAgent restarts after a clean exit, so the panel stays closed until your next login or until you start it yourself.
 
 ### Hide rules and pins
 
@@ -404,10 +412,6 @@ pnpm --filter @scout/tray dev
 `build` makes an installer, `exec tauri build --no-bundle` makes only the executable (`src-tauri/target/release/scout-tray.exe` on Windows), and `dev` runs the panel from source. The macOS app is not notarized, so the first time you open it, right-click it and choose Open.
 
 To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui/index.html`. It runs against the mock hub in `packages/tray/dev`.
-
-### Start the panel at login
-
-On Windows, add the panel to the Startup folder. On macOS, add it to Login Items in System Settings.
 
 ### Troubleshooting the panel
 

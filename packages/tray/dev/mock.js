@@ -40,6 +40,7 @@ export async function createMock() {
     set_theme: ({ theme }) => { config = { ...config, theme }; },
     close_panel: () => {},
     open_portal: () => { console.info("open portal"); },
+    quit_app: () => { console.info("quit"); },
     refresh_now: () => emit("snapshot", snapshot()),
     save_config: async ({ hubUrl, clientId, secret }) => {
       if (!hubUrl.startsWith("https://")) throw new Error("the hub address must start with https://");
@@ -94,5 +95,7 @@ export async function createMock() {
       return fn(args);
     },
     listen: async (name, fn) => { listeners.set(name, [...(listeners.get(name) ?? []), fn]); return () => {}; },
+    /** Lets a person or a test fire a shell event, such as confirm-quit, from the browser console. */
+    emit,
   };
 }

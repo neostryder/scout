@@ -1,5 +1,6 @@
 //! Scout's tray and menu bar panel: one icon that shows the worst state across every device, and a panel that lists the services behind it.
 
+pub mod autostart;
 pub mod hub;
 pub mod icon;
 
@@ -10,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::image::Image;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Rect, State, WebviewWindow, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
@@ -341,6 +342,34 @@ fn close_panel(app: AppHandle, shared: State<'_, Handle>) {
 }
 
 #[tauri::command]
+fn quit_app(app: AppHandle) {
+    // A clean exit is not restarted by the login supervisor, so the tray stays closed until the next login.
+    app.exit(0);
+}
+
+/// Registers or removes the login entry on a worker thread, because the scheduler call can take a moment, and remembers the choice.
+fn set_autostart(shared: &Handle, on: bool) {
+    let config = shared.config.lock().ok().map(|mut slot| {
+        slot.autostart_disabled = !on;
+        slot.clone()
+    });
+    let dir = shared.config_dir.clone();
+    if let Some(config) = &config {
+        let _ = hub::save_config(&dir, config);
+    }
+    std::thread::spawn(move || {
+        let result = match (on, std::env::current_exe()) {
+            (true, Ok(exe)) => autostart::enable(&exe, &dir),
+            (true, Err(error)) => Err(error.to_string()),
+            (false, _) => autostart::disable(),
+        };
+        if let Err(message) = result {
+            eprintln!("start at login: {message}");
+        }
+    });
+}
+
+#[tauri::command]
 fn refresh_now(shared: State<'_, Handle>) {
     if let Ok(mut etag) = shared.etag.lock() {
         *etag = None;
@@ -356,7 +385,7 @@ pub fn run() {
                 show_panel(app, &shared, None);
             }
         }))
-        .invoke_handler(tauri::generate_handler![get_snapshot, get_config, get_text, hub_request, save_config, set_theme, open_portal, close_panel, refresh_now])
+        .invoke_handler(tauri::generate_handler![get_snapshot, get_config, get_text, hub_request, save_config, set_theme, open_portal, close_panel, refresh_now, quit_app])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -381,8 +410,11 @@ pub fn run() {
             let handle = app.handle().clone();
             let open_item = MenuItem::with_id(app, "open", shared.line("trayMenuOpenScout"), true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", shared.line("trayMenuSettings"), true, None::<&str>)?;
+            let autostart_off = shared.config.lock().map(|c| c.autostart_disabled).unwrap_or(false);
+            let autostart_item = CheckMenuItem::with_id(app, "autostart", shared.line("trayMenuAutostart"), true, !autostart_off, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", shared.line("trayMenuQuit"), true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open_item, &settings_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&open_item, &settings_item, &autostart_item, &quit_item])?;
+            let toggle_item = autostart_item.clone();
 
             let dark = bar_is_dark(&handle);
             let menu_shared = Arc::clone(&shared);
@@ -400,7 +432,11 @@ pub fn run() {
                         show_panel(app, &menu_shared, None);
                         let _ = app.emit("show-connect", ());
                     }
-                    "quit" => app.exit(0),
+                    "autostart" => set_autostart(&menu_shared, toggle_item.is_checked().unwrap_or(true)),
+                    "quit" => {
+                        show_panel(app, &menu_shared, None);
+                        let _ = app.emit("confirm-quit", ());
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(move |tray, event| {
@@ -418,6 +454,10 @@ pub fn run() {
                         hide_panel(&focus_handle, &focus_shared);
                     }
                 });
+            }
+
+            if !cfg!(debug_assertions) && !autostart_off {
+                set_autostart(&shared, true);
             }
 
             let poll_shared = Arc::clone(&shared);

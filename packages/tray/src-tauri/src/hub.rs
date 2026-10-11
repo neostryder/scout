@@ -18,6 +18,9 @@ pub struct Config {
     /// "system", "dark", or "light"; the panel's own look, not the tray icon's.
     #[serde(default)]
     pub theme: String,
+    /// True once the person turns off Start at login; the tray starts at login until then.
+    #[serde(default)]
+    pub autostart_disabled: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -158,7 +161,7 @@ mod tests {
     fn a_config_round_trips_and_a_missing_one_is_empty() {
         let dir = std::env::temp_dir().join(format!("scout-tray-test-{}", std::process::id()));
         assert_eq!(load_config(&dir), Config::default());
-        let config = Config { hub_url: "https://h.example".into(), client_id: "abc.access".into(), theme: "dark".into() };
+        let config = Config { hub_url: "https://h.example".into(), client_id: "abc.access".into(), theme: "dark".into(), autostart_disabled: false };
         save_config(&dir, &config).unwrap();
         assert_eq!(load_config(&dir), config);
         std::fs::remove_dir_all(&dir).unwrap();
@@ -168,7 +171,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn a_local_hub_answers_the_tray_request() {
-        let config = Config { hub_url: "http://127.0.0.1:4899".into(), client_id: "test.access".into(), theme: String::new() };
+        let config = Config { hub_url: "http://127.0.0.1:4899".into(), client_id: "test.access".into(), theme: String::new(), autostart_disabled: false };
         let client = client();
         let first = request(&client, &config, "secret", "GET", "/api/tray", None, None).await;
         assert_eq!(first.status, 200, "{}", first.body);

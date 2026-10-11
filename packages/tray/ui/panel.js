@@ -37,7 +37,9 @@ const THEMES = ["system", "dark", "light"];
 
 const bridge = await (async () => {
   if (window.__TAURI__) return { invoke: window.__TAURI__.core.invoke, listen: window.__TAURI__.event.listen };
-  return (await import("../dev/mock.js")).createMock();
+  const mock = await (await import("../dev/mock.js")).createMock();
+  window.__scoutMock = mock;
+  return mock;
 })();
 
 const ui = {
@@ -54,6 +56,7 @@ const ui = {
   menu: null,
   toast: null,
   connect: false,
+  quit: false,
 };
 const t = (key, vars) => fill(ui.text[key] ?? key, vars);
 
@@ -229,6 +232,7 @@ function showError(err) {
 }
 
 function render() {
+  if (ui.quit) { renderQuit(); return; }
   if (ui.connect) { renderConnect(); return; }
   const list = h("div", { class: "list" });
   root.replaceChildren(...[header(), tools(), tabBar(), meters(), ...notices(), list, footer(), ui.menu ? menuView() : null, ui.toast ? h("div", { class: "toast", role: "status" }, ui.toast) : null].filter(Boolean));
@@ -334,7 +338,7 @@ async function chooseEntry(entry, row) {
 document.addEventListener("click", (e) => { if (ui.menu && !e.target.closest(".menu")) { ui.menu = null; render(); } });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (ui.menu) { ui.menu = null; render(); } else if (ui.connect && ui.link !== "unconfigured") { ui.connect = false; render(); } else bridge.invoke("close_panel");
+  if (ui.quit) { ui.quit = false; render(); } else if (ui.menu) { ui.menu = null; render(); } else if (ui.connect && ui.link !== "unconfigured") { ui.connect = false; render(); } else bridge.invoke("close_panel");
 });
 
 // ---- connection screen -----------------------------------------------------------
@@ -370,11 +374,22 @@ function renderConnect() {
   hub.focus();
 }
 
+// ---- quit confirmation -----------------------------------------------------------
+
+function renderQuit() {
+  const keep = h("button", { class: "primary", onclick: () => { ui.quit = false; render(); } }, t("quitNo"));
+  root.replaceChildren(h("div", { class: "connect", role: "alertdialog", "aria-labelledby": "quit-title" },
+    h("h1", { id: "quit-title" }, t("quitTitle")), h("p", {}, t("quitBody")),
+    h("div", { class: "buttons" }, keep, h("button", { class: "plain", onclick: () => bridge.invoke("quit_app") }, t("quitYes")))));
+  keep.focus();
+}
+
 // ---- start -----------------------------------------------------------------------
 
 applyTheme();
 await bridge.listen("snapshot", (event) => setSnapshot(event.payload));
 await bridge.listen("show-connect", () => { ui.connect = true; render(); });
-await bridge.listen("panel-open", () => { ui.menu = null; if (!ui.connect) { render(); searchInput?.focus(); } });
+await bridge.listen("confirm-quit", () => { ui.quit = true; render(); });
+await bridge.listen("panel-open", () => { ui.menu = null; if (!ui.connect && !ui.quit) { render(); searchInput?.focus(); } });
 setSnapshot(await bridge.invoke("get_snapshot"));
 if (ui.link === "unconfigured") { ui.connect = true; render(); }
