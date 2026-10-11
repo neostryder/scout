@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The panel reads events and calls the app's own commands.",
+  "windows": ["panel"],
+  "permissions": ["core:default"]
+}

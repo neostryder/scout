@@ -7,3 +7,6 @@ node_modules/
 fixtures/_raw/
 /machines.json
 /access.json
+target/
+packages/tray/src-tauri/gen/
+packages/tray/src-tauri/icon-source.png
