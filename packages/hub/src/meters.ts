@@ -13,6 +13,8 @@ export interface MeterScheduleOptions {
   cycle?: typeof runMeterCycle;
   cycleOptions?: MeterCycleOptions;
   log?: (line: string) => void;
+  /** Runs after every cycle, such as the meter alerts. A failure is logged and never stops the schedule. */
+  afterCycle?: () => Promise<unknown> | void;
 }
 
 const CLOCK: LiveClock = {
@@ -92,6 +94,7 @@ export class MeterSchedule {
   private async execute(): Promise<void> {
     try {
       await (this.options.cycle ?? runMeterCycle)(this.db, this.options.machines(), { ...this.options.cycleOptions, now: () => new Date(this.clock.now()).toISOString(), ...(this.options.log ? { log: this.options.log } : {}) });
+      try { await this.options.afterCycle?.(); } catch { (this.options.log ?? console.error)("Meter alerts failed; the next cycle will retry."); }
     } catch { (this.options.log ?? console.error)("Meter cycle failed; the next cycle will retry."); }
     finally { this.running = false; this.arm(); }
   }

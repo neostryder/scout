@@ -108,3 +108,27 @@ export function machineTone(machine) {
 
 /** Polling interval for the view: the hub's stated cadence, never faster than 5 s. */
 export function pollMs(intervalSeconds) { return Math.max(5, Number.isFinite(intervalSeconds) ? intervalSeconds : 10) * 1000; }
+
+export const ALERT_KINDS = [
+  { key: "disk", label: "Disk", hint: "Any disk on any machine" },
+  { key: "memory", label: "Memory", hint: "Memory in use on each machine" },
+  { key: "vram", label: "Video memory", hint: "Each graphics card" },
+];
+
+/** The rows of the alert settings: one per meter, with the saved rule. */
+export function alertRows(settings) {
+  return ALERT_KINDS.map((kind) => ({ ...kind, enabled: settings?.[kind.key]?.enabled !== false, pct: settings?.[kind.key]?.pct ?? 90, minutes: settings?.[kind.key]?.minutes ?? 5 }));
+}
+
+/** The body to save from the edited fields. A value that is not a number is sent as NaN-free null so the hub's check names the field. */
+export function alertEdit(fields) {
+  const number = (value) => (value === "" || value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value));
+  return Object.fromEntries(fields.map((field) => [field.key, { enabled: Boolean(field.enabled), pct: number(field.pct), minutes: number(field.minutes) }]));
+}
+
+/** One line for an alert that is up: where, which meter, how high, and for how long. */
+export function activeAlertText(alert, machineName, nowMs) {
+  const minutes = Math.max(0, Math.round((nowMs - Date.parse(alert.since)) / 60_000));
+  const length = minutes < 1 ? "just now" : minutes < 90 ? `for ${minutes} min` : `for ${Math.round(minutes / 60)} h`;
+  return `${machineName}: ${alert.label} at ${alert.pct}%, ${length}`;
+}

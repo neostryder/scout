@@ -304,6 +304,20 @@ meters bilbo       failed  (The meter read failed (exit 255).)
 
 Each read has a 45 second limit. The usual causes are that ssh cannot reach the machine, the machine is asleep, or the read ran past that limit. Windows OpenSSH sometimes exits with a crash status such as 3221226356 (0xC0000374) after printing a full reading, and that reading still counts. Only empty or cut-off output counts as a failed read.
 
+### Meter alerts
+
+The hub sends a notice when a disk is nearly full, memory is under pressure, or video memory is nearly used up. Each of the three rules has an on/off switch, a percentage, and a number of minutes, and a notice goes out once a meter has stayed at or over that percentage for that many minutes. The defaults are:
+
+- Disk: 90 percent for 5 minutes, for every disk on every machine, with each disk as its own alert.
+- Memory: 92 percent for 10 minutes, for each machine.
+- Video memory: 95 percent for 10 minutes, for each graphics card with a video memory reading.
+
+Each episode sends one notice, with no repeats while the meter stays high, and a reading under the threshold before the minutes pass starts the count again. The alert clears when the meter falls to 5 points under the threshold or lower, and one "back to normal" notice follows. A dip that stays inside that 5-point margin neither clears the alert nor restarts the count. Turning a rule off while one of its alerts is up sends one closing notice. Notices go to the same channels as outage notices (see [Notices](#notices)): a desktop notification on the hub machine, and a Discord post when the webhook is set up. A raised alert is a high-severity notice, and a clearing notice is info.
+
+To change the rules, open the Alerts section under the machine cards on the Resources page. It is closed by default, and its title shows how many alerts are up, as in "Alerts (2 up)". Each rule has a row with a checkbox, an "At or over" percent from 50 to 100, and a "For" time in whole minutes from 0 to 1440, where 0 alerts on the first reading. Below the rows are the alerts that are up ("No meter is over its threshold." when there are none), the Save alerts button, and a line saying where notices go. The same settings live in `.scout-data/meter-alerts.json` on the hub machine, which you can edit by hand. It holds `disk`, `memory`, and `vram`, each with `enabled`, `pct`, and `minutes`. Without the file the defaults apply, and when the file is malformed the defaults apply and the Alerts section shows a warning.
+
+A machine whose reading is older than 150 seconds is skipped, so a machine that cannot be read raises and clears nothing. The hub keeps alert state in memory, so after a restart the count starts over, and a meter still over its threshold alerts again after its minutes. Turning metering off with `--no-meters`, or turning live reads off, turns the alerts off too.
+
 ## Provenance flags
 
 The page shows small flags beside installs, services, and listeners. Hover over a flag to see the evidence behind it, or open the detail panel, where the Provenance list shows the same evidence. There are four kinds:

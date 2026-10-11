@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { bytesText, rateText, pctText, meterTone, toneWord, ageText, isStale, sparkSegments, meterRows, topRows, summaryText, machineTone, pollMs } = await import(new URL("../public/resources-model.js", import.meta.url).href);
+const { bytesText, rateText, pctText, meterTone, toneWord, ageText, isStale, sparkSegments, meterRows, topRows, summaryText, machineTone, pollMs, alertRows, alertEdit, activeAlertText } = await import(new URL("../public/resources-model.js", import.meta.url).href);
 
 const GIB = 1_073_741_824;
 const machine = {
@@ -79,4 +79,17 @@ test("the summary and machine tone name the numbers and the worst meter", () => 
 
 test("polling follows the hub's cadence and never runs faster than every 5 seconds", () => {
   assert.deepEqual([10, 60, 1, undefined].map(pollMs), [10_000, 60_000, 5_000, 10_000]);
+});
+
+test("alert rows list the three meters with the saved rule, and an edit sends numbers or null", () => {
+  const rows = alertRows({ disk: { enabled: true, pct: 90, minutes: 5 }, memory: { enabled: false, pct: 88, minutes: 3 }, vram: { enabled: true, pct: 95, minutes: 10 } });
+  assert.deepEqual(rows.map((r: any) => [r.key, r.label, r.enabled, r.pct, r.minutes]), [["disk", "Disk", true, 90, 5], ["memory", "Memory", false, 88, 3], ["vram", "Video memory", true, 95, 10]]);
+  assert.equal(alertRows(undefined).length, 3);
+  assert.deepEqual(alertEdit([{ key: "disk", enabled: true, pct: "85", minutes: "0" }, { key: "memory", enabled: false, pct: "abc", minutes: "" }]), { disk: { enabled: true, pct: 85, minutes: 0 }, memory: { enabled: false, pct: null, minutes: null } });
+});
+
+test("an alert that is up reads as machine, meter, level, and how long", () => {
+  const now = Date.parse("2026-10-11T12:30:00.000Z");
+  assert.equal(activeAlertText({ label: "disk D:", pct: 93, since: "2026-10-11T12:18:00.000Z" }, "Eru", now), "Eru: disk D: at 93%, for 12 min");
+  assert.equal(activeAlertText({ label: "memory", pct: 95, since: "2026-10-11T12:29:50.000Z" }, "Bilbo", now), "Bilbo: memory at 95%, just now");
 });

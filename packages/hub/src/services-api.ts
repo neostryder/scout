@@ -440,7 +440,7 @@ function openStream(req: IncomingMessage, res: ServerResponse, db: Db, live: Liv
   write(`event: hello\ndata: ${JSON.stringify({ machines: helloMachines(db, live), edge: edgeHello(db, cloudflare), describe: descriptions?.status() ?? idleDescriptionStatus(), actions: { running: control?.runner?.running() ?? 0 }, recipes: (({ proposed, approved }) => ({ proposed, approved }))(recipesResponse(db).counts), stacks: registries?.stacks.summary() ?? { total: 0, running: 0 }, alerts: { open: summary.open, high: summary.high }, health: healthSummary(db, new Date().toISOString(), alerts?.options().tunnelHosts) })}\n\n`);
 }
 
-async function readJson(req: IncomingMessage, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson): Promise<Record<string, unknown> | undefined> {
+export async function readJson(req: IncomingMessage, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson): Promise<Record<string, unknown> | undefined> {
   const origin = req.headers.origin;
   if (origin !== undefined && !hostAllowed(URL.canParse(origin) ? new URL(origin).host : undefined)) {
     json(res, 403, { error: "cross-origin request refused" });

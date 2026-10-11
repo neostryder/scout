@@ -15,13 +15,14 @@ import type { CloudflareSchedule } from "./cloudflare.ts";
 import type { LiveSchedule } from "./live.ts";
 import { routesApi } from "./routes-api.ts";
 import type { ResearchSchedule } from "./schedule.ts";
-import { servicesApi } from "./services-api.ts";
+import { readJson, servicesApi } from "./services-api.ts";
 import type { DescriptionRun } from "./descriptions.ts";
 import { HubRecipes } from "./recipes.ts";
 import type { Project } from "@scout/core";
 import { HubAlerts, type HubAlertOptions } from "./alerts.ts";
 import { HealthSchedule, type HealthScheduleOptions } from "./health.ts";
 import type { MeterSchedule } from "./meters.ts";
+import type { HubMeterAlerts } from "./meter-alerts.ts";
 import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import { HubStacks } from "./stacks.ts";
@@ -77,6 +78,8 @@ export interface HubOptions {
   health?: HealthScheduleOptions | false;
   /** Samples machine resources for /api/resources. Off when omitted. */
   meters?: MeterSchedule;
+  /** The quiet meter alerts: their settings and the alerts that are up. Omit it and the settings route answers 404. */
+  meterAlerts?: HubMeterAlerts;
   /** Outage watch: machine, web address and service checks, notices and the heartbeat. Omit it and the outage routes answer with an empty, read-only record. */
   watch?: HubWatch;
   /** Heartbeat comment interval for /api/services/live. Tests pass a short one. */
@@ -212,6 +215,15 @@ export function createHub(options: HubOptions): Server {
     }
     const url = new URL(req.url ?? "/", "http://localhost");
     if (url.pathname === "/api/tray" || url.pathname.startsWith("/api/tray/")) return trayApi(db, req, url, res, hostAllowed, json, { rulesPath: trayPath, read: trayFile, stacks: () => stacks.response().stacks, provenance, live: options.live, control: { context: () => control.context() } });
+    if (url.pathname === "/api/resources/alerts") {
+      if (!options.meterAlerts) return json(res, 404, { error: "meter alerts are off" });
+      if (req.method === "POST") {
+        const body = await readJson(req, res, hostAllowed, json);
+        if (!body) return;
+        try { return json(res, 200, options.meterAlerts.update(body)); } catch (error) { return json(res, 400, { error: (error as Error).message }); }
+      }
+      return json(res, 200, options.meterAlerts.status());
+    }
     if (url.pathname === "/api/filters" || url.pathname.startsWith("/api/filters/")) return filtersApi(db, req, url, res, hostAllowed, json);
     // Refresh is a POST. The generic POST handler answers every other post it does not know with "read only".
     if (url.pathname === "/api/services/routes" || url.pathname === "/api/services/routes/overview" || url.pathname === "/api/services/routes/refresh") {

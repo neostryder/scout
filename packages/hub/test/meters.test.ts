@@ -1,7 +1,11 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { openCatalog, recordMeterReading, upsertMachine } from "@scout/core";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { meterAlertsFileReader, openCatalog, recordMeterReading, upsertMachine } from "@scout/core";
+import { HubMeterAlerts } from "../src/meter-alerts.ts";
 import { METER_ACTIVE_SECONDS, METER_ACTIVE_WINDOW_MS, METER_IDLE_SECONDS, MeterSchedule } from "../src/meters.ts";
 import { createHub } from "../src/server.ts";
 import type { LiveClock } from "../src/live.ts";
@@ -99,4 +103,52 @@ test("/api/resources returns the newest sample per machine and pulls the schedul
   assert.deepEqual(body.machines.map((m) => [m.name, m.cpuPct, m.mem.pct]), [["Eru", 20, 50]]);
   assert.equal(body.intervalSeconds, METER_ACTIVE_SECONDS);
   assert.equal(touched, 1);
+});
+
+test("the schedule runs the after-cycle hook each cycle, and a failing hook does not stop the next cycle", async (t: TestContext) => {
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  const clock = new FakeClock();
+  const logs: string[] = [];
+  let hooks = 0;
+  const schedule = new MeterSchedule(db, { machines: () => [], clock, log: (line) => logs.push(line), cycle: async () => [], afterCycle: async () => { hooks++; throw new Error("boom"); } });
+  t.after(() => schedule.stop());
+  schedule.start();
+  await settle();
+  await clock.advance(60_000);
+  assert.equal(hooks, 2);
+  assert.deepEqual(logs, ["Meter alerts failed; the next cycle will retry.", "Meter alerts failed; the next cycle will retry."]);
+});
+
+test("/api/resources/alerts reads and saves the rules, refuses a bad edit, and check() sends one notice per raised alert", async (t: TestContext) => {
+  const db = openCatalog(":memory:");
+  upsertMachine(db, { id: "hub", name: "Eru", os: "windows", kind: "host" });
+  const dir = mkdtempSync(join(tmpdir(), "scout-hub-meter-alerts-"));
+  const path = join(dir, "meter-alerts.json");
+  const sent: { title: string }[] = [];
+  const now = Date.now();
+  const alerts = new HubMeterAlerts(db, { settings: meterAlertsFileReader(path), path, notifier: { send: async (notice) => { sent.push(notice); return []; }, channels: () => ({ discord: false, desktop: true }) }, now: () => now });
+  const server = createHub({ db, webRoot: ".", meterAlerts: alerts });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.close(); db.close(); rmSync(dir, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/resources/alerts`;
+  const post = (body: unknown) => fetch(base, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  const first = await (await fetch(base)).json() as { settings: { memory: { pct: number } }; channels: { desktop: boolean }; active: unknown[] };
+  assert.equal(first.settings.memory.pct, 92);
+  assert.equal(first.channels.desktop, true);
+  assert.deepEqual(first.active, []);
+
+  const saved = await post({ memory: { pct: 80, minutes: 0 } });
+  assert.equal(saved.status, 200);
+  assert.equal(((await saved.json()) as { settings: { memory: { pct: number } } }).settings.memory.pct, 80);
+  assert.equal(JSON.parse(readFileSync(path, "utf8")).memory.pct, 80);
+  assert.equal((await post({ memory: { pct: 10 } })).status, 400);
+  assert.equal((await fetch(base, { method: "POST", body: "{}" })).status, 415);
+
+  recordMeterReading(db, "hub", { cpuPct: 5, memUsedBytes: 90, memTotalBytes: 100, disks: [], gpus: [], netRxBytes: null, netTxBytes: null, processes: [] }, new Date(now).toISOString());
+  assert.deepEqual((await alerts.check()).map((n) => n.title), ["Eru: memory is at 90%"]);
+  assert.deepEqual(sent.map((n) => n.title), ["Eru: memory is at 90%"]);
+  assert.deepEqual(await alerts.check(), []);
+  assert.equal(alerts.status().active.length, 1);
 });
