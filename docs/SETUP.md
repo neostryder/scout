@@ -178,6 +178,8 @@ To set it up:
 
 4. Start the hub with `pnpm --filter @scout/hub start:production`. That runs `--production --schedule-models`, and production mode turns on the live reads and scheduled lookups as well.
 
+5. To let a phone or an installer save the page as an app with its icon, add a second self-hosted Access application for the same hostname with the action Bypass and these paths as its destinations: `/manifest.webmanifest`, `/icon.svg`, `/icon-192.png`, `/icon-512.png`, `/icon-maskable-512.png`, `/apple-touch-icon.png`, and `/favicon-32.png`. Installers fetch those files without your sign-in. The hub serves exactly those paths to a GET without a token, and every other path still needs one.
+
 In production mode, http://127.0.0.1:4870/ answers `421 misdirected request`. Use the public hostname.
 
 ## Optional integrations

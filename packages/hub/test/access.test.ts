@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { request } from "node:http";
 import { openCatalog } from "@scout/core";
-import { certsKeySource, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type Jwk, type KeySource } from "../src/access.ts";
+import { certsKeySource, isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type Jwk, type KeySource } from "../src/access.ts";
 import { createHub } from "../src/server.ts";
 
 const config: AccessConfig = { host: "scout.example.test", teamDomain: "team.example.test", aud: "aud-tag-1", allowedEmails: ["user@example.test"], allowedServiceTokens: ["tray-eru.access"] };
@@ -137,6 +137,20 @@ test("in production mode the hub answers the public host only, and only with a v
   assert.equal(ok.status, 200);
   assert.ok(JSON.parse(ok.body).installs === 0);
   assert.ok(log.some((l) => l.includes("no Access token")));
+});
+
+test("only the install icons and the manifest are served without a token, to a GET on the public host", async () => {
+  writeFileSync(join(dir, "icon-192.png"), "png");
+  const host = { host: config.host };
+  assert.equal((await call("GET", "/icon-192.png", host)).status, 200);
+  assert.equal((await call("GET", "/icon-192.png", { host: "127.0.0.1" })).status, 421);
+  assert.equal((await call("POST", "/icon-192.png", host)).status, 403);
+  assert.equal((await call("GET", "/icon-192.png/../index.html", host)).status, 403);
+  assert.equal((await call("GET", "/index.html", host)).status, 403);
+  assert.equal((await call("GET", "/icon-192.png.bak", host)).status, 403);
+  assert.equal(isPublicInstallAsset("GET", "/manifest.webmanifest"), true);
+  assert.equal(isPublicInstallAsset("HEAD", "/manifest.webmanifest"), false);
+  assert.equal(isPublicInstallAsset("GET", "/api/summary"), false);
 });
 
 test("a decision post needs the token and an origin on the public host", async () => {

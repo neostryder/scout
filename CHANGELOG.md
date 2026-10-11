@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- [Visible] [UI] **Saving the portal as an app on a phone keeps its icon.** The icons and the manifest were behind the Cloudflare Access sign-in, so an installer that fetches them without your session got a login page. They now load without one, from a bypass rule that names those seven paths, and the hub serves only those paths without a token.
+
 ## [0.1.0] - 2026-10-11
 
 ### Added

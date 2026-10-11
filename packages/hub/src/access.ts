@@ -117,6 +117,16 @@ export async function verifyAccessJwt(token: string | undefined, config: AccessC
   return { ok: true, claims: { email, sub, exp } };
 }
 
+/**
+ * The files a browser or an installer fetches without a sign-in when it saves the page as an app. Cloudflare Access lets exactly these paths through unauthenticated (a bypass rule scoped to each path), so the hub serves them
+ * without a token too. Nothing else is public, and only a GET reaches them.
+ */
+const PUBLIC_INSTALL_PATHS = new Set(["/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png", "/favicon-32.png"]);
+
+export function isPublicInstallAsset(method: string | undefined, pathname: string): boolean {
+  return method === "GET" && PUBLIC_INSTALL_PATHS.has(pathname);
+}
+
 /** A service token reaches only the tray panel's own endpoints, the plan and run steps of a control action, and the action log it reads the result from. Nothing else. */
 export function serviceTokenMayReach(method: string | undefined, pathname: string): boolean {
   if (pathname === "/api/tray" || pathname.startsWith("/api/tray/")) return true;

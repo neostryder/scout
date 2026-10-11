@@ -5,7 +5,7 @@ import { hubMachineId, resourcesResponse, changelogSummaryFor, mineFileReader, t
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { trayApi } from "./tray-api.ts";
-import { serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
+import { isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
 import { ControlRunner, Runner, runHealthCycle, subscribeServiceReads, type ControlRunnerDeps, type RunnerDeps } from "@scout/ops";
 import { createDownloadJobsResponse, createJobsResponse, jobResponse, planResponse } from "./jobs-api.ts";
@@ -206,7 +206,7 @@ export function createHub(options: HubOptions): Server {
   const hostAllowed = (host: string | undefined): boolean => (access ? host === access.config.host : isLoopbackHost(host));
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (!hostAllowed(req.headers.host)) return send(res, 421, "misdirected request", "text/plain");
-    if (access) {
+    if (access && !isPublicInstallAsset(req.method, new URL(req.url ?? "/", "http://localhost").pathname)) {
       const header = req.headers["cf-access-jwt-assertion"];
       const checked = await verifyAccessJwt(Array.isArray(header) ? header[0] : header, access.config, access.keys);
       if (!checked.ok) {
