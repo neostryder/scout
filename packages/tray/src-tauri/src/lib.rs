@@ -115,13 +115,15 @@ fn icon_for(link: Link, body: Option<&str>) -> (IconState, usize) {
     }
 }
 
-/// One short line per machine with a reading, such as "Eru: 12% processor, 38% memory". Whole lines are dropped to stay inside the 127-character limit of a Windows tooltip.
-fn meter_lines(template: &str, body: Option<&str>, room: usize) -> String {
+/// One short line per machine with a reading, such as "Eru 12% CPU 38% RAM 20% VRAM". `vram_template` stands in for `{vram}` on a machine that has video memory, and is dropped on one that does not.
+/// Whole lines are dropped to stay inside the 127-character limit of a Windows tooltip.
+fn meter_lines(template: &str, vram_template: &str, body: Option<&str>, room: usize) -> String {
     let Some(value) = body.and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok()) else { return String::new() };
     let mut out = String::new();
     for machine in value["machines"].as_array().into_iter().flatten() {
         let (Some(name), Some(cpu), Some(mem)) = (machine["name"].as_str(), machine["meters"]["cpuPct"].as_f64(), machine["meters"]["memPct"].as_f64()) else { continue };
-        let line = template.replace("{name}", name).replace("{cpu}", &format!("{:.0}", cpu)).replace("{mem}", &format!("{:.0}", mem));
+        let vram = machine["meters"]["vramPct"].as_f64().map(|v| vram_template.replace("{vram}", &format!("{:.0}", v))).unwrap_or_default();
+        let line = template.replace("{name}", name).replace("{cpu}", &format!("{:.0}", cpu)).replace("{mem}", &format!("{:.0}", mem)).replace("{vram}", &vram);
         if out.chars().count() + 1 + line.chars().count() > room {
             break;
         }
@@ -146,8 +148,8 @@ fn paint(app: &AppHandle, shared: &Shared, snapshot: &Snapshot) {
     let dark = bar_is_dark(app);
     let mut tip = tooltip(shared, snapshot.link, state, n);
     if snapshot.link == Link::Ok {
-        let room = 120usize.saturating_sub(tip.chars().count());
-        tip.push_str(&meter_lines(&shared.line("tipMeters"), snapshot.body.as_deref(), room));
+        let room = 126usize.saturating_sub(tip.chars().count());
+        tip.push_str(&meter_lines(&shared.line("tipMeters"), &shared.line("tipMetersVram"), snapshot.body.as_deref(), room));
     }
     let wanted = (state, dark, tip.clone());
     let Ok(mut shown) = shared.shown.lock() else { return };
@@ -491,25 +493,27 @@ fn open_portal_inner(app: &AppHandle, shared: &Handle) -> Result<(), String> {
 mod tests {
     use super::meter_lines;
 
-    const BODY: &str = r#"{"machines":[{"name":"Eru","meters":{"cpuPct":12.4,"memPct":38.2}},{"name":"Bilbo","meters":null},{"name":"Stacks","meters":null},{"name":"Gamemaster","meters":{"cpuPct":62,"memPct":74}}]}"#;
+    const T: &str = "{name} {cpu}% CPU {mem}% RAM{vram}";
+    const V: &str = " {vram}% VRAM";
+    const BODY: &str = r#"{"machines":[{"name":"Eru","meters":{"cpuPct":12.4,"memPct":38.2,"vramPct":20.4}},{"name":"Bilbo","meters":null},{"name":"Stacks","meters":null},{"name":"Gamemaster","meters":{"cpuPct":62,"memPct":74,"vramPct":null}}]}"#;
 
     #[test]
-    fn one_line_per_machine_with_a_reading() {
-        assert_eq!(meter_lines("{name}: {cpu}% processor, {mem}% memory", Some(BODY), 200), "
-Eru: 12% processor, 38% memory
-Gamemaster: 62% processor, 74% memory");
+    fn one_line_per_machine_with_a_reading_and_video_memory_where_there_is_some() {
+        assert_eq!(meter_lines(T, V, Some(BODY), 200), "
+Eru 12% CPU 38% RAM 20% VRAM
+Gamemaster 62% CPU 74% RAM");
     }
 
     #[test]
     fn whole_lines_are_dropped_when_there_is_no_room() {
-        assert_eq!(meter_lines("{name}: {cpu}% processor, {mem}% memory", Some(BODY), 40), "
-Eru: 12% processor, 38% memory");
-        assert_eq!(meter_lines("{name}: {cpu}%", Some(BODY), 3), "");
+        assert_eq!(meter_lines(T, V, Some(BODY), 40), "
+Eru 12% CPU 38% RAM 20% VRAM");
+        assert_eq!(meter_lines(T, V, Some(BODY), 3), "");
     }
 
     #[test]
     fn no_body_or_unreadable_body_adds_nothing() {
-        assert_eq!(meter_lines("{name}", None, 100), "");
-        assert_eq!(meter_lines("{name}", Some("not json"), 100), "");
+        assert_eq!(meter_lines("{name}", V, None, 100), "");
+        assert_eq!(meter_lines("{name}", V, Some("not json"), 100), "");
     }
 }

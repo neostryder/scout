@@ -372,7 +372,7 @@ The panel checks the hub every 30 seconds while it is closed and every 5 seconds
 
 Under the machine tabs, a strip shows how busy the selected machine is in up to four small rows: Processor, Memory, Disk, and Video memory. Disk is the busiest disk, labeled with its mount (for example "Disk C:"), and Video memory is the highest of the machine's graphics cards. Each row has a name, a bar, and a percentage, colored as on the Resources page (see [Reading a meter](#reading-a-meter)): amber with the word "High" at 70 percent and above, and red with "Very high" at 85 percent and above. A reading older than 150 seconds is dimmed, and the strip is labeled as out of date for screen readers. The strip is hidden for a machine the hub has not read yet.
 
-When the pointer rests on the tray icon, the tooltip adds one line for each machine that has a reading, for example "Eru: 12% processor, 38% memory". A Windows tooltip holds at most 127 characters, so a line that would not fit is left out whole. These lines appear only while the hub is reachable.
+When the pointer rests on the tray icon, the tooltip adds one line for each machine that has a reading, for example "Eru 12% CPU 38% RAM 20% VRAM". The VRAM figure appears only for a machine with a graphics card that reports video memory. A Windows tooltip holds at most 127 characters, so a line that would not fit is left out whole. These lines appear only while the hub is reachable.
 
 ### Start at login and Quit
 
