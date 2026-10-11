@@ -175,6 +175,11 @@ test("runtime listeners carry the script they run and nothing else from the comm
   assert.equal(win.facts[0]!.scriptPath, "C:/Repositories/ark-overseer/dist/index.js");
   assert.equal("scriptPath" in win.facts[1]!, false);
 
+  const wrapped = { address: "::", port: 3310, pid: 26536, name: "node", path: String.raw`C:\ProgramData\ARK Overseer\runtime\node\node.exe`, cmd: String.raw`"C:\ProgramData\ARK Overseer\runtime\node\node.exe" "C:\ProgramData\ARK Overseer\app\src\main.js"`, cwd: null };
+  const service = windowsListenersAdapter.parse({ listeners: output(JSON.stringify([wrapped])) });
+  assert.equal(service.status, "ok");
+  assert.equal(service.facts[0]!.scriptPath, "C:/ProgramData/ARK Overseer/app/src/main.js");
+
   const mac = macListenersAdapter.parse({ listeners: output("p42\ncnode\nn127.0.0.1:8787\n---SCOUT-PS---\n42 /opt/homebrew/bin/node\n---SCOUT-ARGS---\n42 /opt/homebrew/bin/node /Users/me/proj/dist/worker.js --secret x\n") });
   assert.equal(mac.status, "ok");
   assert.equal(mac.facts[0]!.scriptPath, "/Users/USER/proj/dist/worker.js");

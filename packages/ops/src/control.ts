@@ -436,7 +436,10 @@ export class ControlRunner extends EventEmitter {
       notifyServiceRead(this.db, machine.id, new Date(this.clock.now()).toISOString());
     } else {
       const os = machine.os ?? (row.kind === "windows-service" || row.machineId === hubMachineId() ? "windows" : "macos");
-      const result = await readLive(this.db, { ...machine, os }, { cheapTimeoutMs: timeoutMs, run: (transport, probe) => this.exec(transport, probe.argv, remaining()) });
+      const readOnce = (): Promise<Awaited<ReturnType<typeof readLive>>> => readLive(this.db, { ...machine, os }, { cheapTimeoutMs: timeoutMs, run: (transport, probe) => this.exec(transport, probe.argv, remaining()) });
+      let result = await readOnce();
+      // A single slow or dropped probe makes the read partial; one more pass separates that from a machine that is really unreachable.
+      if (result.status !== "ok" && until - this.clock.now() > 5_000) result = await readOnce();
       if (result.status !== "ok") throw new Error("The machine state could not be read.");
       if (row.kind === "launchd" && row.domain === "gui" && row.uid == null) {
         const uid = await this.exec(machine.transport, ["id", "-u"], remaining());

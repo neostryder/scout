@@ -3,7 +3,11 @@ $runtime = '^(node|nodejs|bun|deno|python[0-9.]*|pythonw|ruby|java|javaw|php|per
 $procs = @{}
 Get-Process | ForEach-Object { $procs[[int]$_.Id] = $_ }
 $cmds = @{}
-Get-CimInstance Win32_Process | ForEach-Object { $cmds[[int]$_.ProcessId] = $_.CommandLine }
+$parents = @{}
+Get-CimInstance Win32_Process | ForEach-Object { $cmds[[int]$_.ProcessId] = $_.CommandLine; $parents[[int]$_.ProcessId] = [int]$_.ParentProcessId }
+# An elevated process hides its path and command line from this session. A wrapper service (shawl, for one) names the real command after a bare "--", and the service table is readable, so read it from the parent service.
+$wrapped = @{}
+Get-CimInstance Win32_Service | ForEach-Object { if ($_.ProcessId -and $_.PathName -match '\s--\s+(.+)$') { $wrapped[[int]$_.ProcessId] = $Matches[1] } }
 $listen = @(Get-NetTCPConnection -State Listen)
 if ($listen | Where-Object { $procs[[int]$_.OwningProcess].ProcessName -match $runtime }) {
   Add-Type -TypeDefinition @'
@@ -39,9 +43,14 @@ $listen | ForEach-Object {
   $p = $procs[[int]$_.OwningProcess]
   $cmd = $null
   $cwd = $null
+  $path = $p.Path
   if ($p.ProcessName -match $runtime) {
     $cmd = $cmds[[int]$_.OwningProcess]
     if ($cmd) { $cwd = [ScoutCwd]::Get([int]$_.OwningProcess) }
+    if (-not $cmd -and -not $path) {
+      $via = $wrapped[$parents[[int]$_.OwningProcess]]
+      if ($via) { $cmd = $via; if ($via -match '^"([^"]+)"') { $path = $Matches[1] } elseif ($via -match '^(\S+)') { $path = $Matches[1] } }
+    }
   }
-  [pscustomobject]@{ address = $_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess; name = $p.ProcessName; path = $p.Path; cmd = $cmd; cwd = $cwd }
+  [pscustomobject]@{ address = $_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess; name = $p.ProcessName; path = $path; cmd = $cmd; cwd = $cwd }
 } | ConvertTo-Json -Compress

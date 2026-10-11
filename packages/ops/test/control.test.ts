@@ -390,6 +390,25 @@ test("the default launchd reader records a missing uid before planning a gui com
   assert.equal(calls.some((argv) => argv[0] === "launchctl"), false);
 });
 
+test("the default reader retries one partial pass before refusing a machine", async (t) => {
+  let dropped = false;
+  const flakyExec = async (_m: unknown, argv: string[]) => {
+    if (argv[0] === "id") return { exitCode: 0, stdout: "501\n", stderr: "" };
+    const script = argv.join(" ");
+    if (script.includes("SCOUT-SYSTEM")) {
+      if (!dropped) { dropped = true; return { exitCode: 255, stdout: "", stderr: "ssh: connection reset" }; }
+      return { exitCode: 0, stdout: "---SCOUT-SYSTEM---\n---SCOUT-GUI---\n734 0\tcom.example.worker\n---SCOUT-DISABLED-SYSTEM---\n---SCOUT-DISABLED-GUI---\n", stderr: "" };
+    }
+    if (script.includes("SCOUT-PS")) return { exitCode: 0, stdout: "---SCOUT-PS---\n", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  };
+  const flaky = seed(t, { kind: "launchd", name: "com.example.worker", domain: "gui", program: null });
+  allowed(await new ControlRunner(flaky.db, { machines: [mac], clock: new Clock(), exec: flakyExec }).plan("service", flaky.id, "stop"));
+  const down = seed(t, { kind: "launchd", name: "com.example.worker", domain: "gui", program: null });
+  const dead = new ControlRunner(down.db, { machines: [mac], clock: new Clock(), exec: async () => ({ exitCode: 255, stdout: "", stderr: "" }) });
+  assert.equal((await dead.plan("service", down.id, "stop"))!.refusalKind, "unavailable");
+});
+
 test("reader failures, prompt-command timeouts and subscriber errors keep plain audit outcomes", async (t) => {
   const { db, id } = seed(t, { domain: "system" });
   const unavailable = runner(db, { reader: async () => { throw new Error("private-output"); } });

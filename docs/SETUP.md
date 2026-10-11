@@ -416,17 +416,17 @@ The agent starts the server on the hub machine and talks to it over standard inp
 
 ### What an agent can do
 
-An agent can read what the commands above show, plus your services with their ids, ports, protection, and available actions, filtered by machine, state, or name. It can also read outages, alerts, the port registry, and the log of every start, stop, restart, disable, and enable. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, and `scout_action_log`.
+An agent can read everything the commands above show. It can also list your services with their ids, ports, protection, and available actions, filtered by machine, state, or name, and it can read outages, alerts, the port registry, and the log of every start, stop, restart, disable, and enable. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, and `scout_action_log`.
 
-`scout_start_service` starts a stopped service or listener. Scout plans the start, runs it if the plan is allowed, and reports the result, with the same checks, one-time token, and audit log as the page and the tray panel. It refuses a service that is already running or protected and says why. If the start needs admin rights, the agent gets the sudo command to run, or a note to approve the prompt on that machine.
+The one thing an agent can change is starting a stopped service or listener, with `scout_start_service`. Scout plans the start, runs it if the plan allows it, and reports back, using the same checks, one-time token, and audit log as the Scout page and the tray panel. If the service is already running or is protected, Scout refuses and gives the reason. When the start needs admin rights, the agent gets back the sudo command to run, or a note to approve the prompt on that machine.
 
-An agent cannot stop, restart, disable, or enable anything, and `scout_start_service` only starts. With `scout_plan_action` it can ask what a start, stop, restart, disable, or enable would do, whether it is allowed, and what would break, but it never gets the token needed to run it. To stop, restart, disable, or enable, use the Scout page, the tray panel, or the CLI:
+An agent cannot stop, restart, disable, or enable anything. It can call `scout_plan_action` to learn what a start, stop, restart, disable, or enable would do, whether that action is allowed, and what it would break, but the agent never gets the token needed to run it. For those actions, use the Scout page, the tray panel, or the CLI:
 
 ```
 node packages/cli/src/main.ts control run <service|listener> <id> <stop|restart|disable|enable> --yes
 ```
 
-Protected services (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop, Restart, or Disable anywhere. Enable is always allowed, and a disabled service has to be enabled before it can start. On the Services page, Disable and Enable sit in the row's Actions section next to the other buttons.
+Protected services never offer Stop, Restart, or Disable anywhere in Scout. They include ssh, remote access, the tunnel, Scout itself, and DNS and network software. Enable is always allowed, and a disabled service has to be enabled before it can start. On the Services page, Disable and Enable are in the row's Actions section with the other buttons.
 
 ### Who can use it
 
@@ -454,7 +454,7 @@ The page and the CLI write most of these for you. Back up `.scout-data` to keep 
 
 ## Run the hub at login
 
-On Windows, `tools/run-hub.ps1` runs the hub in production mode, appends its output to `.scout-data/hub.log`, and restarts it 10 seconds after any exit. Extra arguments are passed to the hub. Register it as a logon task from a `pwsh` window run as administrator, using the full path to `pwsh.exe` (a scheduled task does not see your shell's PATH):
+On Windows, `tools/run-hub.ps1` runs the hub in production mode, appends its output to `.scout-data/hub.log`, and restarts the hub 10 seconds after any exit. Any extra arguments go to the hub. To start it at logon, register the script as a scheduled task from a `pwsh` window run as administrator. Give the task the full path to `pwsh.exe`, because a scheduled task does not see your shell's PATH.
 
 ```powershell
 $pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
@@ -464,9 +464,9 @@ $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName "Scout hub" -Action $action -Trigger $trigger -Settings $settings
 ```
 
-The zero time limit matters: the supervisor never exits, and the default limit would stop it after three days. Set any optional environment variables (`SCOUT_AI_TOOLKIT`, `BWS_ACCESS_TOKEN`, and so on) at the top of the script, since a logon task does not run your shell profile. For local mode at login, make a copy of the script that runs `pnpm --filter @scout/hub start -- --live` instead.
+The task needs a time limit of zero. The supervisor never exits, and the default limit would stop it after three days. A logon task does not run your shell profile, so set any optional environment variables (`SCOUT_AI_TOOLKIT`, `BWS_ACCESS_TOKEN`, and so on) at the top of the script. To run local mode at login, copy the script and change the copy to run `pnpm --filter @scout/hub start -- --live`.
 
-`pnpm --filter @scout/hub watchdog` is the outage watchdog, and `tools/run-watchdog.ps1` runs it and restarts it after any exit. On Windows, register that script as a second logon task beside the hub, with the same environment variables as the hub (or the `.scout-data/discord-webhook.dpapi` file) so it can send the Discord post. It runs until logoff too, so it needs the same zero time limit:
+The outage watchdog is `pnpm --filter @scout/hub watchdog`, and `tools/run-watchdog.ps1` runs it and restarts it after any exit. On Windows, register that script as a second logon task next to the hub. Give it the same environment variables as the hub, or the `.scout-data/discord-webhook.dpapi` file, so it can send the Discord post. The watchdog also runs until logoff, so its task needs the same zero time limit.
 
 ```powershell
 $pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
@@ -476,7 +476,7 @@ $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName "Scout watchdog" -Action $action -Trigger $trigger -Settings $settings
 ```
 
-On macOS or Linux, any service manager works (a launchd agent, a systemd user unit). Run the same command from the repository folder and restart it when it exits.
+On macOS or Linux, use any service manager, such as a launchd agent or a systemd user unit, to run the same command from the repository folder and restart it when it exits.
 
 ## Updating Scout
 
