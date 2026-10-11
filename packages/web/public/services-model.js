@@ -89,13 +89,16 @@ export function stackEventReducer(stacks = [], event = {}) {
 const SERVICE_KEYS = ["machine", "kind", "state", "class", "official", "hasPort", "q", "desc", "all", "gone", "sort", "dir"];
 const LISTENER_KEYS = ["machine", "bind", "class", "official", "q", "desc", "port", "all", "gone"];
 
-const CONTROL_ACTIONS = ["start", "stop", "restart"];
+const CONTROL_ACTIONS = ["start", "stop", "restart", "disable", "enable"];
+const STARTUP_ACTIONS = ["disable", "enable"];
 const PROTECTED_LABELS = { essential: "Essential system service", scout: "Scout", cloudflared: "Cloudflare tunnel", ssh: "Remote login", cogitator: "Cogitator", "remote-access": "Remote access", "dns-network": "DNS and network", containers: "Containers", custom: "Custom" };
 const ACTION_STATES = { running: ["Running", "running"], waiting: ["Waiting for change", "waiting"], done: ["Done", "done"], failed: ["Failed", "failed"], confirmed: ["Confirmed", "done"], expired: ["Expired", "failed"], declined: ["Declined", "failed"] };
 
 export function actionButtons(row) {
   const actions = row?.control?.actions;
-  return CONTROL_ACTIONS.map((action) => {
+  // Disable and Enable apply only to launchd jobs and scheduled tasks, and only the one that fits the current state is listed.
+  const startup = row?.control?.mechanism === "launchd" || row?.control?.mechanism === "scheduled-task";
+  return CONTROL_ACTIONS.filter((action) => !STARTUP_ACTIONS.includes(action) || startup && !/^Already /.test(actions?.find((entry) => entry.action === action)?.reason || "")).map((action) => {
     const item = actions?.find((entry) => entry.action === action);
     const enabled = !!item?.available;
     return { action, label: action[0].toUpperCase() + action.slice(1), enabled, reason: enabled ? null : item?.reason || "Control is unavailable" };

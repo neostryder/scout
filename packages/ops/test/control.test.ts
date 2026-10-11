@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { listActions, listServices, openCatalog, recordCloudflare, recordListeners, recordServices, upsertMachine, type ActionRecord, type ControlRow, type Db, type Exec, type ServiceFact, type Transport } from "@scout/core";
-import { ControlError, ControlRunner, MAC_PROCESS, planControl, TASK_CONTROL, UAC_CONTROL, WINDOWS_CONTROL, WINDOWS_PROCESS, type ControlClock, type ControlMachine, type ControlPlan, type ControlRunnerDeps } from "../src/control.ts";
+import { ControlError, ControlRunner, LAUNCHD_STARTUP, MAC_PROCESS, planControl, TASK_CONTROL, UAC_CONTROL, WINDOWS_CONTROL, WINDOWS_PROCESS, type ControlClock, type ControlMachine, type ControlPlan, type ControlRunnerDeps } from "../src/control.ts";
 
 const classification = { class: "third-party" as const, vendor: "other" as const, official: false, hidden: false, evidence: [], whatBreaks: "A local workload stops.", confidence: "default" as const };
 const row = (over: Partial<ControlRow> = {}): ControlRow => ({ id: 1, machineId: "hub", machineName: "Hub", name: "DistinctService", displayName: "Distinct service", program: "C:/Tools/distinct.exe", pid: 734, state: "running", goneAt: null, kind: "windows-service", domain: "gui", classification, ports: [], ...over });
@@ -440,4 +440,82 @@ test("process identity scripts resolve catalog USER paths only for the current a
   assert.equal(unix.allowed, true);
   assert.equal(unix.argv.at(-1), "/Users/USER/Tools/worker");
   assert.match(unix.argv[2]!, /\/Users\/USER\/\*\) expected="\$HOME\//);
+});
+
+test("disable and enable plan fixed launchd and scheduled task commands and refuse everything else", () => {
+  const job = (over: Partial<ControlRow> = {}): ControlRow => row({ machineId: "mini", kind: "launchd", name: "com.example.worker", uid: 501, program: "/opt/worker", state: "running", pid: 88, enabled: null, ...over });
+  const gui = planControl(job(), "disable", { machine: mac });
+  assert.equal(gui.allowed, true);
+  assert.deepEqual(gui.argv, ["zsh", "-c", LAUNCHD_STARTUP.disable, "scout-control", "gui/501/com.example.worker", "gui/501", ""]);
+  assert.equal(gui.command, "launchctl disable gui/501/com.example.worker; launchctl bootout gui/501/com.example.worker");
+  assert.equal(gui.admin, "none");
+  assert.ok(gui.effects.some((effect) => /stays off/.test(effect)));
+  const system = planControl(job({ domain: "system", uid: null }), "disable", { machine: mac });
+  assert.equal(system.admin, "sudo");
+  assert.equal(system.sudoCommand, "sudo launchctl disable system/com.example.worker && sudo launchctl bootout system/com.example.worker");
+  const enable = planControl(job({ state: "disabled", pid: null, enabled: false, plist: "/Users/USER/Library/LaunchAgents/com.example.worker.plist" }), "enable", { machine: mac });
+  assert.equal(enable.allowed, true);
+  assert.deepEqual(enable.argv, ["zsh", "-c", LAUNCHD_STARTUP.enable, "scout-control", "gui/501/com.example.worker", "gui/501", "/Users/USER/Library/LaunchAgents/com.example.worker.plist"]);
+  assert.equal(enable.command, 'launchctl enable gui/501/com.example.worker; launchctl bootstrap gui/501 "/Users/USER/Library/LaunchAgents/com.example.worker.plist"');
+  const unloaded = planControl(job({ state: "disabled", pid: null, enabled: false }), "enable", { machine: mac });
+  assert.equal(unloaded.argv[6], "");
+  assert.equal(unloaded.command, "launchctl enable gui/501/com.example.worker");
+  assert.equal(planControl(job({ state: "disabled", pid: null, enabled: false, plist: "/tmp/a;b.plist" }), "enable", { machine: mac }).refusalKind, "unknown");
+  assert.equal(planControl(job({ state: "disabled", pid: null, enabled: false }), "disable", { machine: mac }).refusal, "Already disabled");
+  assert.equal(planControl(job({ enabled: true }), "enable", { machine: mac }).refusal, "Already enabled");
+
+  const task = row({ kind: "scheduled-task", name: "/Vendor/DistinctTask", state: "running", enabled: true });
+  const off = planControl(task, "disable", { machine: local });
+  assert.deepEqual(off.argv, pwsh(TASK_CONTROL.disable));
+  assert.deepEqual(off.env, { SCOUT_NAME: "DistinctTask", SCOUT_TASK_PATH: String.fromCharCode(92) + "Vendor" + String.fromCharCode(92) });
+  assert.match(TASK_CONTROL.disable, /Disable-ScheduledTask[^;]*; Stop-ScheduledTask/);
+  const on = planControl({ ...task, state: "disabled", enabled: false }, "enable", { machine: local });
+  assert.deepEqual(on.argv, pwsh(TASK_CONTROL.enable));
+  assert.equal(planControl({ ...task, enabled: null }, "disable", { machine: local }).refusal, "Enabled state unknown");
+
+  assert.equal(planControl(row({ enabled: true }), "disable", { machine: local }).refusalKind, "unavailable");
+  assert.equal(planControl(row({ kind: null, enabled: true }), "enable", { machine: local }).refusalKind, "unsupported");
+  const protectedJob = job({ name: "com.apple.screensharing.helper" });
+  assert.equal(planControl(protectedJob, "disable", { machine: mac }).refusalKind, "protected");
+  assert.equal(planControl({ ...protectedJob, state: "disabled", pid: null, enabled: false }, "enable", { machine: mac }).allowed, true);
+  assert.equal(planControl(job(), "disable", { machine: mac, hard: true }).refusalKind, "unknown");
+});
+
+test("the launchd startup scripts disable then unload and enable then load, expanding a catalog USER plist path", { skip: spawnSync("sh", ["-c", "exit 0"]).status !== 0 }, () => {
+  const run = (script: string, args: string[], launchctl: string) => spawnSync("sh", ["-c", `launchctl() { echo "$@"; ${launchctl}; }\n${script}`, "scout-control", ...args], { encoding: "utf8", env: { ...process.env, HOME: "/home/real" } });
+  const off = run(LAUNCHD_STARTUP.disable, ["gui/501/x", "gui/501", ""], "[ \"$1\" = bootout ] && return 3; return 0");
+  assert.equal(off.status, 0);
+  assert.equal(off.stdout, "disable gui/501/x\nbootout gui/501/x\n");
+  const refused = run(LAUNCHD_STARTUP.disable, ["gui/501/x", "gui/501", ""], "return 5");
+  assert.equal(refused.status, 5);
+  assert.equal(refused.stdout, "disable gui/501/x\n");
+  const on = run(LAUNCHD_STARTUP.enable, ["gui/501/x", "gui/501", "/Users/USER/Library/LaunchAgents/x.plist"], "return 0");
+  assert.equal(on.stdout, "enable gui/501/x\nbootstrap gui/501 /home/real/Library/LaunchAgents/x.plist\n");
+  assert.equal(run(LAUNCHD_STARTUP.enable, ["gui/501/x", "gui/501", ""], "return 0").stdout, "enable gui/501/x\n");
+});
+
+test("a disable waits for the catalog to show the job disabled and stopped, and an enable waits for it to show enabled", async (t) => {
+  const { db, id } = seed(t, { kind: "launchd", name: "com.example.worker", program: "/opt/worker", pid: 88, enabled: null, uid: 501 });
+  const clock = new Clock();
+  let executed: string[] = [];
+  let done = false;
+  const exec: Exec = async (_t, argv) => { executed = argv; done = true; return { exitCode: 0, stdout: "", stderr: "" }; };
+  const control = runner(db, { clock, exec, reader: async (_m, r) => done ? { ...r, state: "disabled", pid: null, enabled: clock.sleeps.length >= 1 ? false : null } : r });
+  const off = await control.plan("service", id, "disable");
+  allowed(off);
+  const result = await control.run(off.id, off.token);
+  const audit = await control.wait(result.actionId);
+  assert.equal(executed[2], LAUNCHD_STARTUP.disable);
+  assert.equal(audit!.action, "disable");
+  assert.equal(audit!.state, "done");
+  assert.equal(audit!.message, "The launchd job disabled after 2 s.");
+  done = false;
+  db.prepare("UPDATE services SET enabled = 0, state = 'disabled', pid = NULL").run();
+  const none = runner(db, { exec, reader: async (_m, r) => done ? { ...r, state: "stopped", pid: null, enabled: true } : { ...r, state: "disabled", pid: null, enabled: false } });
+  const on = await none.plan("service", id, "enable");
+  allowed(on);
+  const enabled = await none.wait((await none.run(on.id, on.token)).actionId);
+  assert.equal(enabled!.state, "done");
+  assert.match(enabled!.message!, /^The launchd job enabled after /);
+  assert.equal(executed[2], LAUNCHD_STARTUP.enable);
 });

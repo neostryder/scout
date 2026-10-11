@@ -137,3 +137,17 @@ test("start_service refuses a row that is already running without executing anyt
   assert.equal((await call("scout_action_log")).items.length, 0);
   await assert.rejects(Promise.resolve().then(() => seed(t).tool("scout_start_service").run({ target: "service", id: 999999 })), /not found/);
 });
+
+test("plan_action drafts a disable for a person to confirm and start_service stays the only tool that acts", async (t) => {
+  let executed = 0;
+  const { call, ids, tool } = seed(t, { exec: async () => { executed++; return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const out = await call("scout_plan_action", { target: "service", id: ids.Distinct, action: "disable" });
+  assert.equal(out.carriedOut, false);
+  assert.equal("token" in out.plan, false);
+  assert.equal(out.plan.action, "disable");
+  assert.match(out.confirmWith, /control run service \d+ disable --yes/);
+  assert.equal(executed, 0);
+  assert.deepEqual((tool("scout_plan_action").inputSchema as any).properties.action.enum, ["start", "stop", "restart", "disable", "enable"]);
+  assert.equal(tool("scout_start_service").readOnly, false);
+  assert.equal(["scout_plan_action", "scout_start_service"].filter((name) => !tool(name).readOnly).length, 1);
+});

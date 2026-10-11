@@ -27,7 +27,7 @@ export async function controlCommand(db: Db, args: string[], options: ControlCom
   if (!row) throw new Error("not found");
   if (command === "uninstall") { output(uninstallInstructions(row, joinedInstall(db, row))); return; }
   const action = args[3] as ControlAction;
-  if (!["start", "stop", "restart"].includes(action)) throw new Error("action must be start, stop or restart");
+  if (!["start", "stop", "restart", "disable", "enable"].includes(action)) throw new Error("action must be start, stop, restart, disable or enable");
   const hard = args.includes("--hard");
   if (hard && action !== "stop") throw new Error("--hard is allowed only for stop");
   const deps = options.deps ?? { machines: [] };

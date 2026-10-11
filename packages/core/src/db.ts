@@ -66,7 +66,7 @@ function migrateDependencyEdges(db: Db): void {
 
 function migrateActions(db: Db): void {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'actions'").get() as { sql: string } | undefined;
-  if (!row || row.sql.includes("'stack'")) return;
+  if (!row || row.sql.includes("'stack'") && row.sql.includes("'disable'")) return;
   db.exec("BEGIN");
   try {
     db.exec("ALTER TABLE actions RENAME TO actions_old");

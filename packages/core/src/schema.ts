@@ -394,7 +394,7 @@ CREATE TABLE IF NOT EXISTS actions (
   target TEXT NOT NULL CHECK (target IN ('service','listener','recipe','stack')),
   row_id INTEGER NOT NULL,
   name TEXT NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('start','stop','restart')),
+  action TEXT NOT NULL CHECK (action IN ('start','stop','restart','disable','enable')),
   hard INTEGER NOT NULL CHECK (hard IN (0,1)),
   mechanism TEXT NOT NULL,
   command TEXT NOT NULL,

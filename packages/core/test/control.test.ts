@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { controlRow, isProtected, joinedInstall, listListeners, listServices, openCatalog, protectedFileReader, protectedResponse, recordListeners, recordServices, rowControl, SCHEMA_VERSION, uninstallInstructions, upsertMachine, type ControlRow, type ServiceFact } from "../src/index.ts";
+import { controlRow, isProtected, startupEnabled, joinedInstall, listListeners, listServices, openCatalog, protectedFileReader, protectedResponse, recordListeners, recordServices, rowControl, SCHEMA_VERSION, uninstallInstructions, upsertMachine, type ControlRow, type ServiceFact } from "../src/index.ts";
 
 const classification = { class: "third-party" as const, vendor: "other" as const, official: false, hidden: false, evidence: [], whatBreaks: null, confidence: "default" as const };
 const row = (over: Partial<ControlRow> = {}): ControlRow => ({ id: 1, machineId: "hub", machineName: "Hub", name: "ExampleService", displayName: null, program: "C:/Tools/example.exe", pid: 321, state: "running", goneAt: null, kind: "windows-service", domain: "system", classification, ports: [], ...over });
@@ -67,8 +67,8 @@ test("the protected file reader reports missing and malformed files, reloads by 
   assert.deepEqual(read().config.names, []);
 });
 
-test("row control lists three actions and blocks protected stops, bare starts and off-state actions", () => {
-  assert.deepEqual(rowControl(row()).actions.map((a) => a.action), ["start", "stop", "restart"]);
+test("row control lists five actions and blocks protected stops, bare starts and off-state actions", () => {
+  assert.deepEqual(rowControl(row()).actions.map((a) => a.action), ["start", "stop", "restart", "disable", "enable"]);
   assert.equal(rowControl(row()).actions[0]!.reason, "Already running");
   assert.equal(rowControl(row({ state: "stopped", pid: null })).actions[1]!.reason, "Not running");
   const protectedControl = rowControl(row({ name: "cloudflared", state: "stopped" }));
@@ -153,4 +153,25 @@ test("launchd rows join program, KeepAlive and plist facts from the recorded ins
   assert.equal(install!.ecosystem, "launchd");
   const instructions = uninstallInstructions(controlRow(service), install);
   assert.ok(instructions.steps.some((s) => s.includes("remove the launchd plist")));
+});
+
+test("disable and enable are offered only for launchd jobs and scheduled tasks with a known enabled state", () => {
+  const offered = (over: Partial<ControlRow>) => rowControl(row(over)).actions.filter((a) => a.available && (a.action === "disable" || a.action === "enable")).map((a) => a.action);
+  const reason = (over: Partial<ControlRow>, action: "disable" | "enable") => rowControl(row(over)).actions.find((a) => a.action === action)!.reason;
+  const job = { kind: "launchd" as const, domain: "gui" as const, uid: 501, program: "/opt/worker", name: "com.example.worker" };
+  assert.deepEqual(offered({ ...job, enabled: null }), ["disable"]);
+  assert.deepEqual(offered({ ...job, enabled: true }), ["disable"]);
+  assert.deepEqual(offered({ ...job, enabled: false, state: "disabled", pid: null }), ["enable"]);
+  assert.deepEqual(offered({ ...job, enabled: true, state: "stopped", pid: null }), ["disable"]);
+  assert.equal(startupEnabled({ kind: "scheduled-task", enabled: null }), null);
+  assert.equal(startupEnabled({ kind: "launchd", enabled: null }), true);
+  assert.deepEqual(offered({ kind: "scheduled-task", name: "/Vendor/Task", enabled: true }), ["disable"]);
+  assert.deepEqual(offered({ kind: "scheduled-task", name: "/Vendor/Task", enabled: false, state: "disabled", pid: null }), ["enable"]);
+  assert.equal(reason({ kind: "scheduled-task", name: "/Vendor/Task", enabled: null }, "disable"), "Enabled state unknown");
+  assert.equal(reason({ enabled: true }, "disable"), "Only launchd jobs and scheduled tasks can be disabled or enabled");
+  assert.equal(reason({ kind: null, enabled: true }, "enable"), "Only launchd jobs and scheduled tasks can be disabled or enabled");
+  assert.equal(reason({ ...job, enabled: false, goneAt: "2026-10-01T00:00:00Z" }, "enable"), "The row is no longer present");
+  assert.match(reason({ ...job, name: "com.apple.screensharing.helper" }, "disable")!, /^Protected: /);
+  assert.equal(reason({ ...job, name: "com.apple.screensharing.helper", enabled: false, state: "disabled", pid: null }, "enable"), null);
+  assert.ok(rowControl(row({ ...job, enabled: true }), {}, false).actions.every((a) => !a.available && a.reason === "Control is off."));
 });

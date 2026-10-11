@@ -68,6 +68,12 @@ test("control helpers preserve availability reasons and protected labels", () =>
   assert.deepEqual(buttons, [{ action: "start", label: "Start", enabled: true, reason: null }, { action: "stop", label: "Stop", enabled: false, reason: "Protected: remote access" }, { action: "restart", label: "Restart", enabled: false, reason: "Control is unavailable" }]);
   assert.deepEqual(["remote-access", "dns-network", "containers", "essential", "scout", "cloudflared", "ssh", "cogitator", "custom"].map(protectedLabel), ["Remote access", "DNS and network", "Containers", "Essential system service", "Scout", "Cloudflare tunnel", "Remote login", "Cogitator", "Custom"]);
   assert.equal(actionButtons({})[0].enabled, false);
+  const startup = (mechanism: string, extra: any[]) => actionButtons({ control: { mechanism, actions: [{ action: "start", available: true }, { action: "stop", available: true }, { action: "restart", available: true }, ...extra] } }).map((b: any) => b.action);
+  assert.deepEqual(startup("launchd", [{ action: "disable", available: true }, { action: "enable", available: false, reason: "Already enabled" }]), ["start", "stop", "restart", "disable"]);
+  assert.deepEqual(startup("scheduled-task", [{ action: "disable", available: false, reason: "Already disabled" }, { action: "enable", available: true }]), ["start", "stop", "restart", "enable"]);
+  assert.deepEqual(startup("windows-service", [{ action: "disable", available: false, reason: "Only launchd jobs and scheduled tasks can be disabled or enabled" }]), ["start", "stop", "restart"]);
+  assert.deepEqual(actionButtons({ control: { mechanism: "launchd", actions: [{ action: "disable", available: false, reason: "Protected: Cogitator" }] } }).filter((b: any) => b.action === "disable"), [{ action: "disable", label: "Disable", enabled: false, reason: "Protected: Cogitator" }]);
+  assert.equal(planDialogModel({ action: "disable", displayName: null, name: "com.example.worker", machineName: "Mini", command: "launchctl disable gui/501/com.example.worker", admin: "none", effects: [] }).heading, "Disable com.example.worker on Mini");
 });
 
 test("plan, audit and action event helpers model admin, refusal and live state", () => {

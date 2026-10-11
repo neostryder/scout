@@ -172,14 +172,14 @@ function rowView(row) {
 function opLine(row, op) {
   const name = row.label;
   if (op.phase === "confirm") {
-    const yes = t(op.action === "stop" ? "confirmYesStop" : "confirmYesRestart");
-    return h("div", { class: "line confirm" }, h("span", { class: "q" }, t(op.action === "stop" ? "confirmStop" : "confirmRestart", { name })),
+    const yes = t(op.action === "stop" ? "confirmYesStop" : op.action === "disable" ? "confirmYesDisable" : "confirmYesRestart");
+    return h("div", { class: "line confirm" }, h("span", { class: "q" }, t(op.action === "stop" ? "confirmStop" : op.action === "disable" ? "confirmDisable" : "confirmRestart", { name })),
       h("button", { class: "act danger", onclick: () => runAction(row, op.action) }, yes), h("button", { class: "act", onclick: () => clearOp(row.key) }, t("cancel")));
   }
   if (op.phase === "working") {
-    return h("div", { class: "line" }, t(op.action === "start" ? "workingStart" : op.action === "stop" ? "workingStop" : "workingRestart", { name }), op.admin ?? null);
+    return h("div", { class: "line" }, t({ start: "workingStart", stop: "workingStop", restart: "workingRestart", disable: "workingDisable", enable: "workingEnable" }[op.action], { name }), op.admin ?? null);
   }
-  if (op.phase === "result") return h("div", { class: "line ok" }, t(op.action === "start" ? "resultStarted" : op.action === "stop" ? "resultStopped" : "resultRestarted", { name }));
+  if (op.phase === "result") return h("div", { class: "line ok" }, t({ start: "resultStarted", stop: "resultStopped", restart: "resultRestarted", disable: "resultDisabled", enable: "resultEnabled" }[op.action], { name }));
   return h("div", { class: "line bad" }, op.text, h("button", { class: "link", onclick: () => clearOp(row.key) }, "OK"));
 }
 
@@ -279,6 +279,8 @@ async function waitForAction(row, action, actionId) {
 
 function menuLabel(entry, row) {
   switch (entry.id) {
+    case "disable": return t("menuDisable");
+    case "enable": return t("menuEnable");
     case "hide": return t("menuHide");
     case "hide-kind": return t("menuHideKind", { kind: t(KIND_KEYS[entry.value] ?? "kindListener") });
     case "hide-vendor": return t("menuHideVendor", { vendor: t(VENDOR_KEYS[entry.value] ?? "vendorApple") });
@@ -306,6 +308,7 @@ async function chooseEntry(entry, row) {
   render();
   if (!row) return;
   if (entry.scope === "portal") { bridge.invoke("open_portal").catch(showError); return; }
+  if (entry.scope === "startup") { if (needsConfirm(entry.action)) beginConfirm(row, entry.action); else runAction(row, entry.action); return; }
   try {
     const got = await api("GET", "/api/tray/rules");
     if (!got.json?.rules) throw new Error(got.json?.error ?? `${got.status}`);

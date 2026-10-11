@@ -208,3 +208,23 @@ test("the stack audit migration preserves recipe and service rows and their plan
     assert.equal(createAction(reopened, { ...audits[0]!, target: "stack", rowId: 0, mechanism: "stack" }, {}).target, "stack");
   } finally { reopened.close(); }
 });
+
+test("the disable and enable audit migration keeps older audit rows and accepts the new actions", (t) => {
+  const f = fixture(t);
+  const path = `${f.root}/audit-startup.db`;
+  const db = openCatalog(path);
+  upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  const legacy = SCHEMA_SQL.match(/CREATE TABLE IF NOT EXISTS actions \([\s\S]*?\n\);/)![0].replace("CHECK (action IN ('start','stop','restart','disable','enable'))", "CHECK (action IN ('start','stop','restart'))");
+  assert.notEqual(legacy, SCHEMA_SQL.match(/CREATE TABLE IF NOT EXISTS actions \([\s\S]*?\n\);/)![0]);
+  db.exec("DROP TABLE actions");
+  db.exec(legacy);
+  const old = createAction(db, { at: "fixture", finishedAt: null, machineId: "hub", target: "service", rowId: 1, name: "fixture", action: "stop", hard: false, mechanism: "launchd", command: "launchctl kill", admin: "none", state: "done", exitCode: 0, message: "stopped" }, { kept: true });
+  assert.throws(() => createAction(db, { ...old, action: "disable" }, {}));
+  db.close();
+  const reopened = openCatalog(path);
+  try {
+    assert.deepEqual(actionById(reopened, old.id), old);
+    assert.equal(createAction(reopened, { ...old, action: "disable" }, {}).action, "disable");
+    assert.equal(createAction(reopened, { ...old, action: "enable" }, {}).action, "enable");
+  } finally { reopened.close(); }
+});

@@ -141,7 +141,7 @@ Then open http://127.0.0.1:4870/. The page has Catalog, Updates, Review, Jobs, a
 | `--schedule` | Refresh version lookups on a schedule. Production mode turns this on. |
 | `--production` | Require Cloudflare Access on every request (see below). |
 | `--no-jobs` | Turn off update jobs. |
-| `--no-control` | Turn off start, stop, and restart. |
+| `--no-control` | Turn off start, stop, restart, disable, and enable. |
 | `--no-models` | Turn off the AI toolkit even when it is configured. |
 | `--schedule-models` | Let release-note summaries and vendor-page reading use the AI toolkit on their own schedule. |
 | `--no-cloudflare` | Skip the Cloudflare reader. |
@@ -314,7 +314,7 @@ Click the icon to open a 420 by 600 panel. It has a tab for each machine, each w
 
 By default the panel lists the services and listeners that are meant to stay up, by the same rule as the outage watch (Windows services that start automatically, launchd jobs with KeepAlive set, their ports, and container and routed ports), plus stacks and approved launch recipes. A stopped service shows as down only if Scout has seen it running, and as stopped otherwise.
 
-Hover over a row to see Start when it is stopped, or Restart and Stop when it is running. Start runs at once, and Stop and Restart ask on the row first. Each action goes through the same plan, one-time confirmation, and audit log as the page, so protected rows (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop or Restart, and the panel shows why. When an action needs admin rights, the panel asks you to approve the UAC prompt on the Windows machine, or shows a sudo command to run on the Mac.
+Hover over a row to see Start when it is stopped, or Restart and Stop when it is running. Right-click a launchd job or scheduled task to disable or enable it. Start and Enable run at once, and Stop, Restart, and Disable ask on the row first. Each action goes through the same plan, one-time confirmation, and audit log as the page, so protected rows (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop, Restart, or Disable, and the panel shows why. A disabled row does not start; enable it first. When an action needs admin rights, the panel asks you to approve the UAC prompt on the Windows machine, or shows a sudo command to run on the Mac.
 
 Right-click a row for Hide this row, Hide all of its kind, Hide everything from its vendor, Pin to top, and Open in Scout. The footer has Open Scout, a count of rows hidden by rules, and a theme toggle that cycles through system, dark, and light. Right-click the tray icon for Open Scout, Connection settings, and Quit. Only one copy of the panel runs at a time.
 
@@ -416,17 +416,17 @@ The agent starts the server on the hub machine and talks to it over standard inp
 
 ### What an agent can do
 
-An agent can read what the commands above show, plus your services with their ids, ports, protection, and available actions, filtered by machine, state, or name. It can also read outages, alerts, the port registry, and the log of every start, stop, and restart. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, and `scout_action_log`.
+An agent can read what the commands above show, plus your services with their ids, ports, protection, and available actions, filtered by machine, state, or name. It can also read outages, alerts, the port registry, and the log of every start, stop, restart, disable, and enable. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, and `scout_action_log`.
 
 `scout_start_service` starts a stopped service or listener. Scout plans the start, runs it if the plan is allowed, and reports the result, with the same checks, one-time token, and audit log as the page and the tray panel. It refuses a service that is already running or protected and says why. If the start needs admin rights, the agent gets the sudo command to run, or a note to approve the prompt on that machine.
 
-An agent cannot stop or restart anything. With `scout_plan_action` it can ask what a start, stop, or restart would do, whether it is allowed, and what would break, but it never gets the token needed to run it. To stop or restart, use the Scout page, the tray panel, or the CLI:
+An agent cannot stop, restart, disable, or enable anything, and `scout_start_service` only starts. With `scout_plan_action` it can ask what a start, stop, restart, disable, or enable would do, whether it is allowed, and what would break, but it never gets the token needed to run it. To stop, restart, disable, or enable, use the Scout page, the tray panel, or the CLI:
 
 ```
-node packages/cli/src/main.ts control run <service|listener> <id> <stop|restart> --yes
+node packages/cli/src/main.ts control run <service|listener> <id> <stop|restart|disable|enable> --yes
 ```
 
-Protected services (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop or Restart anywhere.
+Protected services (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop, Restart, or Disable anywhere. Enable is always allowed, and a disabled service has to be enabled before it can start. On the Services page, Disable and Enable sit in the row's Actions section next to the other buttons.
 
 ### Who can use it
 

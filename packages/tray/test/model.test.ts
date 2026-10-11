@@ -39,6 +39,8 @@ test("a running row offers Restart and Stop, a stopped one offers Start, and ava
   assert.equal(needsConfirm("start"), false);
   assert.equal(needsConfirm("stop"), true);
   assert.equal(needsConfirm("restart"), true);
+  assert.equal(needsConfirm("disable"), true);
+  assert.equal(needsConfirm("enable"), false);
 });
 
 test("plan bodies name a stack by name and everything else by id", () => {
@@ -76,4 +78,21 @@ test("action records map to running, done, and failed", () => {
   assert.deepEqual(actionOutcome({ state: "done" }), { done: true, ok: true });
   assert.deepEqual(actionOutcome({ state: "failed", message: "It would not stop." }), { done: true, ok: false, reason: "It would not stop." });
   assert.equal(actionOutcome({ state: "expired" }).ok, false);
+});
+
+test("the right-click menu offers Disable or Enable first, only when the hub says the row can take it", () => {
+  const actions = (disable: boolean, enable: boolean) => [{ action: "start", available: false, reason: null }, { action: "disable", available: disable, reason: null }, { action: "enable", available: enable, reason: null }];
+  const ids = (r: Record<string, unknown>) => contextEntries(r).map((e: { id: string }) => e.id);
+  assert.deepEqual(ids(row({ actions: actions(true, false) })), ["disable", "hide", "hide-kind", "pin", "open"]);
+  assert.deepEqual(ids(row({ actions: actions(false, true) })), ["enable", "hide", "hide-kind", "pin", "open"]);
+  assert.deepEqual(ids(row({ actions: actions(false, false) })), ["hide", "hide-kind", "pin", "open"]);
+  assert.deepEqual(contextEntries(row({ actions: actions(true, false) }))[0], { id: "disable", scope: "startup", action: "disable" });
+  assert.deepEqual(planBody(row(), "disable"), { target: "service", id: 7, action: "disable" });
+});
+
+test("every startup string the panel looks up exists", async () => {
+  const { readFileSync } = await import("node:fs");
+  const text = JSON.parse(readFileSync(new URL("../ui/text.json", import.meta.url), "utf8"));
+  for (const key of ["menuDisable", "menuEnable", "confirmDisable", "confirmYesDisable", "workingDisable", "workingEnable", "resultDisabled", "resultEnabled", "failedDisable", "failedEnable"]) assert.equal(typeof text[key], "string", key);
+  assert.equal(fill(text.confirmDisable, { name: "Redis" }), "Disable Redis? It stops now and will not start at login until you enable it.");
 });

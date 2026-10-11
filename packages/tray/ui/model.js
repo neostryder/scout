@@ -66,8 +66,8 @@ export function rowActions(row) {
   return shown.map((name) => ({ action: name, available: byName.get(name)?.available === true, reason: byName.get(name)?.reason ?? null }));
 }
 
-/** Stop and Restart ask first; Start does not. */
-export const needsConfirm = (action) => action === "stop" || action === "restart";
+/** Stop, Restart, and Disable ask first; Start and Enable do not. */
+export const needsConfirm = (action) => action === "stop" || action === "restart" || action === "disable";
 
 /** The body for POST /api/services/actions/plan. */
 export function planBody(row, action) {
@@ -101,7 +101,10 @@ export function sparkRuns(values, width = 46, height = 14) {
 
 /** Right-click entries for a row. */
 export function contextEntries(row) {
-  const entries = [{ id: "hide", scope: "row" }];
+  const entries = [];
+  // Disable or Enable shows only when the hub says the row supports it and it is available right now.
+  for (const name of ["disable", "enable"]) if ((row.actions ?? []).some((a) => a.action === name && a.available === true)) entries.push({ id: name, scope: "startup", action: name });
+  entries.push({ id: "hide", scope: "row" });
   if (row.kind && row.kind !== "stack") entries.push({ id: "hide-kind", scope: "kind", value: row.kind });
   if (row.vendor && row.vendor !== "other") entries.push({ id: "hide-vendor", scope: "vendor", value: row.vendor });
   entries.push({ id: row.pinned ? "unpin" : "pin", scope: "pin" });

@@ -80,3 +80,16 @@ test("the CLI entry accepts control log and refuses control run without confirma
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /requires --yes/);
 });
+
+test("control plan accepts disable and enable, refuses --hard with them and rejects an unknown action", async (t) => {
+  const { db, id } = seed(t);
+  const lines: string[] = [];
+  const deps: ControlRunnerDeps = { machines: [{ id: "hub", transport: { type: "local" } }], exec: async () => { throw new Error("The plan must not execute."); } };
+  await controlCommand(db, ["plan", "service", id, "disable"], { deps, write: (line) => { lines.push(line); } });
+  const plan = JSON.parse(lines[0]!);
+  assert.equal(plan.action, "disable");
+  assert.equal(plan.allowed, false);
+  assert.equal(plan.refusal, "Only launchd jobs and scheduled tasks can be disabled or enabled");
+  await assert.rejects(controlCommand(db, ["plan", "service", id, "enable", "--hard"], { deps }), /only for stop/);
+  await assert.rejects(controlCommand(db, ["plan", "service", id, "pause"], { deps }), /start, stop, restart, disable or enable/);
+});

@@ -227,7 +227,7 @@ test("the alerts mock selects zero, one and high badge states", async () => {
 test("the mock serves control plans, run events, audit rows, protected groups and uninstall instructions", async () => mock(async (base) => {
   const services = await get(base, "/api/services?all=1&limit=500");
   const listeners = await get(base, "/api/listeners?all=1&limit=500");
-  assert.ok(services.rows.every((row: any) => row.control.actions.length === 3));
+  assert.ok(services.rows.every((row: any) => row.control.actions.map((item: any) => item.action).join() === "start,stop,restart,disable,enable"));
   assert.ok(listeners.rows.some((row: any) => row.control.mechanism === "process"));
   assert.deepEqual(new Set([...services.rows, ...listeners.rows].map((row: any) => row.control.mechanism)), new Set(["windows-service", "scheduled-task", "launchd", "process"]));
   assert.deepEqual(new Set([...services.rows, ...listeners.rows].filter((row: any) => row.control.protected.protected).map((row: any) => row.control.protected.group)), new Set(["essential", "scout", "cloudflared", "ssh", "cogitator", "remote-access", "dns-network", "containers", "custom"]));

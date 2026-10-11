@@ -1,3 +1,4 @@
+import type { ControlAction } from "@scout/core";
 import { ControlError, type ControlRunner } from "@scout/ops";
 
 export async function controlPlanResponse(runner: ControlRunner, body: Record<string, unknown>): Promise<{ status: number; body: unknown }> {
@@ -10,9 +11,9 @@ export async function controlPlanResponse(runner: ControlRunner, body: Record<st
   }
   if (body.target !== "service" && body.target !== "listener" && body.target !== "recipe") return { status: 400, body: { error: "target must be service, listener or recipe" } };
   if (typeof body.id !== "number" || !Number.isSafeInteger(body.id) || body.id <= 0) return { status: 400, body: { error: "id must be a positive integer" } };
-  if (body.action !== "start" && body.action !== "stop" && body.action !== "restart") return { status: 400, body: { error: "action must be start, stop or restart" } };
+  if (!["start", "stop", "restart", "disable", "enable"].includes(body.action as string)) return { status: 400, body: { error: "action must be start, stop, restart, disable or enable" } };
   if (body.hard !== undefined && typeof body.hard !== "boolean" || body.hard === true && body.action !== "stop") return { status: 400, body: { error: "hard must be a boolean and is allowed only for stop" } };
-  const plan = await runner.plan(body.target, body.id, body.action, body.hard === true);
+  const plan = await runner.plan(body.target, body.id, body.action as ControlAction, body.hard === true);
   return plan ? { status: 200, body: { plan } } : { status: 404, body: { error: "not found" } };
 }
 

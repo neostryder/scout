@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **You can disable and enable launchd jobs and scheduled tasks from Scout.** Disable stops the job and keeps it from running again until you enable it, and both actions go through the same plan, confirmation, and audit log as start, stop, and restart.
 - [Visible] [Inventory] **Scout scans your machines and lists the software on each one.** It reads Windows (registry, winget, Store apps, WSL, Docker Sandboxes), macOS (apps, Homebrew, casks, pkgutil, launchd), npm, pipx, and uv tools, Go and local binaries, language runtimes, container images, and dpkg packages on Linux. Remote machines are read over ssh, and a scan never starts a program or a guest.
 - [Visible] [UI] **A page on the hub machine shows the whole catalog.** It has Catalog, Updates, Review, Jobs, and Services views with live search, filters you can save, and a detail panel for each install. The Review view lets you confirm or reject installs that Scout thinks are the same program.
 - [Visible] [Research] **Scout finds the newest version of each install.** It asks Homebrew, npm, PyPI, GitHub releases, the Go module proxy, crates.io, Sparkle appcasts, winget, and the Store, and shows end-of-life dates from endoflife.date as notes.

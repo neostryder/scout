@@ -220,3 +220,27 @@ test("the services stream adds hello.actions and ordered action records", async 
   assert.deepEqual(events.filter((e) => e.kind === "action").map((e) => e.data.state), ["running", "done"]);
   stream.destroy();
 });
+
+test("plan routes accept disable and enable, plan a launchd disable with sudo and refuse a Windows service", async (t) => {
+  const { call, id, db } = await app(t);
+  const jobId = listServices(db).find((s) => s.name === "com.example.worker")!.id;
+  const plan = planOf(await call(planPath, { target: "service", id: jobId, action: "disable" }));
+  assert.equal(plan.mechanism, "launchd");
+  assert.equal(plan.action, "disable");
+  assert.equal(plan.admin, "sudo");
+  assert.equal(plan.sudoCommand, "sudo launchctl disable system/com.example.worker && sudo launchctl bootout system/com.example.worker");
+  assert.equal("argv" in plan || "env" in plan || "transport" in plan, false);
+  const already = await call(planPath, { target: "service", id: jobId, action: "enable" });
+  assert.equal(already.status, 200);
+  assert.equal(already.body.plan.refusal, "Already enabled");
+  const windows = await call(planPath, { target: "service", id, action: "disable" });
+  assert.equal(windows.body.plan.allowed, false);
+  assert.equal(windows.body.plan.refusalKind, "unavailable");
+  const protectedId = listServices(db).find((s) => s.name === "cloudflared")!.id;
+  assert.equal((await call(planPath, { target: "service", id: protectedId, action: "disable" })).body.plan.refusalKind, "protected");
+  const bad = await call(planPath, { target: "service", id, action: "disable", hard: true });
+  assert.equal(bad.status, 400);
+  const unknown = await call(planPath, { target: "service", id, action: "pause" });
+  assert.equal(unknown.status, 400);
+  assert.equal(unknown.body.error, "action must be start, stop, restart, disable or enable");
+});

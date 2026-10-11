@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { hubMachineId, hubMachineName, actionById, controlRow, createAction, finishAction, isProtected, listListeners, listRoutes, listServices, loadTunnelHosts, protectedFileReader, recordListeners, recordServices, rowControl, runArgv, type ActionRecord, type ControlAction, type ControlMechanism, type ControlRow, type ControlTarget, type Db, type Exec, type ProtectedContext, type Transport } from "@scout/core";
+import { hubMachineId, hubMachineName, actionById, controlRow, createAction, finishAction, isProtected, listListeners, listRoutes, listServices, loadTunnelHosts, protectedFileReader, recordListeners, recordServices, rowControl, runArgv, startupEnabled, type ActionRecord, type ControlAction, type ControlMechanism, type ControlRow, type ControlTarget, type Db, type Exec, type ProtectedContext, type Transport } from "@scout/core";
 import { detectRecipes, recipeById, validateRecipe } from "@scout/core";
 import { resolveStack, stacksFileReader, type ResolvedStackMember } from "@scout/core";
 import { windowsListenersAdapter } from "@scout/adapter-listeners";
@@ -33,6 +33,13 @@ export const TASK_CONTROL = {
   start: `${ERROR}Start-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop`,
   stop: `${ERROR}Stop-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop`,
   restart: `${ERROR}Stop-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop; Start-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop`,
+  disable: `${ERROR}Disable-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop | Out-Null; Stop-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction SilentlyContinue`,
+  enable: `${ERROR}Enable-ScheduledTask -TaskPath $env:SCOUT_TASK_PATH -TaskName $env:SCOUT_NAME -ErrorAction Stop | Out-Null`,
+};
+// Disable turns the job off for good and unloads it now; a job that is not loaded makes bootout fail, which is fine. Enable loads the job again when its plist is known.
+export const LAUNCHD_STARTUP = {
+  disable: `launchctl disable "$1" || exit $?\nlaunchctl bootout "$1" 2>/dev/null\nexit 0`,
+  enable: `plist="$3"\ncase "$plist" in /Users/USER/*) plist="$HOME/\${plist#/Users/USER/}" ;; esac\nlaunchctl enable "$1" || exit $?\n[ -z "$plist" ] || launchctl bootstrap "$2" "$plist" 2>/dev/null\nexit 0`,
 };
 const WINDOWS_IDENTITY = `${ERROR}${WINDOWS_PATH}$proc = Get-Process -Id ([int]$env:SCOUT_PID) -ErrorAction SilentlyContinue; if (!$proc) { exit 0 }; if (!$proc.Path -or $proc.Path.Replace([char]92, [char]47) -ine $expected) { exit 3 }; `;
 export const WINDOWS_PROCESS = {
@@ -121,20 +128,22 @@ export function planControl(row: ControlRow, action: ControlAction, options: Con
     plan.env = { SCOUT_RECIPE_EXE: recipe.argv[0]!, SCOUT_RECIPE_ARGS: JSON.stringify(recipe.argv.slice(1)), SCOUT_RECIPE_CWD: recipe.cwd };
     return plan;
   }
-  if (!["start", "stop", "restart"].includes(action) || hard && action !== "stop") return refuse("unknown", "The action or hard-stop option is invalid.");
-  if (action !== "start" && isProtected(row, context).protected) return refuse("protected", `${control.actions.find((a) => a.action === action)?.reason}. ${control.protected.reason}`);
+  if (!["start", "stop", "restart", "disable", "enable"].includes(action) || hard && action !== "stop") return refuse("unknown", "The action or hard-stop option is invalid.");
+  if (action !== "start" && action !== "enable" && isProtected(row, context).protected) return refuse("protected", `${control.actions.find((a) => a.action === action)?.reason}. ${control.protected.reason}`);
   if (!machine || machine.id !== row.machineId) return refuse("unavailable", "The machine is not configured.");
   if (!windows && (machine.os === "linux" || machine.transport.type !== "ssh")) return refuse("unsupported", "This machine has no supported control transport.");
   if (!validPath(row.program) || row.pid !== null && !validPid(row.pid)) return refuse("unknown", "The program path or pid is invalid.");
   if (row.kind === "scheduled-task" ? !taskIdentity(row.name) : !validName(row.name)) return refuse("unknown", "The service name or label is invalid.");
   if (control.mechanism === null) return refuse("unknown", "The process identity is unknown.");
-  if (control.mechanism === "process" && action !== "stop") return refuse("unsupported", "A bare process has no start command.");
+  if (control.mechanism === "process" && action !== "stop") return refuse("unsupported", action === "disable" || action === "enable" ? "Only launchd jobs and scheduled tasks can be disabled or enabled." : "A bare process has no start command.");
   if (row.kind === "launchd" && row.domain === "gui" && (!Number.isSafeInteger(row.uid) || row.uid! < 0)) return refuse("unknown", "The launchd uid is unknown or invalid.");
   const unavailable = control.actions.find((a) => a.action === action)?.reason;
   if (unavailable) return refuse("unavailable", unavailable);
+  if (row.kind === "windows-service" && (action === "disable" || action === "enable")) return refuse("unsupported", "Scout cannot disable or enable Windows services yet.");
+  if (action === "enable" && row.kind === "launchd" && !validPath(row.plist ?? null)) return refuse("unknown", "The plist path is invalid.");
   if (row.kind === "windows-service") {
     plan.env = { SCOUT_NAME: row.name, SCOUT_PID: row.pid === null ? "" : String(row.pid), SCOUT_PATH: row.program ?? "" };
-    plan.argv = pwsh(WINDOWS_CONTROL[hard ? "hard" : action]);
+    plan.argv = pwsh(WINDOWS_CONTROL[hard ? "hard" : action as "start" | "stop" | "restart"]);
     plan.command = `${action === "start" ? "Start" : action === "stop" ? "Stop" : "Restart"}-Service -Name ${row.name}${hard ? " -Force -NoWait" : ""}`;
     if (hard && row.pid !== null) plan.command += `; Stop-Process -Id ${row.pid} -Force only if the service and path still match`;
   } else if (row.kind === "scheduled-task") {
@@ -143,13 +152,23 @@ export function planControl(row: ControlRow, action: ControlAction, options: Con
     plan.env = { SCOUT_NAME: task.name, SCOUT_TASK_PATH: task.path };
     plan.argv = pwsh(TASK_CONTROL[action]);
     const command = (verb: string): string => `${verb}-ScheduledTask -TaskPath ${task.path} -TaskName ${task.name}`;
-    plan.command = action === "restart" ? `${command("Stop")}; ${command("Start")}` : command(action === "start" ? "Start" : "Stop");
+    plan.command = action === "restart" ? `${command("Stop")}; ${command("Start")}` : action === "disable" ? `${command("Disable")}; ${command("Stop")}` : command(action === "start" ? "Start" : action === "enable" ? "Enable" : "Stop");
+    if (action === "disable") plan.effects = [...plan.effects, "Its schedule and other triggers are ignored while it is disabled."];
   } else if (row.kind === "launchd") {
     const label = `${row.domain === "system" ? "system" : `gui/${row.uid}`}/${row.name}`;
-    plan.argv = action === "stop" ? ["launchctl", "kill", hard ? "SIGKILL" : "SIGTERM", label] : ["launchctl", "kickstart", ...(action === "restart" ? ["-k"] : []), label];
-    plan.command = plan.argv.join(" ");
-    if (action === "stop" && row.keepAlive) plan.effects = [...plan.effects, "KeepAlive will start this launchd job again."];
-    if (plan.admin === "sudo") plan.sudoCommand = `sudo ${plan.command}`;
+    const domainTarget = row.domain === "system" ? "system" : `gui/${row.uid}`;
+    if (action === "disable" || action === "enable") {
+      const plist = action === "enable" && row.plist ? row.plist : "";
+      plan.argv = ["zsh", "-c", LAUNCHD_STARTUP[action], "scout-control", label, domainTarget, plist];
+      plan.command = action === "disable" ? `launchctl disable ${label}; launchctl bootout ${label}` : `launchctl enable ${label}${plist ? `; launchctl bootstrap ${domainTarget} "${plist}"` : ""}`;
+      plan.effects = [...plan.effects, ...action === "disable" ? ["It stays off after you log in or restart, and comes back only when you enable it."] : plist ? ["Scout loads the job right away, and if it is set to run at load, it starts now too."] : ["Scout cannot find this job's plist, so the job will not load until your next login or restart."]];
+      if (plan.admin === "sudo") plan.sudoCommand = plan.command.split("; ").map((part) => `sudo ${part}`).join(" && ");
+    } else {
+      plan.argv = action === "stop" ? ["launchctl", "kill", hard ? "SIGKILL" : "SIGTERM", label] : ["launchctl", "kickstart", ...(action === "restart" ? ["-k"] : []), label];
+      plan.command = plan.argv.join(" ");
+      if (action === "stop" && row.keepAlive) plan.effects = [...plan.effects, "KeepAlive will start this launchd job again."];
+      if (plan.admin === "sudo") plan.sudoCommand = `sudo ${plan.command}`;
+    }
   } else {
     if (!validPid(row.pid) || row.program === null) return refuse("unknown", "The process identity is unknown.");
     if (windows) {
@@ -209,7 +228,7 @@ export type ControlRunResult = { status: 202 | 200; actionId: number; state: "ru
 export class ControlError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
 
 const fingerprint = (row: ControlRow, plan: PrivateControlPlan): string => createHash("sha256").update(JSON.stringify({
-  row: [row.machineId, row.serviceId, row.name, row.program, row.pid, row.state, row.goneAt, row.kind, row.domain, row.uid, row.keepAlive, row.plist, row.classification, row.ports],
+  row: [row.machineId, row.serviceId, row.name, row.program, row.pid, row.state, row.goneAt, row.kind, row.domain, row.uid, row.keepAlive, row.enabled, row.plist, row.classification, row.ports],
   recipe: row.recipe ? [row.recipe.hash, row.recipe.state, row.recipe.gone, row.recipe.port, row.recipe.decidedAt] : null,
   stack: row.stack ? [row.stack, plan.stackMembers?.map((item) => item.fingerprint)] : null,
   argv: plan.argv, env: plan.env, transport: plan.transport, admin: plan.admin, allowed: plan.allowed, effects: plan.effects,
@@ -516,13 +535,13 @@ export class ControlRunner extends EventEmitter {
         catch { unreadable = true; }
         const stopped = !unreadable && (row === null || row.goneAt !== null || row.state === "stopped" || row.state === "disabled");
         const running = !unreadable && row !== null && row.goneAt === null && row.state === "running";
-        const matched = plan.action === "stop" ? stopped : running && (!sudo || plan.action !== "restart" || row!.pid !== before.pid);
-        if (matched && this.clock.now() - start <= duration) { finish(sudo ? "confirmed" : "done", `${subject} ${plan.action === "stop" ? "stopped" : plan.action === "start" ? "started" : "restarted"} after ${Math.ceil((this.clock.now() - start) / 1000)} s.`); return; }
+        const matched = plan.action === "disable" ? !unreadable && row !== null && startupEnabled(row) === false && (stopped || row.state === "disabled") : plan.action === "enable" ? !unreadable && row !== null && row.goneAt === null && startupEnabled(row) === true : plan.action === "stop" ? stopped : running && (!sudo || plan.action !== "restart" || row!.pid !== before.pid);
+        if (matched && this.clock.now() - start <= duration) { finish(sudo ? "confirmed" : "done", `${subject} ${plan.action === "stop" ? "stopped" : plan.action === "start" ? "started" : plan.action === "disable" ? "disabled" : plan.action === "enable" ? "enabled" : "restarted"} after ${Math.ceil((this.clock.now() - start) / 1000)} s.`); return; }
         const remaining = duration - (this.clock.now() - start);
         if (remaining <= 0) break;
         await this.clock.sleep(Math.min(sudo ? 10_000 : 2000, remaining));
       }
-      finish(sudo ? "expired" : "failed", this.closed ? "The control runner closed before confirmation." : unreadable ? `Scout could not read live state within ${duration / 1000} s.` : plan.action === "stop" ? `${subject} is still running after ${duration / 1000} s.` : `The expected running state did not appear after ${duration / 1000} s.`);
+      finish(sudo ? "expired" : "failed", this.closed ? "The control runner closed before confirmation." : unreadable ? `Scout could not read live state within ${duration / 1000} s.` : plan.action === "stop" ? `${subject} is still running after ${duration / 1000} s.` : plan.action === "disable" || plan.action === "enable" ? `${subject} did not show as ${plan.action}d after ${duration / 1000} s.` : `The expected running state did not appear after ${duration / 1000} s.`);
     } catch { finish(sudo ? "expired" : "failed", "Scout could not read or confirm the action result."); }
   }
 }
