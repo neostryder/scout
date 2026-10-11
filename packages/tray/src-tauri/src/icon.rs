@@ -1,4 +1,4 @@
-//! The tray icon: a compass ring and needle with a status dot, drawn at run time so the icon needs no image files and follows the light or dark bar.
+//! The tray icon: a small watchtower with a status dot, drawn at run time so the icon needs no image files and follows the light or dark bar.
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum IconState {
@@ -39,17 +39,51 @@ fn segment_distance(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32
     ((px - ax - t * dx).powi(2) + (py - ay - t * dy).powi(2)).sqrt()
 }
 
-fn inside_needle(x: f32, y: f32) -> bool {
-    // The diamond M12 5 L15 12 L12 19 L9 12.
-    let (dx, dy) = ((x - 12.0).abs(), (y - 12.0).abs());
-    dx / 3.0 + dy / 7.0 <= 1.0
+/// The warm colors of the tower: gold for the roof and gallery, amber for the lantern.
+fn gold(dark: bool) -> [u8; 3] {
+    if dark { [0xe8, 0xb8, 0x3a] } else { [0xa9, 0x74, 0x0c] }
+}
+
+fn lantern(dark: bool) -> [u8; 3] {
+    if dark { [0xff, 0xb0, 0x2e] } else { [0xd9, 0x7a, 0x00] }
+}
+
+/// Which part of the tower, if any, covers a point. The tower stands left of center so the status dot can sit at the lower right.
+fn tower_part(x: f32, y: f32) -> Option<Part> {
+    // Roof: the triangle (10, 2), (14, 6), (6, 6).
+    if (2.0..=6.0).contains(&y) && (x - 10.0).abs() <= (y - 2.0) {
+        return Some(Part::Roof);
+    }
+    // Lantern room with two bars.
+    if (6.0..10.0).contains(&y) && (7.2..=12.8).contains(&x) {
+        return Some(if (x - 10.0).abs() < 0.5 { Part::Body } else { Part::Lantern });
+    }
+    // Gallery.
+    if (10.0..=11.8).contains(&y) && (6.2..=13.8).contains(&x) {
+        return Some(Part::Roof);
+    }
+    // Tower body, widening toward the base.
+    if (11.8..=22.0).contains(&y) {
+        let half = 2.3 + (y - 11.8) / (22.0 - 11.8) * 1.5;
+        if (x - 10.0).abs() <= half {
+            return Some(Part::Body);
+        }
+    }
+    None
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Part {
+    Roof,
+    Lantern,
+    Body,
 }
 
 fn sample(state: IconState, dark: bool, x: f32, y: f32) -> Option<[u8; 3]> {
-    let base = if state == IconState::Unreachable { dim(ink(dark)) } else { ink(dark) };
+    let unreachable = state == IconState::Unreachable;
     let (dot_x, dot_y) = (19.0, 19.0);
     let to_dot = ((x - dot_x).powi(2) + (y - dot_y).powi(2)).sqrt();
-    if state == IconState::Unreachable {
+    if unreachable {
         let cross = segment_distance(x, y, 16.0, 16.0, 22.0, 22.0).min(segment_distance(x, y, 22.0, 16.0, 16.0, 22.0));
         if cross <= 1.0 {
             return Some(dot(state, dark));
@@ -66,11 +100,12 @@ fn sample(state: IconState, dark: bool, x: f32, y: f32) -> Option<[u8; 3]> {
             return None;
         }
     }
-    let to_center = ((x - 12.0).powi(2) + (y - 12.0).powi(2)).sqrt();
-    if (8.0..=10.0).contains(&to_center) || inside_needle(x, y) {
-        return Some(base);
-    }
-    None
+    let color = match tower_part(x, y)? {
+        Part::Roof => gold(dark),
+        Part::Lantern => lantern(dark),
+        Part::Body => ink(dark),
+    };
+    Some(if unreachable { dim(color) } else { color })
 }
 
 /// Straight-alpha RGBA pixels, SIZE by SIZE.
@@ -120,19 +155,20 @@ mod tests {
             let p = pixel(&buf, 19.0, 19.0);
             assert_eq!(&p[..3], &color);
             assert_eq!(p[3], 255);
-            // On the ring's circle but inside the dot's gap, nothing is drawn.
-            assert_eq!(pixel(&buf, 15.7, 15.7)[3], 0);
+            // Between the tower and the dot, inside the dot's gap, nothing is drawn.
+            assert_eq!(pixel(&buf, 13.2, 19.0)[3], 0);
         }
     }
 
     #[test]
-    fn the_ring_and_needle_follow_the_bar_theme() {
+    fn the_tower_is_gold_amber_and_ink_and_follows_the_bar_theme() {
         let dark = render(IconState::Up, true);
         let light = render(IconState::Up, false);
-        assert_eq!(&pixel(&dark, 12.0, 12.0)[..3], &[0xe8, 0xe8, 0xea]);
-        assert_eq!(&pixel(&light, 12.0, 12.0)[..3], &[0x1c, 0x1f, 0x24]);
-        // The ring at the left edge of the circle.
-        assert_eq!(pixel(&dark, 3.0, 12.0)[3], 255);
+        assert_eq!(&pixel(&dark, 10.0, 4.5)[..3], &[0xe8, 0xb8, 0x3a]);
+        assert_eq!(&pixel(&light, 10.0, 4.5)[..3], &[0xa9, 0x74, 0x0c]);
+        assert_eq!(&pixel(&dark, 8.0, 8.0)[..3], &[0xff, 0xb0, 0x2e]);
+        assert_eq!(&pixel(&dark, 10.0, 16.0)[..3], &[0xe8, 0xe8, 0xea]);
+        assert_eq!(&pixel(&light, 10.0, 16.0)[..3], &[0x1c, 0x1f, 0x24]);
         assert_eq!(pixel(&dark, 1.0, 1.0)[3], 0);
     }
 
@@ -143,5 +179,17 @@ mod tests {
         // The dot's old footprint is empty apart from the cross strokes.
         assert_eq!(pixel(&buf, 19.0, 14.6)[3], 0);
         assert_ne!(render(IconState::Unreachable, true), render(IconState::Up, true));
+    }
+
+    /// Writes each state's pixels as raw RGBA next to the given path, for a look at the glyph. Runs only on request: `SCOUT_ICON_DUMP=dir cargo test -- --ignored dump`.
+    #[test]
+    #[ignore]
+    fn dump_the_glyphs() {
+        let dir = std::env::var("SCOUT_ICON_DUMP").unwrap();
+        for (name, state) in [("up", IconState::Up), ("changed", IconState::Changed), ("down", IconState::Down), ("unreachable", IconState::Unreachable)] {
+            for (theme, dark) in [("dark", true), ("light", false)] {
+                std::fs::write(format!("{dir}/{name}-{theme}.rgba"), render(state, dark)).unwrap();
+            }
+        }
     }
 }

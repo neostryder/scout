@@ -356,7 +356,7 @@ node packages/cli/src/main.ts provenance flags --machine mac-mini --kind odd-loc
 
 The tray panel is a small desktop app in `packages/tray` that puts a Scout icon in the Windows system tray or the macOS menu bar. It reaches the hub through its public hostname, so it needs the hub in production mode (see [Local mode and production mode](#local-mode-and-production-mode)) and a Cloudflare Access service token on each device that runs it.
 
-The icon is a compass ring and needle with a status dot. The dot is green when everything meant to stay up is up, amber when something changed, and red when something is down. A grey cross takes its place when the hub cannot be reached or the panel is not connected yet. The icon follows the light or dark taskbar.
+The icon is a small gold-and-amber watchtower with a status dot. The dot is green when everything meant to stay up is up, amber when something changed, and red when something is down. A grey cross takes its place when the hub cannot be reached or the panel is not connected yet. The icon follows the light or dark taskbar.
 
 ### What the panel shows
 
