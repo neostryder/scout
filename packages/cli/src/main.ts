@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hubMachineId, setHubMachine, findHubMachine, listRoutes, loadTunnelHosts, openCatalog, type RouteState } from "@scout/core";
-import { configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare } from "@scout/ops";
+import { configureHubMachine, loadMachines, localPaths, lookupCloudflareSecrets, readCloudflare } from "@scout/ops";
 import { describeCommand } from "./describe.ts";
 import { recipesCommand } from "./recipes.ts";
 import { findProjects } from "@scout/core";
@@ -15,6 +15,7 @@ import { healthCommand } from "./health.ts";
 import { portsCommand } from "./ports.ts";
 import { provenanceCommand } from "./provenance.ts";
 import { stacksCommand } from "./stacks.ts";
+import { mapCommand, statusCommand, whoisCommand } from "./insight.ts";
 
 const STATES = ["ok", "origin-down", "dns-dangling", "no-origin", "unknown"];
 
@@ -83,6 +84,16 @@ async function main(): Promise<void> {
   if (existsSync(resolve(root, "machines.json"))) configureHubMachine(resolve(root, "machines.json"));
   const requestedDb = value(args, "--db") ?? `${root}/.scout-data/catalog.db`;
   const dbPath = requestedDb === ":memory:" ? requestedDb : resolve(requestedDb);
+  if (args[0] === "status" || args[0] === "whois" || args[0] === "map") {
+    const db = openCatalog(dbPath);
+    try {
+      const options = { paths: localPaths(root, requestedDb) };
+      if (args[0] === "status") statusCommand(db, args.slice(1), options);
+      else if (args[0] === "whois") whoisCommand(db, args.slice(1), options);
+      else mapCommand(db, args.slice(1), options);
+    } finally { db.close(); }
+    return;
+  }
   if (args[0] === "ports" || args[0] === "stacks") {
     if (args[0] === "stacks" && args[1] === "start" && !args.includes("--yes")) throw new Error("stacks start requires --yes");
     const db = openCatalog(dbPath);
@@ -163,13 +174,16 @@ async function main(): Promise<void> {
   console.error("       node packages/cli/src/main.ts ports [next <range>] [--db path]");
   console.error("       node packages/cli/src/main.ts provenance [scan | flags [--machine id] [--kind kind]] [--db path]");
   console.error("       node packages/cli/src/main.ts stacks [plan <name> | start <name> --yes] [--db path]");
+  console.error("       node packages/cli/src/main.ts status [--json] [--db path]");
+  console.error("       node packages/cli/src/main.ts whois <port|name> [--json] [--db path]");
+  console.error("       node packages/cli/src/main.ts map [--out file] [--db path]");
   process.exitCode = 1;
 }
 
 const entry = process.argv[1];
 if (entry !== undefined && resolve(entry) === fileURLToPath(import.meta.url)) {
   main().catch((err: unknown) => {
-    console.error(["control", "recipes", "ports", "stacks", "provenance"].includes(process.argv[2] ?? "") && err instanceof Error ? err.message : "command failed");
+    console.error(["control", "recipes", "ports", "stacks", "provenance", "status", "whois", "map"].includes(process.argv[2] ?? "") && err instanceof Error ? err.message : "command failed");
     process.exitCode = 1;
   });
 }

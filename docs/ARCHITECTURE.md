@@ -60,6 +60,12 @@ Flags are computed each time the API reads installs, services, and listeners, by
 
 `GET /api/tray` returns the rows the panel lists: the services and listeners the outage watch covers, plus stacks and approved launch recipes, with the hide rules and pins from `.scout-data/tray.json` applied. It sends an ETag and answers 304 when nothing changed. `GET` and `PUT /api/tray/rules` read and replace the rules, and `POST /api/tray/hide` adds one. The rules shape only this list and never what the outage watch checks. Start, stop, and restart from the panel go through the same plan, one-time token, and audit row as the page (see [Control: plan, token, audit](#control-plan-token-audit)).
 
+## The MCP server and the command line
+
+The `status`, `whois`, and `map` commands in `packages/cli/src/insight.ts` and the tools in `packages/mcp` read the catalog directly instead of calling the hub. `packages/ops/src/local.ts` builds the tray panel's read model from the local catalog and the rules files in `.scout-data` (`localTray`, `localStatus`, and `localMapInput`), so the CLI and the MCP server see the same rows as the panel. `packages/core/src/systems-map.ts` holds three pure functions over that data: `whoIs`, `statusSummary`, and `systemsMapMarkdown`.
+
+`@scout/mcp` has no external dependencies and does not use the official MCP SDK, which keeps the repository's runtime dependency count at zero. `server.ts` is a small JSON-RPC 2.0 layer over standard input and output that handles `initialize`, `ping`, `tools/list`, and `tools/call`, and `tools.ts` defines the tools. Each tool call opens the catalog, answers, and closes it. `scout_start_service` goes through `ControlRunner` (plan, one-time token, run, wait) the same way the hub's action endpoints do (see [Control: plan, token, audit](#control-plan-token-audit)). `scout_plan_action` returns a plan without its token, and no tool runs a stop or a restart.
+
 ## The hub machine
 
 `configureHubMachine` makes the one machine with the `local` transport in `machines.json` the hub machine. Health probes, launch recipes, stacks, and Scout's own protected entry all ask core for its id instead of assuming a name.

@@ -374,6 +374,64 @@ On Windows, add the panel to the Startup folder. On macOS, add it to Login Items
 - The icon shows a grey cross: the panel is not connected yet, cannot reach the hub, or had its token refused by Cloudflare Access. The banner in the panel says which.
 - The panel says "Cloudflare Access turned down the service token": check the Client ID and secret on the connection screen, the Service Auth policy on the Access application, and `allowedServiceTokens` in `access.json` on the hub machine.
 
+## Agents and the command line
+
+You can check on your machines from a terminal, or let an AI agent do it, without opening the Scout page. The commands and the MCP server below read the hub machine's catalog directly (`.scout-data/catalog.db`, or another file with `--db`), so they work even when the hub is stopped. Run them from the Scout folder on the hub machine.
+
+### Check status, ports, and the systems map
+
+```
+node packages/cli/src/main.ts status
+node packages/cli/src/main.ts whois 5432
+node packages/cli/src/main.ts whois postgres
+node packages/cli/src/main.ts map --out ~/notes/systems-map.md
+```
+
+`status` shows whether everything is up, how many outages are open, and how many rows on each machine are up, changed, down, or stopped, then lists each open outage and everything that is down or changed. It shows the same rows as the tray panel and follows your hide rules, and it also shows open outages for things that have since disappeared from a machine. Add `--json` to get JSON.
+
+`whois` takes a port number or part of a service, process, container, or image name, and shows what matches on every machine and which program is behind it. It searches everything that is present, including rows you have hidden from the tray panel.
+
+`map` writes a markdown document with a table for each machine (name, kind, state, port, whether the row is protected or yours, and a detail), then your stacks and your port registry. The registry part shows each range with how many ports are used and the next free one, each reserved port and what holds it, and any clashes. Without `--out`, it prints to the terminal.
+
+### Keep the map in your notes
+
+With `--out`, `map` saves the file, creates any missing folders, and replaces the old copy in one step. Save it to a notes folder or vault and rerun it from a scheduled task, or by hand, to keep it current.
+
+### Connect an agent
+
+Any agent that supports the Model Context Protocol, such as Claude Desktop or Claude Code, can use Scout's MCP server. Add it to the agent's MCP configuration with the path to your Scout folder:
+
+```json
+{
+  "mcpServers": {
+    "scout": {
+      "command": "node",
+      "args": ["C:/path/to/scout/packages/mcp/src/main.ts"]
+    }
+  }
+}
+```
+
+The agent starts the server on the hub machine and talks to it over standard input and output (JSON-RPC 2.0, one message per line), so the server opens no network port and only that agent can reach it. Add `--db <file>` to the args to use a different catalog. The server needs nothing outside the Scout repository and supports MCP protocol versions 2025-11-25, 2025-06-18, 2025-03-26, and 2024-11-05.
+
+### What an agent can do
+
+An agent can read what the commands above show, plus your services with their ids, ports, protection, and available actions, filtered by machine, state, or name. It can also read outages, alerts, the port registry, and the log of every start, stop, and restart. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, and `scout_action_log`.
+
+`scout_start_service` starts a stopped service or listener. Scout plans the start, runs it if the plan is allowed, and reports the result, with the same checks, one-time token, and audit log as the page and the tray panel. It refuses a service that is already running or protected and says why. If the start needs admin rights, the agent gets the sudo command to run, or a note to approve the prompt on that machine.
+
+An agent cannot stop or restart anything. With `scout_plan_action` it can ask what a start, stop, or restart would do, whether it is allowed, and what would break, but it never gets the token needed to run it. To stop or restart, use the Scout page, the tray panel, or the CLI:
+
+```
+node packages/cli/src/main.ts control run <service|listener> <id> <stop|restart> --yes
+```
+
+Protected services (ssh, remote access, the tunnel, Scout itself, and DNS and network software) never offer Stop or Restart anywhere.
+
+### Who can use it
+
+The MCP server has no sign-in. Anyone who can run it on the hub machine can read the catalog and start services, just as they could with the CLI, so connect it only to agents you would trust with the CLI.
+
 ## Local state
 
 Everything Scout writes lives in `.scout-data/`:

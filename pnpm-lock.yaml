@@ -376,6 +376,15 @@ importers:
         specifier: workspace:*
         version: link:../research
 
+  packages/mcp:
+    dependencies:
+      '@scout/core':
+        specifier: workspace:*
+        version: link:../core
+      '@scout/ops':
+        specifier: workspace:*
+        version: link:../ops
+
   packages/ops:
     dependencies:
       '@scout/adapter-listeners':
