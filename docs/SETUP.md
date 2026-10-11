@@ -86,7 +86,7 @@ A Windows machine is read through the local transport, because remote commands r
 
 ## SSH access for remote machines
 
-Scout calls ssh with `BatchMode=yes` and an eight-second connect timeout, so a remote must accept your key without any prompt. It installs nothing on the remote side, and every probe is a read-only command.
+Scout calls ssh with `BatchMode=yes` and an eight-second connect timeout, so a remote must accept your key without any prompt. On a Windows hub machine it uses the ssh that comes with Git for Windows when that is installed, because the ssh bundled with Windows often exits with a crash code after finishing. Set the `SCOUT_SSH` environment variable to the full path of another ssh program to override that choice. It installs nothing on the remote side, and every probe is a read-only command.
 
 1. Turn on the ssh server on the remote. On macOS that is System Settings, General, Sharing, Remote Login. On Linux, install and start `openssh-server` or your distribution's equivalent.
 2. Make a key on the hub machine if you do not have one: `ssh-keygen -t ed25519`.

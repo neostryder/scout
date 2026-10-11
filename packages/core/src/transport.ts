@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { Probe, ProbeOutput } from "./adapter.ts";
 
 export interface ExecResult { exitCode: number; stdout: string; stderr: string }
@@ -50,6 +52,21 @@ function run(file: string, args: string[], timeoutMs: number, signal?: AbortSign
   });
 }
 
+/**
+ * The ssh program to run. Windows' bundled OpenSSH exits with a crash status on about half of its runs, after printing the complete output,
+ * which looks like a failed read; the ssh that ships with Git for Windows does not, so it is used when it is installed. `SCOUT_SSH` names another program.
+ */
+export function sshProgram(env: NodeJS.ProcessEnv = process.env, platform: string = process.platform, exists: (path: string) => boolean = existsSync): string {
+  if (env["SCOUT_SSH"]) return env["SCOUT_SSH"];
+  if (platform === "win32") {
+    for (const base of [env["ProgramFiles"], env["ProgramW6432"], env["ProgramFiles(x86)"]]) {
+      const candidate = base ? join(base, "Git", "usr", "bin", "ssh.exe") : "";
+      if (candidate && exists(candidate)) return candidate;
+    }
+  }
+  return "ssh";
+}
+
 /** Run one argv locally or through SSH, with no stdin and an abortable child. */
 export const runArgv: Exec = (transport, argv, timeoutMs, signal, env) => {
   if (transport.type === "local") {
@@ -58,7 +75,7 @@ export const runArgv: Exec = (transport, argv, timeoutMs, signal, env) => {
   }
   const words = transport.guest ? [...transport.guest, ...argv] : argv;
   const remote = env ? ["env", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), ...words] : words;
-  return run("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...(transport.options ?? []), transport.target, remoteCommand(remote)], timeoutMs, signal);
+  return run(sshProgram(), ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...(transport.options ?? []), transport.target, remoteCommand(remote)], timeoutMs, signal);
 };
 
 /** Run one probe on a machine and return its raw output. Never throws. */
@@ -69,7 +86,7 @@ export function runProbe(transport: Transport, probe: Probe, timeoutMs = 120_000
     return run(file, args, timeoutMs, undefined, undefined, probe.stdin);
   }
   return run(
-    "ssh",
+    sshProgram(),
     ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...(transport.options ?? []), transport.target, remoteCommand(transport.guest ? [...transport.guest, ...probe.argv] : probe.argv)],
     timeoutMs,
     undefined,
