@@ -5,11 +5,11 @@ import type { AddressInfo } from "node:net";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alertsResponse, listOutages, openCatalog, recordServices, upsertMachine, type Db, type OutageNotice, type ServiceFact } from "@scout/core";
+import { alertsResponse, listOutages, openCatalog, recordListeners, recordServices, upsertMachine, type Db, type OutageNotice, type ServiceFact } from "@scout/core";
 import type { MachineProbe, WatchedMachine } from "@scout/ops";
 import { createHub } from "../src/server.ts";
 import { Notifier, type ChannelResult } from "../src/notify.ts";
-import { HubWatch } from "../src/watch.ts";
+import { HubWatch, type HubWatchOptions } from "../src/watch.ts";
 
 const WEBHOOK = "https://discord.com/api/webhooks/123456789/abcDEF-ghi_JKL";
 const worker: ServiceFact = { kind: "windows-service", name: "worker", displayName: "Worker", domain: "system", program: "C:/Tools/worker.exe", state: "running", startMode: "auto", enabled: true, pid: 42, runAs: null, triggers: null, lastRun: null, lastResult: null };
@@ -17,7 +17,7 @@ const machines: WatchedMachine[] = [{ id: "gm", name: "Server", host: "192.0.2.5
 
 interface Sent { title: string; body: string }
 
-function setup(t: TestContext, mode: { state: MachineProbe["state"] } = { state: "up" }) {
+function setup(t: TestContext, mode: { state: MachineProbe["state"] } = { state: "up" }, extra: Partial<HubWatchOptions> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "scout-hub-watch-"));
   const db = openCatalog(":memory:");
   upsertMachine(db, { id: "gm", name: "Server", os: "macos", kind: "host" });
@@ -32,7 +32,7 @@ function setup(t: TestContext, mode: { state: MachineProbe["state"] } = { state:
   });
   let now = Date.parse("2026-10-10T08:00:00.000Z");
   const clock = { now: () => now, setTimeout: () => ({}), clearTimeout: () => {} };
-  const watch = new HubWatch(db, { machines: () => machines, configPath: join(dir, "watch.json"), heartbeatPath: join(dir, "heartbeat.json"), notifier, clock, log: () => {}, check: { probe: async () => ({ state: mode.state, detail: mode.state === "up" ? "" : "No SSH greeting.", latencyMs: null }) } });
+  const watch = new HubWatch(db, { ...extra, machines: () => machines, configPath: join(dir, "watch.json"), heartbeatPath: join(dir, "heartbeat.json"), notifier, clock, log: () => {}, check: { probe: async () => ({ state: mode.state, detail: mode.state === "up" ? "" : "No SSH greeting.", latencyMs: null }) } });
   t.after(() => { watch.stop(); db.close(); rmSync(dir, { recursive: true, force: true }); });
   return { db, dir, watch, sent, posted, advance: (ms: number) => { now += ms; }, mode };
 }
@@ -81,20 +81,46 @@ test("a pause stops checks and notices and the page can switch a machine off", a
 test("service checks count once an interval even when reads arrive every few seconds, and a stopped service is announced after two of them", async (t) => {
   const { db, watch, sent, advance } = setup(t);
   recordServices(db, "gm", { origin: "services", status: "ok", facts: [worker] }, "2026-10-10T08:00:00.000Z");
-  watch.observeServices("gm", "2026-10-10T08:00:00.000Z");
+  await watch.observeServices("gm", "2026-10-10T08:00:00.000Z");
   recordServices(db, "gm", { origin: "services", status: "ok", facts: [{ ...worker, state: "stopped" }] }, "2026-10-10T08:00:03.000Z");
   advance(3_000);
-  assert.deepEqual(watch.observeServices("gm", "2026-10-10T08:00:03.000Z"), []);
+  assert.deepEqual(await watch.observeServices("gm", "2026-10-10T08:00:03.000Z"), []);
   advance(3_000);
-  assert.deepEqual(watch.observeServices("gm", "2026-10-10T08:00:06.000Z"), [], "a read a few seconds later is the same check window");
+  assert.deepEqual(await watch.observeServices("gm", "2026-10-10T08:00:06.000Z"), [], "a read a few seconds later is the same check window");
   advance(110_000);
-  assert.deepEqual(watch.observeServices("gm", "2026-10-10T08:01:56.000Z").length, 0, "first failed check");
+  assert.deepEqual((await watch.observeServices("gm", "2026-10-10T08:01:56.000Z")).length, 0, "first failed check");
   advance(120_000);
-  const changes = watch.observeServices("gm", "2026-10-10T08:03:56.000Z");
+  const changes = await watch.observeServices("gm", "2026-10-10T08:03:56.000Z");
   assert.equal(changes.length, 1);
   assert.equal(changes[0]!.outage.kind, "service");
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(JSON.stringify(sent), /Worker on Server is not running/);
+});
+
+const listener = { port: 4870, protocol: "tcp" as const, address: "127.0.0.1", bind: "loopback" as const, pid: 321, processName: "node", processPath: null, container: { name: "web", image: "web:1", containerPort: 80 } };
+
+test("a hub listener the machine's own table stops listing is not an outage while its port still accepts connections", async (t) => {
+  const reachable = { value: true };
+  const asked: string[] = [];
+  const { db, watch, sent, advance } = setup(t, { state: "up" }, { reach: async (host, port) => { asked.push(`${host}:${port}`); return reachable.value; } });
+  const read = (facts: typeof listener[], at: string) => recordListeners(db, "hub", { origin: "docker-ports", status: "ok", facts }, at);
+  read([listener], "2026-10-10T08:00:00.000Z");
+  await watch.observeServices("hub", "2026-10-10T08:00:00.000Z");
+  for (const at of ["2026-10-10T08:02:00.000Z", "2026-10-10T08:04:00.000Z", "2026-10-10T08:06:00.000Z"]) {
+    read([], at);
+    advance(120_000);
+    assert.deepEqual(await watch.observeServices("hub", at), []);
+  }
+  assert.equal(sent.length, 0);
+  assert.ok(asked.includes("127.0.0.1:4870"));
+  reachable.value = false;
+  read([], "2026-10-10T08:08:00.000Z");
+  advance(120_000);
+  await watch.observeServices("hub", "2026-10-10T08:08:00.000Z");
+  read([], "2026-10-10T08:10:00.000Z");
+  advance(120_000);
+  const changes = await watch.observeServices("hub", "2026-10-10T08:10:00.000Z");
+  assert.equal(changes.length, 1, "a port that really stopped answering is still an outage");
 });
 
 test("starting after a long silence records a monitor gap and a short one does not", async (t) => {

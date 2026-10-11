@@ -184,7 +184,7 @@ export function createHub(options: HubOptions): Server {
   const registries = { ports: () => portsResponse(db, readPorts()), stacks };
   const alerts = new HubAlerts(db, { tunnelHostsPath: options.tunnelHostsPath, loadPorts: readPorts, ...(options.watch ? { loadWatch: options.watch.configReader() } : {}), ...options.alerts });
   options.watch?.attachAlerts(alerts);
-  const unsubscribeWatchLive = options.live?.subscribeStored((read) => { if (read.status === "ok") options.watch?.observeServices(read.machineId, read.at); });
+  const unsubscribeWatchLive = options.live?.subscribeStored((read) => { if (read.status === "ok") void options.watch?.observeServices(read.machineId, read.at); });
   const unsubscribeStacksLive = options.live?.subscribeStored(() => stacks.evaluate());
   const unsubscribeStacksReads = subscribeServiceReads(db, () => stacks.evaluate());
   const health = options.health === false ? undefined : new HealthSchedule(db, {

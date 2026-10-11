@@ -29,6 +29,8 @@ export interface Observation {
   state: string;
   detail: string;
   at: string;
+  /** Where a listener can be reached, so a caller can confirm by connecting when the machine's own table is unreliable. */
+  endpoint?: { host: string; port: number };
 }
 
 export interface Outage {
@@ -221,6 +223,14 @@ export function outageNotice(change: OutageChange): OutageNotice {
 // ---- service and listener checks -------------------------------------------------------------------------------------
 
 export function serviceWatchKey(row: Service): string { return `service:${row.machineId}:${row.kind}:${row.domain}:${row.name}`; }
+/** The address to connect to for a listener: loopback for a wildcard bind, otherwise the address it is bound to. */
+export function listenerEndpoint(row: Pick<Listener, "address" | "bind" | "port">): { host: string; port: number } {
+  const address = row.address.replace(/^[(.*)]$/, "$1");
+  if (address === "::" ) return { host: "::1", port: row.port };
+  if (row.bind === "all" || address === "*" || address === "0.0.0.0") return { host: "127.0.0.1", port: row.port };
+  return { host: address, port: row.port };
+}
+
 export function listenerWatchKey(row: Listener): string { return `listener:${row.machineId}:${row.port}:${row.processName ?? row.containerName ?? "unknown"}`; }
 
 // Per-connection and per-app launchd jobs and loopback ports in the dynamic range come and go all the time and carry no signal.
@@ -282,10 +292,10 @@ export function serviceObservations(db: Db, machineId: string, config: WatchConf
   const proven = new Set((db.prepare("SELECT key FROM watch_state WHERE machine_id = ? AND kind = 'service' AND last_state = 'up'").all(machineId) as { key: string }[]).map((row) => row.key));
   const failing = new Set((db.prepare("SELECT key FROM watch_state WHERE machine_id = ? AND kind = 'service' AND failures > 0").all(machineId) as { key: string }[]).map((row) => row.key));
   const out: Observation[] = [];
-  const add = (key: string, label: string, running: boolean, detail: string): void => {
+  const add = (key: string, label: string, running: boolean, detail: string, endpoint?: { host: string; port: number }): void => {
     if (!isWatched(config, "service", machineId, key, at)) return;
     if (!running && !proven.has(key) && !failing.has(key)) return;
-    out.push({ key, kind: "service", machineId, label, ok: running, state: running ? "up" : "not-running", detail, at });
+    out.push({ key, kind: "service", machineId, label, ok: running, state: running ? "up" : "not-running", detail, at, ...(endpoint ? { endpoint } : {}) });
   };
   const services = listServices(db, { machine: machineId }, descriptions);
   const context = watchContext(db, services);
@@ -297,7 +307,7 @@ export function serviceObservations(db: Db, machineId: string, config: WatchConf
   }
   for (const row of listListeners(db, { machine: machineId }, descriptions)) {
     if (!forced(listenerWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
-    add(listenerWatchKey(row), `Port ${row.port} (${row.processName ?? row.containerName ?? "unknown"}) on ${row.machineName}`, row.goneAt === null, "Nothing is listening on the port.");
+    add(listenerWatchKey(row), `Port ${row.port} (${row.processName ?? row.containerName ?? "unknown"}) on ${row.machineName}`, row.goneAt === null, "Nothing is listening on the port.", listenerEndpoint(row));
   }
   return out;
 }

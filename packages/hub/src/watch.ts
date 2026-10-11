@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { connect } from "node:net";
 import { dirname } from "node:path";
-import { hubMachineName, isPaused, outageNotice, recordMonitorGap, recordObservations, resetWatchCounters, serviceObservations, settleUnwatched, updateWatchFile, urlObservations, watchedKeys, watchFileReader, type Db, type OutageChange, type WatchConfig } from "@scout/core";
+import { hubMachineId, hubMachineName, isPaused, outageNotice, recordMonitorGap, recordObservations, resetWatchCounters, serviceObservations, settleUnwatched, updateWatchFile, urlObservations, watchedKeys, watchFileReader, type Db, type Observation, type OutageChange, type WatchConfig } from "@scout/core";
 import { runMachineChecks, type MachineCheckOptions, type WatchedMachine } from "@scout/ops";
 import type { HubAlerts } from "./alerts.ts";
 import type { LiveClock } from "./live.ts";
@@ -20,7 +21,22 @@ export interface HubWatchOptions {
   alerts?: HubAlerts;
   clock?: LiveClock;
   check?: Pick<MachineCheckOptions, "probe" | "now">;
+  /** Whether a TCP connection to a port succeeds. A test replaces it. */
+  reach?: (host: string, port: number) => Promise<boolean>;
   log?: (line: string) => void;
+}
+
+const REACH_TIMEOUT_MS = 1_500;
+
+/** True when something accepts a connection on the port. */
+export function tcpReachable(host: string, port: number, timeoutMs: number = REACH_TIMEOUT_MS): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ host, port });
+    const done = (ok: boolean): void => { socket.destroy(); resolve(ok); };
+    socket.setTimeout(timeoutMs, () => done(false));
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+  });
 }
 
 const CLOCK: LiveClock = {
@@ -168,15 +184,30 @@ export class HubWatch {
     return changes;
   }
 
+  /**
+   * The hub machine's own listener table is not always complete: some Windows builds drop loopback listeners from it or list them under an unknown owner, so a service
+   * that is running looks gone. A listener that the table does not show is therefore confirmed by connecting to it before it counts as down. Other machines are read
+   * over ssh and are not second-guessed here.
+   */
+  private async confirmReachable(machineId: string, observations: Observation[]): Promise<Observation[]> {
+    if (machineId !== hubMachineId()) return observations;
+    const reach = this.options.reach ?? tcpReachable;
+    return Promise.all(observations.map(async (obs) => {
+      if (obs.ok || obs.endpoint === undefined) return obs;
+      if (!(await reach(obs.endpoint.host, obs.endpoint.port).catch(() => false))) return obs;
+      return { ...obs, ok: true, state: "up", detail: "The port accepts connections although the listener table did not list it." };
+    }));
+  }
+
   /** A fresh, complete live read of one machine. Reads come every few seconds while a page watches, so a check counts at most once an interval. */
-  observeServices(machineId: string, at: string): OutageChange[] {
+  async observeServices(machineId: string, at: string): Promise<OutageChange[]> {
     const nowMs = this.clock.now();
     const last = this.lastServiceAt.get(machineId);
     if (last !== undefined && nowMs - last < this.intervalMs - 15_000) return [];
     this.lastServiceAt.set(machineId, nowMs);
     const config = this.readConfig();
     if (isPaused(config, at)) return [];
-    const observations = serviceObservations(this.db, machineId, config, at);
+    const observations = await this.confirmReachable(machineId, serviceObservations(this.db, machineId, config, at));
     const changes = [...settleUnwatched(this.db, { kind: "service", machineId }, watchedKeys(observations), at), ...recordObservations(this.db, observations)];
     if (changes.length) {
       this.alerts?.evaluate(at);

@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- [Visible] [Services] **Services on the hub machine no longer flap between down and back up when Windows drops them from its listener list.** Some Windows builds leave loopback listeners out of that list or show them under an unknown owner, so running services looked stopped for a minute or two. Scout now connects to the port before it counts a listener on the hub machine as down, and a port that still accepts connections stays up.
 - [Visible] [UI] **Saving the portal as an app on a phone keeps its icon.** The icons and the manifest were behind the Cloudflare Access sign-in, and a phone fetches the home-screen icon in a separate process that has none, so it got a login page. The page now carries its Apple touch icon and favicon inline, and the other icons and the manifest load without a sign-in from a bypass rule that names those paths. The hub serves only those paths without a token.
 
 ## [0.1.0] - 2026-10-11
