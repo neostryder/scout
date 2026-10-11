@@ -10,5 +10,5 @@ const root = scoutRoot();
 if (existsSync(`${root}/machines.json`)) configureHubMachine(`${root}/machines.json`);
 const dbIndex = process.argv.indexOf("--db");
 const paths = localPaths(root, dbIndex >= 0 ? process.argv[dbIndex + 1] : undefined);
-const server = new McpServer({ name: "scout", version: "0.1.0", instructions: INSTRUCTIONS }, createTools({ paths }));
+const server = new McpServer({ name: "scout", version: "0.1.1", instructions: INSTRUCTIONS }, createTools({ paths }));
 await server.serve(process.stdin, process.stdout);

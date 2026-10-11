@@ -1,6 +1,6 @@
 [package]
 name = "scout-tray"
-version = "0.1.0"
+version = "0.1.1"
 description = "Scout tray and menu bar panel"
 edition = "2024"
 publish = false

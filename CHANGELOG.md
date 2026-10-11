@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-11
+
 ### Fixed
 
 - [Visible] [Services] **A port no longer shows up twice when Windows reports its owner as process 0.** Some Windows builds read the owner of a loopback listener as "Idle" on one scan and as the real program on the next, so the Services page listed the port under both names. Scout now keeps the last real owner it saw on that port.
