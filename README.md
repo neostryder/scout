@@ -6,16 +6,40 @@ It is meant for one person or a household with a handful of machines: a Windows 
 
 ## What it does
 
-- Builds an inventory of each machine: Windows registry entries, winget packages, Store apps, Homebrew formulae and casks, macOS app bundles and pkgutil receipts, npm globals, pipx and uv tools, Go and other local binaries, Python and Node runtimes, container images, and the contents of WSL and Docker Sandboxes guests. A scan never starts a program. Guests are read only while they are already running.
-- Looks up the newest version of each install from Homebrew, npm, PyPI, GitHub releases, the Go module proxy, crates.io, Sparkle appcasts, winget, and the Microsoft Store, and shows end-of-life dates from endoflife.date as advisory notes.
-- Updates installs through winget, the Store, brew, brew casks, npm, pipx, and uv. Each update shows the exact command, waits for your confirmation, then runs a preflight check, the update, and a verify step, one job at a time. A dependency guard refuses an update that would break a runtime another program needs, and asks for a second confirmation when the risk is softer.
-- Maps the running side of each machine: listening TCP ports, published container ports, Windows services, scheduled tasks, and launchd jobs. Each row carries a description and a label of essential, optional, or third-party. Start, stop, and restart go through a plan and a one-time confirmation, and so do disable and enable for launchd jobs and scheduled tasks. A protected list (ssh, remote access, the tunnel, Scout itself, and more) cannot be stopped or disabled from Scout.
-- Raises alerts for new listeners and background jobs, stopped services, widened network exposure, unhealthy endpoints, TLS certificates within 14 days of expiry, crash loops, and port clashes.
-- Flags installs, services, and listeners that look out of place, such as a program running from a temp, Downloads, or Desktop folder, a Windows uninstall entry with no publisher, or an unsigned Store app package. With an optional profile of your GitHub accounts and commit emails, it also marks what comes from your own projects. Each flag shows its evidence and changes nothing.
-- Watches for outages. Every 2 minutes the hub checks that each machine answers its ssh port with an SSH greeting, and checks the public hostnames and running services it already tracks. A machine that accepts a connection but sends nothing back counts as hung. Each confirmed outage is recorded with its start and end, listed on the Services page, and sent as a desktop notification and, if you set up a webhook, a Discord post.
-- Starts your own projects on a Windows hub machine. Package scripts, launch configurations, and compose files under folders you name become launch recipes that you approve once, and a stack starts several recipes and services in order.
-- Puts a Scout icon in the Windows system tray or the macOS menu bar. Its dot turns amber when something changed and red when something is down, and a click opens a small panel that lists the services, listeners, stacks, and launch recipes meant to stay up on each machine. Start, stop, and restart there go through the same plan and confirmation as the page.
-- Reports on your machines from a terminal and to AI agents. The `status` command shows what is down or changed, `whois` says what holds a port or matches a name, and `map` writes a markdown systems map you can keep in a notes folder. An MCP server gives agents such as Claude Desktop and Claude Code the same information and lets them start a stopped service. Stopping and restarting stay with you.
+Scout builds an inventory of each machine from these sources:
+
+- Windows registry entries, winget packages, and Store apps
+- Homebrew formulae and casks, macOS app bundles, and pkgutil receipts
+- dpkg and pacman packages on Linux, with packages built from the AUR listed separately
+- npm globals, pipx and uv tools, and Go and other local binaries
+- Python and Node runtimes and container images
+- the contents of WSL and Docker Sandboxes guests
+
+A scan never starts a program. Guests are read only while they are already running.
+
+For each install, Scout looks up the newest version from Homebrew, npm, PyPI, GitHub releases, the Go module proxy, crates.io, Sparkle appcasts, winget, and the Microsoft Store. End-of-life dates from endoflife.date appear as advisory notes.
+
+Scout updates installs through winget, the Store, brew, brew casks, npm, pipx, and uv. Each update shows the exact command and waits for your confirmation. Scout then runs a preflight check, the update, and a verify step, one job at a time. A dependency guard refuses an update that would break a runtime another program needs, and it asks for a second confirmation when the risk is softer.
+
+Scout also maps the running side of each machine. This covers listening TCP ports on Windows, macOS, and Linux, published container ports, Windows services, scheduled tasks, and launchd jobs. Each row carries a description and a label of essential, optional, or third-party. Start, stop, and restart go through a plan and a one-time confirmation. Disable and enable for launchd jobs and scheduled tasks work the same way. Scout cannot stop or disable anything on its protected list, which includes ssh, remote access, the tunnel, and Scout itself.
+
+Alerts fire for new listeners and background jobs, stopped services, widened network exposure, unhealthy endpoints, TLS certificates within 14 days of expiry, crash loops, and port clashes.
+
+Scout flags installs, services, and listeners that look out of place. Examples are a program running from a temp, Downloads, or Desktop folder, a Windows uninstall entry with no publisher, and an unsigned Store app package. Each flag shows its evidence and changes nothing. With an optional profile of your GitHub accounts and commit emails, Scout also marks what comes from your own projects.
+
+Every 2 minutes the hub checks that each machine answers its ssh port with an SSH greeting. It also checks the public hostnames and running services it already tracks. A machine that accepts a connection but sends nothing back counts as hung. Each confirmed outage is recorded with its start and end and listed on the Services page. Scout sends it as a desktop notification and, if you set up a webhook, as a Discord post.
+
+On a Windows hub machine, Scout starts your own projects. Package scripts, launch configurations, and compose files under folders you name become launch recipes that you approve once. A stack starts several recipes and services in order.
+
+A Scout icon sits in the Windows system tray or the macOS menu bar. Its dot turns amber when something changed and red when something is down. A click opens a small panel that lists the services, listeners, stacks, and launch recipes meant to stay up on each machine. Start, stop, and restart in that panel go through the same plan and confirmation as the page.
+
+Three terminal commands report on your machines:
+
+- `status` shows what is down or changed.
+- `whois` says what holds a port or matches a name.
+- `map` writes a markdown systems map you can keep in a notes folder.
+
+An MCP server gives agents such as Claude Desktop and Claude Code the same information and lets them start a stopped service. They cannot stop or restart one.
 
 Scout never runs an update or a control action on its own. Every change to a machine starts with a click or a command from you, and every one is written to an audit table.
 
