@@ -1,0 +1,7 @@
+{
+  "listeners": {
+    "stdout": "p500\ncPython\nf10\nn*:8009\n---SCOUT-PS---\n500 /usr/local/bin/python3\n953 /usr/local/AdGuardHome/AdGuardHome\n1004 /usr/libexec/kdc\n---SCOUT-ARGS---\n---SCOUT-PPID---\n500 100\n953 1\n1004 1\n---SCOUT-NETSTAT---\ntcp4       0      0  *.8009                 *.*                    LISTEN                 0            0  131072  131072       Python:500  00100 00000006 00000000004d3069 00000000 00000800      1      0 000000\ntcp4       0      0  192.168.2.10.53        *.*                    LISTEN                 0            0  131072  131072  AdGuardHome:953  00100 00000006 00000000004d3069 00000000 00000800      1      0 000000\ntcp46      0      0  *.88                   *.*                    LISTEN                 0            0  131072  131072       kdc:1004  00100 00000006 00000000004d3069 00000000 00000800      1      0 000000\ntcp6       0      0  ::1.8021               *.*                    LISTEN                 0            0  131072  131072  AdGuardHome:953  00100 00000006 00000000004d3069 00000000 00000800      1      0 000000\n",
+    "exitCode": 0,
+    "stderr": ""
+  }
+}

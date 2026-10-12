@@ -5,3 +5,5 @@ echo "---SCOUT-ARGS---"
 ps -axo pid=,args= 2>/dev/null | awk '$2 ~ /(^|\/)(node|nodejs|bun|deno|python[0-9.]*|ruby|java|php|perl)$/'
 echo "---SCOUT-PPID---"
 ps -axo pid=,ppid= 2>/dev/null
+echo "---SCOUT-NETSTAT---"
+netstat -anv -p tcp 2>/dev/null | grep LISTEN

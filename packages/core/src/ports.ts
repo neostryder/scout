@@ -66,7 +66,7 @@ export function validatePorts(data: unknown): { config: PortRegistry; fileError:
 }
 
 export const portsFileReader = (path = ".scout-data/ports.json") => registryFileReader(path, () => ({ ranges: [], reserved: [] } as PortRegistry), validatePorts);
-const owner = (listener: Listener): string => launchLabel(listener.processName, listener.scriptPath) ?? listener.containerName ?? "Unknown process";
+const owner = (listener: Listener): string => launchLabel(listener.processName, listener.scriptPath, listener.owner) ?? listener.containerName ?? "Unknown process";
 const matches = (listener: Listener, match: string): boolean => [listener.processName, listener.containerName].some((name) => name?.toLowerCase().includes(match.toLowerCase()));
 
 export function portClashes(registry: PortRegistry, listeners: Listener[], recipes: LaunchRecipe[]): PortClash[] {

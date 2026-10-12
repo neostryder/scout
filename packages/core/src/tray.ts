@@ -201,7 +201,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       const control = rowControl(controlRow(l, services), context);
       const container = l.containerName !== null;
       const name = l.processName ?? l.containerName ?? `port ${l.port}`;
-      const shown = container ? name : launchLabel(l.processName, l.scriptPath) ?? name;
+      const shown = container ? name : launchLabel(l.processName, l.scriptPath, l.owner) ?? name;
       finish({
         key: listenerWatchKey(l), target: "listener", id: l.id, name, label: container ? `${l.containerName}` : shown, machineId: machine.id, kind: container ? "container" : "listener", class: l.classification.class, vendor: l.classification.vendor,
         state: stateOf(true, shouldRun, l.health?.state), port: l.port, detail: `:${l.port}`,

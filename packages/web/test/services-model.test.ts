@@ -207,6 +207,14 @@ test("listener view models prefer container names and describe missing service j
   assert.equal(listenerRow({ bind: "lan" }).name, "Unknown process");
 });
 
+test("a listener row shows its process id, or says why there is none, and prefers the platform's name for it", () => {
+  assert.equal(listenerRow({ pid: 4870, bind: "loopback" }).pidText, "4870");
+  assert.equal(listenerRow({ pid: 0, bind: "loopback" }).pidText, "Unknown");
+  assert.equal(listenerRow({ pid: null, bind: "all", containerName: "relay" }).pidText, "Container");
+  assert.equal(listenerRow({ pid: null, bind: "all" }).pidText, "Unknown");
+  assert.equal(listenerRow({ label: "svchost: Remote Desktop Services", processName: "svchost", bind: "all" }).name, "svchost: Remote Desktop Services");
+});
+
 test("sort toggling reverses the current column and gives last seen a descending default", () => {
   const original = new URLSearchParams("machine=hub");
   const machine = toggleSort(original, "machine");

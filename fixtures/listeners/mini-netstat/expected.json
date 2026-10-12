@@ -1,0 +1,47 @@
+{
+  "origin": "lsof",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 8009,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 500,
+      "processName": "python3",
+      "processPath": "/usr/local/bin/python3",
+      "ppid": 100,
+      "container": null
+    },
+    {
+      "port": 53,
+      "protocol": "tcp",
+      "address": "192.168.2.10",
+      "bind": "lan",
+      "pid": 953,
+      "processName": "AdGuardHome",
+      "processPath": "/usr/local/AdGuardHome/AdGuardHome",
+      "container": null
+    },
+    {
+      "port": 88,
+      "protocol": "tcp",
+      "address": "*",
+      "bind": "all",
+      "pid": 1004,
+      "processName": "kdc",
+      "processPath": "/usr/libexec/kdc",
+      "container": null
+    },
+    {
+      "port": 8021,
+      "protocol": "tcp",
+      "address": "::1",
+      "bind": "loopback",
+      "pid": 953,
+      "processName": "AdGuardHome",
+      "processPath": "/usr/local/AdGuardHome/AdGuardHome",
+      "container": null
+    }
+  ]
+}

@@ -204,3 +204,23 @@ test("launchLabel names what a runtime is running", async () => {
   assert.equal(launchLabel("node", null), "node");
   assert.equal(launchLabel(null, null), null);
 });
+
+test("an owner names a listener the process name alone leaves unclear, and it survives a scan that reads process 0", async (t) => {
+  const { launchLabel } = await import("../src/listeners.ts");
+  assert.equal(launchLabel("svchost", null, "Remote Desktop Services"), "svchost: Remote Desktop Services");
+  assert.equal(launchLabel("AdguardSvc", null, "adguardsvc"), "adguardsvc");
+  assert.equal(launchLabel(null, null, "Print Spooler"), "Print Spooler");
+  assert.equal(launchLabel("Idle", null, "Print Spooler"), "Print Spooler");
+  assert.equal(launchLabel("node", "server.js", "Example Service service"), "node: server.js");
+  assert.equal(launchLabel("node", null, null), "node");
+  const db = seed(t);
+  const named: ListenerFact = { ...listener, pid: 3100, processName: "node", processPath: "C:/ProgramData/Example/node.exe", owner: "Example Service service" };
+  recordListeners(db, "hub", result([named], "ok", "netconn"), T);
+  assert.equal(listListeners(db)[0]!.owner, "Example Service service");
+  assert.equal(listListeners(db)[0]!.label, "node: Example Service service");
+  recordListeners(db, "hub", result([{ ...named, pid: 0, processName: "Idle", processPath: null, owner: null }], "ok", "netconn"), T2);
+  const rows = listListeners(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.owner, "Example Service service");
+  assert.equal(rows[0]!.pid, 3100);
+});

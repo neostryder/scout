@@ -1,0 +1,7 @@
+{
+  "listeners": {
+    "stdout": "[{\"address\":\"0.0.0.0\",\"port\":3389,\"pid\":1200,\"name\":\"svchost\",\"path\":null,\"cmd\":null,\"cwd\":null,\"ppid\":640,\"owner\":\"Remote Desktop Services\"},{\"address\":\"0.0.0.0\",\"port\":445,\"pid\":4,\"name\":\"System\",\"path\":null,\"cmd\":null,\"cwd\":null,\"ppid\":0,\"owner\":\"File sharing (SMB)\"},{\"address\":\"0.0.0.0\",\"port\":3310,\"pid\":3100,\"name\":\"node\",\"path\":\"C:/ProgramData/Example App/runtime/node.exe\",\"cmd\":null,\"cwd\":null,\"ppid\":2500,\"owner\":\"Example Service service\"},{\"address\":\"127.0.0.1\",\"port\":4870,\"pid\":5100,\"name\":\"node\",\"path\":\"C:/Users/USER/node.exe\",\"cmd\":null,\"cwd\":null,\"ppid\":4000,\"owner\":null},{\"address\":\"::\",\"port\":49664,\"pid\":800,\"name\":\"lsass\",\"path\":null,\"cmd\":null,\"cwd\":null,\"ppid\":640,\"owner\":\"Local Security Authority (RPC)\"}]",
+    "exitCode": 0,
+    "stderr": ""
+  }
+}

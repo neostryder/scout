@@ -260,8 +260,14 @@ export function listenerSummary(machine) {
   return `${listeners.total} ${listeners.total === 1 ? "port" : "ports"} listening, ${exposed} exposed`;
 }
 
+/** The process id to show: a real id, "Container" for a container's port, or "Unknown" when the platform did not report one. */
+export function pidText(row) {
+  if (Number.isInteger(row.pid) && row.pid > 0) return String(row.pid);
+  return row.containerName ? "Container" : "Unknown";
+}
+
 export function listenerRow(row) {
-  return { ...row, exposureText: exposureLabel(row.bind), name: row.containerName || row.label || row.processName || "Unknown process", joinedText: row.serviceName || "No joined service" };
+  return { ...row, exposureText: exposureLabel(row.bind), pidText: pidText(row), name: row.containerName || row.label || row.processName || "Unknown process", joinedText: row.serviceName || "No joined service" };
 }
 
 export function toggleSort(params, sort) {

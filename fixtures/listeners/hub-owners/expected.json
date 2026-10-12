@@ -1,0 +1,64 @@
+{
+  "origin": "netconn",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 3389,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": 1200,
+      "processName": "svchost",
+      "processPath": null,
+      "ppid": 640,
+      "owner": "Remote Desktop Services",
+      "container": null
+    },
+    {
+      "port": 445,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": 4,
+      "processName": "System",
+      "processPath": null,
+      "owner": "File sharing (SMB)",
+      "container": null
+    },
+    {
+      "port": 3310,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": 3100,
+      "processName": "node",
+      "processPath": "C:/ProgramData/Example App/runtime/node.exe",
+      "ppid": 2500,
+      "owner": "Example Service service",
+      "container": null
+    },
+    {
+      "port": 4870,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 5100,
+      "processName": "node",
+      "processPath": "C:/Users/USER/node.exe",
+      "ppid": 4000,
+      "container": null
+    },
+    {
+      "port": 49664,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": 800,
+      "processName": "lsass",
+      "processPath": null,
+      "ppid": 640,
+      "owner": "Local Security Authority (RPC)",
+      "container": null
+    }
+  ]
+}

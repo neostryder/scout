@@ -9,8 +9,8 @@ const fixture = (name: string): ProbeOutputs => JSON.parse(readFileSync(new URL(
 const output = (stdout: string, exitCode = 0) => ({ stdout, exitCode, stderr: "" });
 
 for (const [adapter, names] of [
-  [windowsListenersAdapter, ["hub"]],
-  [macListenersAdapter, ["laptop", "server", "mini"]],
+  [windowsListenersAdapter, ["hub", "hub-owners"]],
+  [macListenersAdapter, ["laptop", "server", "mini", "mini-netstat"]],
   [dockerPortsAdapter, ["docker-laptop", "docker-server", "docker-mini"]],
 ] as [ListenerAdapter, string[]][]) {
   for (const name of names) {

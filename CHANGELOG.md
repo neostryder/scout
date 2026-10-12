@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- [Visible] [Services] **Listeners owned by administrator, system, or other-account processes show a name.** On Windows, the probe reads the socket owner table and the service table, neither of which needs administrator rights, and names each row after its service or a known system owner. On macOS, a netstat section adds listeners from all accounts, including root, that lsof missed. The name is stored in a new searchable `owner` column and shows in the tray, the ports report, and the control confirmation. The Listeners table on the Services page gains a PID column. The first scan after upgrading can raise a one-time burst of "New listener" alerts for listeners that were hidden before.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added

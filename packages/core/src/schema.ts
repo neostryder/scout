@@ -327,6 +327,7 @@ CREATE TABLE IF NOT EXISTS listeners (
   process_path    TEXT,
   script_path     TEXT,
   ppid            INTEGER,
+  owner           TEXT,
   container_name  TEXT,
   container_image TEXT,
   first_seen_at   TEXT NOT NULL,

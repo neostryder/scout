@@ -89,12 +89,13 @@ export const windowsListenersAdapter: ListenerAdapter = {
     const facts: ListenerFact[] = [];
     let malformed = false;
     for (const row of Array.isArray(doc) ? doc : [doc]) {
-      if (!object(row) || !portNumber(row["port"]) || !pidNumber(row["pid"]) || typeof row["address"] !== "string" || !(row["name"] === null || typeof row["name"] === "string") || !(row["path"] === null || typeof row["path"] === "string") || !(row["cmd"] === undefined || row["cmd"] === null || typeof row["cmd"] === "string")) { malformed = true; continue; }
+      if (!object(row) || !portNumber(row["port"]) || !pidNumber(row["pid"]) || typeof row["address"] !== "string" || !(row["name"] === null || typeof row["name"] === "string") || !(row["path"] === null || typeof row["path"] === "string") || !(row["cmd"] === undefined || row["cmd"] === null || typeof row["cmd"] === "string") || !(row["owner"] === undefined || row["owner"] === null || typeof row["owner"] === "string")) { malformed = true; continue; }
       const binding = address(row["address"]);
       if (!binding) { malformed = true; continue; }
       const scriptPath = scriptOf(row["name"], typeof row["cmd"] === "string" ? row["cmd"] : null, typeof row["cwd"] === "string" ? row["cwd"] : null);
       const ppid = pidNumber(row["ppid"]) && row["ppid"] > 0 ? row["ppid"] : null;
-      facts.push({ port: row["port"], protocol: "tcp", ...binding, pid: row["pid"], processName: row["name"], processPath: row["path"] === null ? null : path(row["path"]), ...(scriptPath ? { scriptPath } : {}), ...(ppid ? { ppid } : {}), container: null });
+      const owner = typeof row["owner"] === "string" && row["owner"].trim() ? row["owner"].trim() : null;
+      facts.push({ port: row["port"], protocol: "tcp", ...binding, pid: row["pid"], processName: row["name"], processPath: row["path"] === null ? null : path(row["path"]), ...(scriptPath ? { scriptPath } : {}), ...(ppid ? { ppid } : {}), ...(owner ? { owner } : {}), container: null });
     }
     return finish("netconn", probe, facts, malformed);
   },
@@ -114,8 +115,8 @@ export const macListenersAdapter: ListenerAdapter = {
     const missing = unavailable(outputs, "listeners", "lsof");
     if (missing) return missing;
     const probe = outputs["listeners"]!;
-    const sections = probe.stdout.split(/^---SCOUT-(?:PS|ARGS|PPID)---\r?$/m);
-    let malformed = sections.length < 2 || sections.length > 4;
+    const sections = probe.stdout.split(/^---SCOUT-(?:PS|ARGS|PPID|NETSTAT)---\r?$/m);
+    let malformed = sections.length < 2 || sections.length > 5;
     const parents = new Map<number, number>();
     for (const line of (sections[3] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
       const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
@@ -167,6 +168,22 @@ export const macListenersAdapter: ListenerAdapter = {
       } else malformed = true;
     }
     if (processPending || filePending) malformed = true;
+    // lsof shows only the sockets of the account that runs it. netstat lists every listening socket with its owner's name and pid, so it adds the system daemons and other accounts' processes.
+    for (const line of (sections[4] ?? "").split(/\r?\n/)) {
+      const match = /^(tcp4|tcp6|tcp46)\s+\d+\s+\d+\s+(\S+)\s+\S+\s+LISTEN\s+\d+\s+\d+\s+\d+\s+\d+\s+(.+?):(\d+)\s+[0-9a-f]{5}\s/.exec(line);
+      if (!match) continue;
+      const split = match[2]!.lastIndexOf(".");
+      const port = Number(match[2]!.slice(split + 1));
+      const host = match[2]!.slice(0, split);
+      const owner = Number(match[4]);
+      const binding = address(host === "*" && match[1] === "tcp4" ? "0.0.0.0" : host === "*" && match[1] === "tcp6" ? "::" : host);
+      if (!binding || !portNumber(port) || !pidNumber(owner) || owner <= 0 || facts.some((fact) => fact.port === port && fact.pid === owner && fact.bind === binding.bind)) continue;
+      const processPath = paths.get(owner) ?? null;
+      const processName = processPath?.split("/").at(-1) ?? match[3]!.trim();
+      const scriptPath = scriptOf(processName, argv.get(owner) ?? null);
+      const ppid = parents.get(owner);
+      facts.push({ port, protocol: "tcp", ...binding, pid: owner, processName, processPath, ...(scriptPath ? { scriptPath } : {}), ...(ppid ? { ppid } : {}), container: null });
+    }
     return finish("lsof", probe, facts, malformed);
   },
 };
