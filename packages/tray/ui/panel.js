@@ -233,7 +233,8 @@ function showError(err) {
 
 function render() {
   if (ui.quit) { renderQuit(); return; }
-  if (ui.connect) { renderConnect(); return; }
+  // A snapshot arrives every few seconds; rebuilding the connection form would wipe what is being typed.
+  if (ui.connect) { if (!connectView || !root.contains(connectView)) renderConnect(); return; }
   const list = h("div", { class: "list" });
   root.replaceChildren(...[header(), tools(), tabBar(), meters(), ...notices(), list, footer(), ui.menu ? menuView() : null, ui.toast ? h("div", { class: "toast", role: "status" }, ui.toast) : null].filter(Boolean));
   renderList();
@@ -343,6 +344,8 @@ document.addEventListener("keydown", (e) => {
 
 // ---- connection screen -----------------------------------------------------------
 
+let connectView = null;
+
 function renderConnect() {
   let status = null;
   const hub = h("input", { type: "url", value: ui.config.hubUrl ?? "", placeholder: t("fieldHubPlaceholder"), spellcheck: "false", autocomplete: "off" });
@@ -367,10 +370,11 @@ function renderConnect() {
   } }, t("connectSave"));
   const back = ui.link === "unconfigured" ? null : h("button", { class: "plain", onclick: () => { ui.connect = false; render(); } }, t("connectBack"));
   void status;
-  root.replaceChildren(h("div", { class: "connect" },
+  connectView = h("div", { class: "connect" },
     h("h1", {}, t("connectTitle")), h("p", {}, t("connectHelp")),
     h("label", {}, h("span", {}, t("fieldHub")), hub), h("label", {}, h("span", {}, t("fieldClient")), client), h("label", {}, h("span", {}, t("fieldSecret")), secret),
-    h("div", { class: "buttons" }, save, back), result));
+    h("div", { class: "buttons" }, save, back), result);
+  root.replaceChildren(connectView);
   hub.focus();
 }
 
