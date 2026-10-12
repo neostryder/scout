@@ -11,7 +11,7 @@ type Handler = (event: any) => void;
 function worker() {
   const handlers = new Map<string, Handler>();
   const stores = new Map<string, Map<string, Response>>();
-  const posted: any[] = [];
+  const posted: Array<{ type: string; at?: string }> = [];
   const network = { up: true, responses: new Map<string, () => Response>() };
   const keyOf = (request: Request | string) => (typeof request === "string" ? request : request.url);
   const match = (store: Map<string, Response>, request: Request | string, options?: { ignoreSearch?: boolean }) => {
@@ -73,13 +73,13 @@ test("an API read is served from the saved copy when the hub is unreachable, and
   w.network.responses.set("/api/summary", body({ installs: 3 }));
   const live = await w.dispatch(get("/api/summary"));
   assert.deepEqual(await live!.json(), { installs: 3 });
-  assert.deepEqual(w.posted, []);
+  assert.equal(w.posted.length, 0);
   w.network.up = false;
   const saved = await w.dispatch(get("/api/summary"));
   assert.deepEqual(await saved!.json(), { installs: 3 });
   assert.equal(w.posted.length, 1);
-  assert.equal(w.posted[0].type, "offline");
-  assert.match(w.posted[0].at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(w.posted[0]!.type, "offline");
+  assert.match(w.posted[0]!.at!, /^\d{4}-\d{2}-\d{2}T/);
   w.network.up = true;
   await w.dispatch(get("/api/summary"));
   assert.deepEqual(w.posted.slice(1).map((message) => message.type), ["online"]);
@@ -94,7 +94,7 @@ test("a hub that answers with a server error falls back to the saved copy", asyn
   w.network.responses.set("/api/summary", () => new Response("bad gateway", { status: 502 }));
   const saved = await w.dispatch(get("/api/summary"));
   assert.deepEqual(await saved!.json(), { installs: 1 });
-  assert.equal(w.posted.at(-1).type, "offline");
+  assert.equal(w.posted.at(-1)!.type, "offline");
 });
 
 test("an API read that was never saved is refused while offline", async () => {
