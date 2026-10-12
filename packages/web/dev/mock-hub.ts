@@ -171,7 +171,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (/^\/api\/jobs\/\d+\/stop$/.test(path) && req.method === "POST") { const job = jobs.find((j) => j.id === Number(path.split("/")[3])); if (!job) return json(res, 404, { error: "Not found" }); if (!["queued", "preflight", "running"].includes(job.state)) return json(res, 409, { error: "Job finished" }); job.state = "stopped"; job.finishedAt = new Date().toISOString(); return json(res, 200, job); }
     if (path.startsWith("/api/")) return json(res, 404, { error: "Not found" });
     const relative = path === "/" ? "index.html" : path.slice(1);
-    if (relative.includes("..") || !["index.html", "app.js", "lib.js", "filters.js", "saved-filters.js", "theme.js", "review-reminder.js", "alerts-badge.js", "download-kinds.js", "styles.css", "services.js", "services-diagram.js", "outages.js", "outages-model.js", "services-model.js", "services.css"].includes(relative)) return json(res, 404, { error: "Not found" });
+    if (!/^[\w-]+\.(?:html|js|css)$/.test(relative)) return json(res, 404, { error: "Not found" });
     try { const bytes = await readFile(resolve(publicDir, relative)); res.writeHead(200, { "content-type": extname(relative) === ".css" ? "text/css" : extname(relative) === ".js" ? "text/javascript" : "text/html", "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'" }); res.end(bytes); } catch { json(res, 404, { error: "Not found" }); }
   });
   server.on("close", () => filtersDb.close());

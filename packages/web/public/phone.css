@@ -1,0 +1,53 @@
+/* Density, touch targets, and the phone layout. Density sets how roomy rows and controls are: Compact is the desktop look, Comfortable adds height, and Auto is Comfortable on a touch screen. */
+:root { --row-y: 7px; --tap: 0px; }
+:root[data-density="comfortable"] { --row-y: 12px; --tap: 44px; }
+:root[data-density="compact"] { --row-y: 4px; --tap: 0px; }
+@media (pointer: coarse) {
+  :root:not([data-density]) { --row-y: 12px; --tap: 44px; }
+}
+td { padding-top: var(--row-y); padding-bottom: var(--row-y); }
+button, select, input[type="search"], input[type="text"], .tab { min-height: var(--tap); }
+.facet label, .toggles label { min-height: var(--tap); }
+:root[data-density="compact"] #services td, :root[data-density="compact"] #resources td { padding-top: 3px; padding-bottom: 3px; }
+
+.tabbar, .tab-sheet { display: none; }
+
+@media (max-width: 719px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .top { gap: 10px; padding: 8px 12px; flex-wrap: nowrap; }
+  .top .views, .top .summary { display: none; }
+  .top .alerts-badge { margin-left: auto; }
+  .theme-toggle { margin-left: auto; }
+  .alerts-badge:not([hidden]) ~ .theme-toggle { margin-left: 0; }
+  .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 56px; padding: 6px 2px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 11px; line-height: 1.1; text-decoration: none; position: relative; }
+  .tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tab[aria-current="true"] { color: var(--accent); }
+  .tab[aria-current="true"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 2px; background: var(--accent); border-radius: 0 0 2px 2px; }
+  .tab[data-count]:not([data-count=""])::after { content: attr(data-count); position: absolute; top: 4px; left: calc(50% + 6px); min-width: 16px; padding: 0 4px; border-radius: 8px; background: var(--chip); color: var(--ink); font-size: 10px; text-align: center; }
+  .tab[data-tone="high"]::after { background: var(--danger); color: var(--bg); }
+  .tab-sheet { display: flex; flex-direction: column; position: fixed; right: 8px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 5; min-width: 180px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 28px rgb(0 0 0 / 28%); }
+  .tab-sheet[hidden] { display: none; }
+  .tab-sheet a { display: block; padding: 12px 14px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+  .tab-sheet a[aria-current="true"] { background: var(--chip); color: var(--accent); }
+  .detail { top: 0; width: 100vw; border-left: 0; z-index: 6; padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+
+  .layout { display: block; }
+  .results { padding: 10px 12px 24px; }
+  .bar { gap: 8px; }
+  .sort { flex: 1 1 140px; }
+  .sort select { flex: 1; }
+  .table-wrap { background: transparent; border: 0; overflow: visible; }
+  #table, #table tbody, #table tr, #table td { display: block; width: 100%; max-width: none; }
+  #table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #table tbody tr { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  #table td { border: 0; padding: 3px 0; min-width: 0; }
+  #table td.name { min-width: 0; max-width: none; }
+  #table td[data-label]:not(.name)::before { content: attr(data-label) ": "; color: var(--muted); font-size: 12px; }
+  #table td.empty { text-align: center; }
+  .review, .settings { padding-left: 12px; padding-right: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab, .tab-sheet { transition: none; }
+}

@@ -124,8 +124,13 @@ function renderTable() {
   $("count").textContent = `${state.total.toLocaleString()} ${updates ? "updates" : "installs"}${updates ? `, ${state.updatable.toLocaleString()} updatable` : ""}`;
   $("more").hidden = state.rows.length >= state.total;
   $("more").textContent = `Show more (${Math.min(PAGE, state.total - state.rows.length)} left)`;
+  labelCells($("table"));
   $("selection").hidden = !updates || !state.selected.size;
   $("update-selected").textContent = `Update ${state.selected.size} selected`;
+}
+function labelCells(table) {
+  const names = [...table.tHead.rows[0].cells].map((cell) => cell.textContent.replace(/\s+[\^v]$/, "").trim());
+  for (const row of table.tBodies[0].rows) [...row.cells].forEach((cell, index) => { if (names[index]) cell.dataset.label = names[index]; });
 }
 function updateRow(row) {
   const job = state.jobs.find((j) => j.installId === row.installId) || row.job;
