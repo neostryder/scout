@@ -1,10 +1,6 @@
 import { $, h, flagRow, marked, safeUrl, defaultDir, riskBadge, updateDialogModel, updatePlanQuery } from "./lib.js";
 import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
-import { createServicesView } from "./services.js";
-import { createResourcesView } from "./resources.js";
-import { createTraySettings } from "./tray-settings.js";
-import { TEXT as TRAY_TEXT } from "./tray-text.js";
 
 let servicesView;
 let resourcesView;
@@ -288,14 +284,33 @@ function showView(next, initial = false) {
   state.limit = PAGE; state.rows = []; state.facets = {}; state.selected.clear(); closeDetail(); url();
   $("list-layout").hidden = !["updates", "catalog"].includes(next);
   $("review").hidden = next !== "review"; $("jobs").hidden = next !== "jobs"; $("settings").hidden = next !== "settings";
-  if (next === "settings") { if (!traySettings) { traySettings = createTraySettings(); $("settings").replaceChildren(h("h1", {}, TRAY_TEXT.viewTitle), traySettings.section); } traySettings.load(); }
-  if (next === "services") { servicesView ||= createServicesView($("services")); servicesView.show(state.params); } else servicesView?.hide();
-  if (next === "resources") { resourcesView ||= createResourcesView($("resources")); resourcesView.show(); } else resourcesView?.hide();
+  if (next === "settings") openSettings();
+  if (next === "services") openServices(); else servicesView?.hide();
+  if (next === "resources") openResources(); else resourcesView?.hide();
   $("toggle-filters").hidden = !["updates", "catalog"].includes(next);
   for (const button of document.querySelectorAll("[data-view]")) button.setAttribute("aria-current", String(button.dataset.view === next));
   if (["updates", "catalog"].includes(next)) { $("search").value = value("q"); renderFilters(); renderSorts(); renderChips(); }
   savedFilters.refresh();
   load();
+}
+// The Services, Resources, and Settings pages are large, so each one's code is fetched the first time that page opens. If the page was left again while its code was loading, nothing is drawn.
+async function openSettings() {
+  const [{ createTraySettings }, { TEXT: TRAY_TEXT }] = await Promise.all([import("./tray-settings.js"), import("./tray-text.js")]);
+  if (view() !== "settings") return;
+  if (!traySettings) { traySettings = createTraySettings(); $("settings").replaceChildren(h("h1", {}, TRAY_TEXT.viewTitle), traySettings.section); }
+  traySettings.load();
+}
+async function openServices() {
+  const { createServicesView } = await import("./services.js");
+  if (view() !== "services") return;
+  servicesView ||= createServicesView($("services"));
+  servicesView.show(state.params);
+}
+async function openResources() {
+  const { createResourcesView } = await import("./resources.js");
+  if (view() !== "resources") return;
+  resourcesView ||= createResourcesView($("resources"));
+  resourcesView.show();
 }
 function renderSorts() { const names = view() === "updates" ? UPDATE_SORTS : CATALOG_SORTS; $("sort").replaceChildren(...names.map((name) => h("option", { value: name, selected: sortKey() === name }, title(name)))); $("dir").value = value("dir") || defaultDir(sortKey()); }
 
