@@ -1,14 +1,15 @@
 import { test, type TestContext } from "node:test";
+import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { openCatalog, recipeById, upsertMachine } from "@scout/core";
 import { createHub } from "../src/server.ts";
 import { DescriptionRun } from "../src/descriptions.ts";
 
 async function app(t: TestContext, off = false, describe = false) {
-  const root = mkdtempSync(resolve("recipe-hub-")).replace(/\\/g, "/");
+  const root = mkdtempSync(join(tmpdir(), "recipe-hub-")).replace(/\\/g, "/");
   writeFileSync(`${root}/package.json`, JSON.stringify({ scripts: { dev: "node app.js" } }));
   mkdirSync(`${root}/.claude`);
   writeFileSync(`${root}/.claude/launch.json`, JSON.stringify({ configurations: [{ name: "bad", runtimeExecutable: "cmd", runtimeArgs: [] }] }));
@@ -21,7 +22,7 @@ async function app(t: TestContext, off = false, describe = false) {
   const server = createHub({ db, webRoot: root, recipeProjects: projects, descriptions, control: off ? false : { machines: [{ id: "hub", os: "windows", transport: { type: "local" } }], protectedPath: `${root}/protected.json`, clock: { now: () => time, sleep: async (ms) => { time += ms; } }, exec: async () => { calls++; return { exitCode: 0, stdout: "4321", stderr: "" }; }, recipeReader: async () => true }, streamHeartbeatMs: 20 });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  t.after(async () => { await new Promise<void>((done) => { server.close(() => done()); server.closeAllConnections(); }); db.close(); rmSync(root, { recursive: true, force: true }); });
+  t.after(async () => { await new Promise<void>((done) => { server.close(() => done()); server.closeAllConnections(); }); db.close(); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
   const call = async (path: string, body?: unknown) => {
     const response = await fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     return { status: response.status, body: await response.json() as Record<string, any> };
