@@ -25,7 +25,7 @@ function mount() {
     else document.documentElement.removeAttribute("data-offline");
   };
   const render = () => {
-    text.textContent = `Offline, as of ${clock(oldest)}. This is the last copy Scout saved, and controls are off.`;
+    text.textContent = `Offline, as of ${clock(oldest)}. Showing the last saved copy, and actions are off until the hub answers.`;
     reload.hidden = true;
     strip.hidden = false;
   };

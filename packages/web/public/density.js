@@ -42,8 +42,9 @@ function mount() {
   button.style.marginLeft = "0";
   const paint = () => {
     button.replaceChildren(icon(mode));
-    button.title = `Density: ${LABEL[mode]}`;
-    button.setAttribute("aria-label", `Density: ${LABEL[mode]}. Activate to change it.`);
+    const next = LABEL[MODES[(MODES.indexOf(mode) + 1) % MODES.length]];
+    button.title = `Density: ${LABEL[mode]}. Click for ${next}.`;
+    button.setAttribute("aria-label", `Density: ${LABEL[mode]}. Click for ${next}.`);
   };
   button.addEventListener("click", () => {
     mode = MODES[(MODES.indexOf(mode) + 1) % MODES.length];

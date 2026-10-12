@@ -112,7 +112,7 @@ function mount() {
     items = [...machineHits, ...(query.kind === "port" ? [] : found), ...fromHub].filter((item, index, all) => all.findIndex((other) => other.href === item.href) === index);
     active = 0;
     paint();
-    if (items.length === 0) note.textContent = failed === asks.length ? "Scout could not look that up right now." : "Nothing found.";
+    if (items.length === 0) note.textContent = failed === asks.length ? "The hub did not answer, so the search could not run. Try again in a moment." : "No port, machine, service, or page matches that.";
   }
 
   input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, DELAY_MS); });

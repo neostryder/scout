@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- [Visible] [UI] **The portal has a phone layout.** On a screen narrower than 720 pixels, the top navigation becomes a tab bar along the bottom with Services, Resources, Alerts, Outages, and More, and More opens a sheet with Updates, Catalog, Review queue, Jobs, and Settings. The Alerts tab shows how many alerts are open. The Catalog and Updates tables show each row as a card, and the detail panel fills the screen.
+- [Visible] [UI] **A density button in the header switches between Auto, Comfortable, and Compact.** Comfortable gives rows more height and makes touch targets 44 pixels, Compact keeps the tight desktop look, and Auto uses Comfortable on a touch screen and Compact with a mouse. Each browser keeps its own choice.
+- [Visible] [UI] **The portal still opens when the hub cannot be reached.** The service worker saves every page file and every successful API read that passes through it, and shows those saved copies when the hub does not answer. A gold strip then says "Offline, as of" with the time of the oldest saved answer on the screen, and every control that would change something is dimmed and turned off. When the hub answers again, the strip offers a reload. Only pages opened while the hub was reachable have a saved copy, and each browser keeps at most 200 saved answers.
+- [Visible] [UI] **A command palette finds a port, machine, service, or page and jumps to it.** Ctrl+K, Cmd+K on a Mac, or the magnifier button in the header opens it, and a port can be typed as "port 4870", ":4870", or just the number. Every result is a link, and nothing in the palette can start, stop, or change anything.
+- [Visible] [Services] **Each machine on the Services map shows how many of its ports other machines can reach.** A line on the machine's island gives the number of listening ports and how many of them listen on the LAN or on all interfaces, such as "12 ports listening, 5 exposed".
+
+### Changed
+
+- [Visible] [UI] **The portal downloads less when it opens and each time it refreshes.** The code for the Services, Resources, and Settings pages loads the first time each page opens, so the first screen is smaller. The reads the page polls (overview, listeners, routes, health, ports, stacks, alerts, outages, resources, summary, installs, and updates) now carry an ETag, and a request for an answer the browser already holds gets a 304 with no body. Every other API read is still sent with `Cache-Control: no-store`.
+
 ### Fixed
 
 - [Visible] [Services] **A service now claims the listeners that its child processes open.** Scout matched a listener to a service only when the service's own process held the port, so a service that starts helper programs, such as Cogitator and the two engines it runs on Bilbo, left those ports looking unowned and unwatched. The listener scan now records each listener's parent process on Windows and macOS, and a listener whose parent is a service that stays up is treated as that service's and watched for outages.

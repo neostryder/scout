@@ -38,7 +38,7 @@ async function remember(request, response, name) {
   if (name === DATA) await trim(cache);
 }
 
-const refusal = () => new Response(JSON.stringify({ error: "Scout is offline, so this action is unavailable." }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+const refusal = () => new Response(JSON.stringify({ error: "Scout is offline, so nothing can be changed. Try again once the hub is back." }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
 async function read(event, name, ignoreSearch) {
   const request = event.request;

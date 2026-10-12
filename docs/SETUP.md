@@ -182,6 +182,26 @@ To set it up:
 
 In production mode, http://127.0.0.1:4870/ answers `421 misdirected request`. Use the public hostname.
 
+## Using the portal on a phone and offline
+
+The portal works in a phone's browser and as an app saved to the home screen. To save it with its icon, add the Bypass application from step 5 of [Local mode and production mode](#local-mode-and-production-mode).
+
+### On a narrow screen
+
+When the window is narrower than 720 pixels, the top navigation moves to a tab bar along the bottom of the screen. The tabs are Services, Resources, Alerts, Outages, and More, and More opens a sheet with Updates, Catalog, Review queue, Jobs, and Settings. The Alerts tab carries the number of open alerts. The Catalog and Updates tables show each row as a card, and the detail panel takes the whole screen when it opens.
+
+The density button in the header cycles through Auto, Comfortable, and Compact. Auto gives taller rows and 44-pixel touch targets on a touch screen and the tight desktop rows with a mouse, and each browser remembers its own setting.
+
+### Find a port, machine, or service
+
+Press Ctrl+K (Cmd+K on a Mac), or tap the magnifier in the header, and start typing. The palette matches ports, machines, services, and page names, and a port can be typed as `port 4870`, `:4870`, or `4870`. Choosing a result opens that page or item. Every result is a link, and nothing in the palette starts, stops, or changes anything.
+
+### When the hub is out of reach
+
+As you browse, the service worker keeps a copy of each page file and each successful answer from the hub. If the hub cannot be reached, for example because the hub machine is off or the phone has no signal, the portal shows those saved copies instead. A gold strip then reads "Offline, as of" and a time, which is when the oldest answer on the screen was saved. Buttons that would change something, such as Start and Stop, are dimmed, and the hub refuses the request if one is sent anyway. When the hub answers again, the strip offers a reload.
+
+A page has a saved copy only if you opened it in that browser while the hub was reachable, so open the pages you want on hand before you leave home. Each browser keeps at most 200 saved answers.
+
 ## Optional integrations
 
 All of these stay off until configured, and the page works without any of them.
