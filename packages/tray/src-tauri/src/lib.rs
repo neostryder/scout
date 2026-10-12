@@ -25,6 +25,9 @@ const POLL_CLOSED: Duration = Duration::from_secs(30);
 const POLL_OPEN: Duration = Duration::from_secs(5);
 // A click on the icon first takes focus away from the panel, which hides it; without this the same click would open it again.
 const REOPEN_GUARD: Duration = Duration::from_millis(300);
+// How long a just-opened panel is given to take focus before the macOS watcher may hide it.
+#[cfg(target_os = "macos")]
+const FOCUS_GRACE: Duration = Duration::from_millis(1200);
 
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +56,7 @@ struct Shared {
     shown: Mutex<Option<(IconState, bool, String)>>,
     open: AtomicBool,
     last_hide: Mutex<Option<Instant>>,
+    opened_at: Mutex<Option<Instant>>,
     wake: Notify,
     text: HashMap<String, String>,
     config_dir: std::path::PathBuf,
@@ -225,6 +229,9 @@ fn show_panel(app: &AppHandle, shared: &Handle, rect: Option<&Rect>) {
     let _ = window.show();
     let _ = window.set_focus();
     shared.open.store(true, Ordering::SeqCst);
+    if let Ok(mut stamp) = shared.opened_at.lock() {
+        *stamp = Some(Instant::now());
+    }
     shared.wake.notify_one();
     let _ = app.emit("panel-open", ());
 }
@@ -403,6 +410,7 @@ pub fn run() {
                 shown: Mutex::new(None),
                 open: AtomicBool::new(false),
                 last_hide: Mutex::new(None),
+                opened_at: Mutex::new(None),
                 wake: Notify::new(),
                 text,
                 config_dir,
@@ -454,6 +462,29 @@ pub fn run() {
                 window.on_window_event(move |event| {
                     if let WindowEvent::Focused(false) = event {
                         hide_panel(&focus_handle, &focus_shared);
+                    }
+                });
+            }
+
+            // On macOS a menu bar panel can stay open without ever receiving a focus-lost event, and a floating window covers the icon's own menu. The panel therefore stays at the normal window level, and a watcher hides it once it has been open a moment and no longer has focus.
+            #[cfg(target_os = "macos")]
+            {
+                if let Some(window) = app.get_webview_window("panel") {
+                    let _ = window.set_always_on_top(false);
+                }
+                let watch_handle = handle.clone();
+                let watch_shared = Arc::clone(&shared);
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(400)).await;
+                        if !watch_shared.open.load(Ordering::SeqCst) {
+                            continue;
+                        }
+                        let settled = watch_shared.opened_at.lock().ok().and_then(|s| *s).map(|t| t.elapsed() > FOCUS_GRACE).unwrap_or(false);
+                        let focused = watch_handle.get_webview_window("panel").and_then(|w| w.is_focused().ok()).unwrap_or(true);
+                        if settled && !focused {
+                            hide_panel(&watch_handle, &watch_shared);
+                        }
                     }
                 });
             }
