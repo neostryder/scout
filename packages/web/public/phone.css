@@ -18,7 +18,19 @@ button, select, input[type="search"], input[type="text"], .tab { min-height: var
 .offline-strip button[hidden] { display: none; }
 :root[data-offline] button.primary, :root[data-offline] button.download, :root[data-offline] .action-dialog-buttons button { opacity: 0.45; pointer-events: none; }
 
+.palette { width: min(560px, calc(100vw - 24px)); max-height: min(70vh, 520px); margin: 12vh auto 0; padding: 0; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 48px rgb(0 0 0 / 35%); overflow: hidden; }
+.palette[open] { display: flex; flex-direction: column; }
+.palette::backdrop { background: rgb(0 0 0 / 45%); }
+.palette input { width: 100%; box-sizing: border-box; padding: 14px 16px; font: inherit; font-size: 16px; color: inherit; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; outline: none; }
+.palette ul { margin: 0; padding: 6px; list-style: none; overflow-y: auto; }
+.palette li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+.palette li[aria-selected="true"] { background: var(--chip); color: var(--accent); }
+.palette-hint { flex: none; color: var(--muted); font-size: 12px; align-self: center; }
+.palette-note { margin: 0; padding: 12px 16px; color: var(--muted); font-size: 13px; }
+.palette-note:empty { display: none; }
+
 @media (max-width: 719px) {
+  .palette { margin-top: 8vh; }
   body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
   .top { gap: 10px; padding: 8px 12px; flex-wrap: nowrap; }
   .top .views, .top .summary { display: none; }
