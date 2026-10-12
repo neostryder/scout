@@ -64,6 +64,19 @@ struct Shared {
 
 type Handle = Arc<Shared>;
 
+/// Appends one line to panel.log in the config folder so a panel that misbehaves can be traced afterwards; the file is cut back once it passes 64 KB.
+fn trace(shared: &Shared, what: &str) {
+    use std::io::Write;
+    let path = shared.config_dir.join("panel.log");
+    if std::fs::metadata(&path).map(|m| m.len() > 65_536).unwrap_or(false) {
+        let _ = std::fs::remove_file(&path);
+    }
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(file, "{at} {what}");
+    }
+}
+
 fn fill(template: &str, n: usize) -> String {
     template.replace("{n}", &n.to_string())
 }
@@ -228,6 +241,7 @@ fn show_panel(app: &AppHandle, shared: &Handle, rect: Option<&Rect>) {
     }
     let _ = window.show();
     let _ = window.set_focus();
+    trace(shared, &format!("show placed={} visible={:?} focused={:?}", rect.is_some(), window.is_visible(), window.is_focused()));
     shared.open.store(true, Ordering::SeqCst);
     if let Ok(mut stamp) = shared.opened_at.lock() {
         *stamp = Some(Instant::now());
@@ -239,6 +253,7 @@ fn show_panel(app: &AppHandle, shared: &Handle, rect: Option<&Rect>) {
 fn hide_panel(app: &AppHandle, shared: &Handle) {
     if let Some(window) = app.get_webview_window("panel") {
         let _ = window.hide();
+        trace(shared, &format!("hide visible={:?}", window.is_visible()));
     }
     shared.open.store(false, Ordering::SeqCst);
     if let Ok(mut stamp) = shared.last_hide.lock() {
@@ -248,6 +263,7 @@ fn hide_panel(app: &AppHandle, shared: &Handle) {
 
 fn toggle_panel(app: &AppHandle, shared: &Handle, rect: &Rect) {
     let visible = app.get_webview_window("panel").and_then(|w| w.is_visible().ok()).unwrap_or(false);
+    trace(shared, &format!("toggle visible={visible} open={}", shared.open.load(Ordering::SeqCst)));
     if visible {
         hide_panel(app, shared);
         return;
@@ -436,20 +452,26 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "open" => {
+                        trace(&menu_shared, "menu open");
                         let _ = open_portal_inner(app, &menu_shared);
                     }
                     "settings" => {
+                        trace(&menu_shared, "menu settings");
                         show_panel(app, &menu_shared, None);
                         let _ = app.emit("show-connect", ());
                     }
                     "autostart" => set_autostart(&menu_shared, toggle_item.is_checked().unwrap_or(true)),
                     "quit" => {
+                        trace(&menu_shared, "menu quit");
                         show_panel(app, &menu_shared, None);
                         let _ = app.emit("confirm-quit", ());
                     }
                     _ => {}
                 })
                 .on_tray_icon_event(move |tray, event| {
+                    if let TrayIconEvent::Click { button, button_state, .. } = &event {
+                        trace(&click_shared, &format!("tray click {button:?} {button_state:?}"));
+                    }
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, rect, .. } = event {
                         toggle_panel(tray.app_handle(), &click_shared, &rect);
                     }
@@ -460,8 +482,11 @@ pub fn run() {
                 let focus_handle = handle.clone();
                 let focus_shared = Arc::clone(&shared);
                 window.on_window_event(move |event| {
-                    if let WindowEvent::Focused(false) = event {
-                        hide_panel(&focus_handle, &focus_shared);
+                    if let WindowEvent::Focused(focused) = event {
+                        trace(&focus_shared, &format!("focus {focused}"));
+                        if !*focused {
+                            hide_panel(&focus_handle, &focus_shared);
+                        }
                     }
                 });
             }
@@ -483,6 +508,7 @@ pub fn run() {
                         let settled = watch_shared.opened_at.lock().ok().and_then(|s| *s).map(|t| t.elapsed() > FOCUS_GRACE).unwrap_or(false);
                         let focused = watch_handle.get_webview_window("panel").and_then(|w| w.is_focused().ok()).unwrap_or(true);
                         if settled && !focused {
+                            trace(&watch_shared, "watcher hides");
                             hide_panel(&watch_handle, &watch_shared);
                         }
                     }

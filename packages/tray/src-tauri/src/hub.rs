@@ -53,8 +53,14 @@ pub fn load_secret() -> Option<String> {
     keyring::Entry::new(SERVICE, SECRET_USER).ok()?.get_password().ok().filter(|s| !s.is_empty())
 }
 
+/// An item left by an earlier build of the app can refuse an in-place update ("already exists"); the item is removed and written again.
 pub fn store_secret(secret: &str) -> Result<(), String> {
-    keyring::Entry::new(SERVICE, SECRET_USER).and_then(|entry| entry.set_password(secret)).map_err(|e| e.to_string())
+    let entry = keyring::Entry::new(SERVICE, SECRET_USER).map_err(|e| e.to_string())?;
+    if entry.set_password(secret).is_ok() {
+        return Ok(());
+    }
+    let _ = entry.delete_credential();
+    entry.set_password(secret).map_err(|e| e.to_string())
 }
 
 /// The hub address as a base with no trailing slash. https only, except for a local hub during development.
