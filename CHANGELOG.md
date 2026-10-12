@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
 ### Added
 
 - [Visible] [UI] **The portal has a phone layout.** On a screen narrower than 720 pixels, the top navigation becomes a tab bar along the bottom with Services, Resources, Alerts, Outages, and More, and More opens a sheet with Updates, Catalog, Review queue, Jobs, and Settings. The Alerts tab shows how many alerts are open. The Catalog and Updates tables show each row as a card, and the detail panel fills the screen.
