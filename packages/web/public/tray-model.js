@@ -1,6 +1,6 @@
 // The tray rules document: the pure edits the Settings view makes before it saves.
 
-export const KINDS = ["windows-service", "launchd", "scheduled-task", "listener", "container", "recipe", "stack"];
+export const KINDS = ["windows-service", "launchd", "systemd", "scheduled-task", "listener", "container", "recipe", "stack"];
 export const CLASSES = ["essential", "optional", "third-party"];
 export const VENDORS = ["apple", "microsoft", "other"];
 

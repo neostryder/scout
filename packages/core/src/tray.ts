@@ -21,7 +21,7 @@ export interface TrayRules {
 }
 export const EMPTY_TRAY_RULES: TrayRules = { hide: { kinds: [], classes: [], machines: [], vendors: [], names: [] }, pins: [] };
 
-const KINDS = ["windows-service", "launchd", "scheduled-task", "listener", "container", "recipe", "stack"];
+const KINDS = ["windows-service", "launchd", "systemd", "scheduled-task", "listener", "container", "recipe", "stack"];
 const CLASSES = ["essential", "optional", "third-party"];
 const VENDORS = ["apple", "microsoft", "other"];
 const strings = (value: unknown, name: string, allowed?: readonly string[]): string[] => {
@@ -188,7 +188,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
       finish({
         key: serviceWatchKey(s), target: "service", id: s.id, name: s.name, label: s.displayName ?? s.name, machineId: machine.id, kind: s.kind, class: s.classification.class, vendor: s.classification.vendor,
         state: stateOf(running, shouldRun && proven.has(serviceWatchKey(s)), health), port: ports[0] ?? null,
-        detail: running ? (ports.length ? `:${ports.join(", :")}` : s.kind === "launchd" ? "launchd job" : "service") : `${s.state}${s.lastResult ? `, last result ${s.lastResult}` : ""}`,
+        detail: running ? (ports.length ? `:${ports.join(", :")}` : s.kind === "launchd" ? "launchd job" : s.kind === "systemd" ? "systemd service" : "service") : `${s.state}${s.lastResult ? `, last result ${s.lastResult}` : ""}`,
         protected: control.protected.protected, protectedReason: control.protected.reason, actions: control.actions, needsAdmin: control.needsAdmin,
         mine: options.mine?.({ machineId: machine.id, path: s.program, ports }) ?? false, spark: sparkFor(db, machine.id, ports),
       }, true, !hidden(rules, { machineId: machine.id, kind: s.kind, cls: s.classification.class, vendor: s.classification.vendor, names: [s.name, s.displayName ?? ""] }));

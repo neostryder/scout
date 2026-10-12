@@ -47,5 +47,14 @@
   { "match": { "kind": "launchd", "name": "com.apple.Siri.agent" }, "class": "optional", "whatBreaks": "Turns off Siri services." },
   { "match": { "kind": "launchd", "name": "com.apple.siriknowledged" }, "class": "optional", "whatBreaks": "Turns off Siri knowledge services." },
   { "match": { "kind": "launchd", "name": "com.apple.siriappintentsd" }, "class": "optional", "whatBreaks": "Turns off Siri app intent services." },
-  { "match": { "kind": "launchd", "name": "com.apple.ftpd" }, "class": "optional", "whatBreaks": "Turns off the built-in FTP server." }
+  { "match": { "kind": "launchd", "name": "com.apple.ftpd" }, "class": "optional", "whatBreaks": "Turns off the built-in FTP server." },
+  { "match": { "kind": "systemd", "namePrefix": "systemd-" }, "class": "essential", "whatBreaks": "Part of systemd itself. Stopping it can break logging, logins, networking, time sync, or device handling." },
+  { "match": { "kind": "systemd", "name": "dbus-broker" }, "class": "essential", "whatBreaks": "Stops the system message bus that most desktop and system services use to talk to each other." },
+  { "match": { "kind": "systemd", "name": "dbus" }, "class": "essential", "whatBreaks": "Stops the system message bus that most desktop and system services use to talk to each other." },
+  { "match": { "kind": "systemd", "name": "polkit" }, "class": "essential", "whatBreaks": "Stops the authorization checks that let programs ask for administrator actions." },
+  { "match": { "kind": "systemd", "name": "NetworkManager" }, "class": "essential", "whatBreaks": "Drops network connections that NetworkManager manages." },
+  { "match": { "kind": "systemd", "namePrefix": "getty@" }, "class": "essential", "whatBreaks": "Closes the text login prompt on a virtual console." },
+  { "match": { "kind": "systemd", "namePrefix": "serial-getty@" }, "class": "essential", "whatBreaks": "Closes the text login prompt on a serial console." },
+  { "match": { "kind": "systemd", "namePrefix": "user@" }, "class": "essential", "whatBreaks": "Ends that user's systemd session and everything running in it." },
+  { "match": { "kind": "systemd", "namePrefix": "user-runtime-dir@" }, "class": "essential", "whatBreaks": "Removes the runtime folder that user sessions depend on." }
 ]

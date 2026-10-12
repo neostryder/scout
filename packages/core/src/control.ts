@@ -60,6 +60,7 @@ export function rowControl(row: ControlRow, context: ProtectedContext = {}, enab
       if (!enabled) reason = "Control is off.";
       else if (action !== "start" && action !== "enable" && protection.protected) reason = `Protected: ${protection.group === "remote-access" ? "remote access" : protection.group}`;
       else if (mechanism === null) reason = "The process identity is unknown";
+      else if (mechanism === "systemd") reason = "Scout cannot control systemd services yet";
       else if (startup && mechanism !== "launchd" && mechanism !== "scheduled-task") reason = "Only launchd jobs and scheduled tasks can be disabled or enabled";
       else if (startup && row.goneAt !== null) reason = "The row is no longer present";
       else if (startup && startupEnabled(row) === null) reason = "Enabled state unknown";

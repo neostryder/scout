@@ -354,7 +354,7 @@ CREATE TABLE IF NOT EXISTS descriptions (
 CREATE TABLE IF NOT EXISTS services (
   id            INTEGER PRIMARY KEY,
   machine_id    TEXT NOT NULL REFERENCES machines(id),
-  kind          TEXT NOT NULL CHECK (kind IN ('windows-service','scheduled-task','launchd')),
+  kind          TEXT NOT NULL CHECK (kind IN ('windows-service','scheduled-task','launchd','systemd')),
   domain        TEXT NOT NULL CHECK (domain IN ('system','gui')),
   name          TEXT NOT NULL,
   display_name  TEXT,

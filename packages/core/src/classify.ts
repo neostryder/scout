@@ -49,7 +49,8 @@ function classify(kind: ServiceFact["kind"], name: string, program: string | nul
   const windowsTask = kind === "scheduled-task" && (taskPath.startsWith("/microsoft/windows/") || taskPath.startsWith("/microsoft/"));
   const windowsPath = path.startsWith("c:/windows/") || path.startsWith("c:/program files/windowsapps/microsoft.");
   const appleLabel = kind === "launchd" && name.startsWith("com.apple.");
-  const applePath = appleDirectories.some((directory) => path.startsWith(directory));
+  // A systemd unit under /usr/bin belongs to a Linux package, not to Apple; only the curated systemd rules call one essential.
+  const applePath = kind !== "systemd" && appleDirectories.some((directory) => path.startsWith(directory));
   const microsoft = windowsPath || windowsTask;
   const apple = appleLabel || applePath;
   const vendor: ServiceVendor = microsoft ? "microsoft" : apple ? "apple" : "other";

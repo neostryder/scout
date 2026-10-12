@@ -30,7 +30,7 @@ type SendJson = (res: ServerResponse, status: number, value: unknown) => void;
 type Exposure = "none" | "loopback" | "lan" | "all";
 type Dir = "asc" | "desc";
 
-const SERVICE_KINDS = ["windows-service", "scheduled-task", "launchd"] as const;
+const SERVICE_KINDS = ["windows-service", "scheduled-task", "launchd", "systemd"] as const;
 const SERVICE_STATES = ["running", "stopped", "disabled", "other"] as const;
 const SERVICE_CLASSES = ["essential", "optional", "third-party"] as const;
 const SERVICE_SORTS = ["name", "machine", "kind", "state", "class", "lastSeen", "ports"] as const;
@@ -280,6 +280,7 @@ function serviceLabel(kind: unknown): string {
   if (kind === "windows-service") return "service";
   if (kind === "scheduled-task") return "scheduled task";
   if (kind === "launchd") return "launchd job";
+  if (kind === "systemd") return "systemd service";
   return typeof kind === "string" ? kind : "service";
 }
 

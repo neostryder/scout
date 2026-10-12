@@ -10,12 +10,12 @@ const value = (name: string): string | undefined => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const kinds = ["windows-service", "scheduled-task", "launchd"];
+const kinds = ["windows-service", "scheduled-task", "launchd", "systemd"];
 const states = ["running", "stopped", "disabled", "other"];
 const kind = value("--kind");
 const state = value("--state");
 const serviceClass = value("--class");
-if (kind !== undefined && !kinds.includes(kind)) throw new Error("--kind requires windows-service, scheduled-task or launchd");
+if (kind !== undefined && !kinds.includes(kind)) throw new Error("--kind requires windows-service, scheduled-task, launchd or systemd");
 if (state !== undefined && !states.includes(state)) throw new Error("--state requires running, stopped, disabled or other");
 if (serviceClass !== undefined && !["essential", "optional", "third-party"].includes(serviceClass)) throw new Error("--class requires essential, optional or third-party");
 

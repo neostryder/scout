@@ -258,6 +258,7 @@ export function watchContext(db: Db, services: Service[]): WatchContext {
 function staysUpService(row: Service): boolean {
   if (row.kind === "windows-service") return row.startMode === "auto" || row.startMode === "boot";
   if (row.kind === "launchd") return row.keepAlive === true;
+  if (row.kind === "systemd") return row.startMode === "auto" && row.keepAlive === true;
   return false;
 }
 

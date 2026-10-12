@@ -44,6 +44,19 @@ test("a scan that reads the owner as process 0 keeps the last real owner and add
   assert.equal(events(db).length, 0);
 });
 
+test("a reader that learns the owner of an unnamed listener renames the row without a new or gone event", (t) => {
+  const db = seed(t);
+  const unnamed: ListenerFact = { ...listener, pid: null, processName: null, processPath: null };
+  recordListeners(db, "hub", result([unnamed], "ok", "listeners"), T);
+  recordListeners(db, "hub", result([listener], "ok", "listeners"), T2);
+  const rows = listListeners(db, { port: 8787 });
+  assert.equal(rows.length, 1);
+  assert.deepEqual([rows[0]!.processName, rows[0]!.pid, rows[0]!.goneAt, rows[0]!.firstSeenAt], ["node", 100, null, T]);
+  assert.deepEqual(events(db), []);
+  recordListeners(db, "hub", result([{ ...listener, processName: "deno" }], "ok", "listeners"), T3);
+  assert.deepEqual(events(db).map((event) => event.kind), ["listener_new", "listener_gone"]);
+});
+
 test("the store retains the widest bind and keeps identity across pid and path changes", (t) => {
   const db = seed(t);
   const all: ListenerFact = { ...listener, address: "::", bind: "all" };

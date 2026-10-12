@@ -1,5 +1,5 @@
 import type { ProbeOutput, ProbeOutputs, ServiceAdapter, ServiceDomain, ServiceFact, ServiceResult, ServiceStartMode, ServiceState } from "@scout/core";
-import { MAC_LAUNCHD_STATE_SCRIPT, WINDOWS_SERVICE_STATE_SCRIPT, WINDOWS_TASKS_SCRIPT } from "./probes.ts";
+import { LINUX_SYSTEMD_SCRIPT, MAC_LAUNCHD_STATE_SCRIPT, WINDOWS_SERVICE_STATE_SCRIPT, WINDOWS_TASKS_SCRIPT } from "./probes.ts";
 
 const result = (origin: string, status: ServiceResult["status"], facts: ServiceFact[] = [], message?: string): ServiceResult => ({ origin, status, facts, ...(message === undefined ? {} : { message }) });
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -284,5 +284,80 @@ export const macLaunchdStateAdapter: ServiceAdapter = {
     }
     if (!complete && facts.length === 0) return result("launchd-state", "failed", [], "launchd sections are missing");
     return finish("launchd-state", probe, facts, malformed);
+  },
+};
+
+const SYSTEMD_ENABLED = new Set(["enabled", "enabled-runtime"]);
+const SYSTEMD_OFF = new Set(["disabled", "masked", "masked-runtime"]);
+/** Unit files that can be switched on or off. Static, alias, and generated units only run when something else starts them. */
+const SYSTEMD_LISTED = new Set([...SYSTEMD_ENABLED, ...SYSTEMD_OFF, "linked", "linked-runtime"]);
+const SYSTEMD_LONG_TYPES = new Set(["simple", "exec", "notify", "notify-reload", "forking", "dbus", "idle"]);
+
+function systemdFact(unit: string, description: string, load: string, active: string, sub: string, mainPid: number, fileState: string, program: string | null, user: string, type: string, remain: boolean): ServiceFact {
+  const off = SYSTEMD_OFF.has(fileState);
+  const running = sub === "running" || (active === "active" && mainPid > 0);
+  let state: ServiceState = "other";
+  if (running) state = "running";
+  else if (active === "failed") state = "stopped";
+  else if (active === "inactive") state = off ? "disabled" : "stopped";
+  const startMode: ServiceStartMode | null = SYSTEMD_ENABLED.has(fileState) ? "auto" : off ? "disabled" : fileState === "" ? null : "manual";
+  return {
+    kind: "systemd",
+    name: unit.replace(/\.service$/, ""),
+    displayName: description !== "" && description !== unit ? description : null,
+    domain: "system",
+    program,
+    state,
+    startMode,
+    enabled: SYSTEMD_ENABLED.has(fileState) ? true : off ? false : null,
+    pid: running && mainPid > 0 ? mainPid : null,
+    runAs: user !== "" ? user : load === "loaded" ? "root" : null,
+    keepAlive: SYSTEMD_LONG_TYPES.has(type) && !remain,
+    triggers: null,
+    lastRun: null,
+    lastResult: active === "failed" ? "failed" : null,
+  };
+}
+
+export const linuxSystemdAdapter: ServiceAdapter = {
+  origin: "systemd-state",
+  os: ["linux"],
+  probes() {
+    return [{ id: "state", argv: ["/bin/sh", "-c", LINUX_SYSTEMD_SCRIPT] }];
+  },
+  parse(outputs) {
+    const probe = outputs["state"];
+    if (!probe) return result("systemd-state", "failed", [], "probe output missing");
+    const [shown = "", files = ""] = probe.stdout.replaceAll("\r\n", "\n").split(/^---SCOUT-FILES---$/m);
+    // Without systemctl, or with a systemd that is not the running init (a container, WSL without systemd), there is nothing to list.
+    if (probe.exitCode === 127 || shown.trim() === "") return result("systemd-state", "skipped", [], "systemd is not running on this machine");
+    const facts = new Map<string, ServiceFact>();
+    let malformed = false;
+    for (const block of shown.split(/\n\s*\n/)) {
+      if (block.trim() === "") continue;
+      const fields = new Map<string, string>();
+      for (const line of block.split("\n")) {
+        const at = line.indexOf("=");
+        if (at > 0 && !fields.has(line.slice(0, at))) fields.set(line.slice(0, at), line.slice(at + 1).trim());
+      }
+      const id = fields.get("Id") ?? "";
+      if (!id.endsWith(".service")) { malformed = true; continue; }
+      const load = fields.get("LoadState") ?? "";
+      if (load === "not-found") continue;
+      const main = Number(fields.get("MainPID") ?? "0");
+      const program = /\bpath=(\S+)/.exec(fields.get("ExecStart") ?? "")?.[1] ?? null;
+      const fact = systemdFact(id, fields.get("Description") ?? "", load, fields.get("ActiveState") ?? "", fields.get("SubState") ?? "", Number.isSafeInteger(main) && main > 0 ? main : 0, fields.get("UnitFileState") ?? "", program, fields.get("User") ?? "", fields.get("Type") ?? "", fields.get("RemainAfterExit") === "yes");
+      facts.set(fact.name, fact);
+    }
+    for (const line of files.split("\n")) {
+      const cols = line.trim().split(/\s+/);
+      if (cols.length < 2 || cols[0] === "") continue;
+      const unit = cols[0]!;
+      if (!unit.endsWith(".service")) { malformed = true; continue; }
+      const name = unit.replace(/\.service$/, "");
+      if (unit.endsWith("@.service") || facts.has(name) || !SYSTEMD_LISTED.has(cols[1]!)) continue;
+      facts.set(name, systemdFact(unit, "", "unit-file", "inactive", "dead", 0, cols[1]!, null, "", "", false));
+    }
+    return finish("systemd-state", probe, [...facts.values()], malformed);
   },
 };

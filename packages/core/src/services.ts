@@ -5,7 +5,7 @@ import { listListeners, type Listener, type ListenerBind } from "./listeners.ts"
 import { loadDescriptionResolver, type Description, type DescriptionResolver } from "./descriptions.ts";
 import type { HealthRow } from "./health.ts";
 
-export type ServiceKind = "windows-service" | "scheduled-task" | "launchd";
+export type ServiceKind = "windows-service" | "scheduled-task" | "launchd" | "systemd";
 export type ServiceState = "running" | "stopped" | "disabled" | "other";
 export type ServiceStartMode = "auto" | "manual" | "disabled" | "boot";
 export type ServiceDomain = "system" | "gui";
@@ -98,6 +98,7 @@ function owns(origin: string, kind: ServiceKind): boolean {
   if (origin === "win-services") return kind === "windows-service";
   if (origin === "win-tasks") return kind === "scheduled-task";
   if (origin === "launchd-state") return kind === "launchd";
+  if (origin === "systemd-state") return kind === "systemd";
   return false;
 }
 
@@ -183,7 +184,7 @@ function triggerList(value: string | null): string[] | null {
 
 /** A live pid is the process that owns the socket. Without one, the executable is the only link, and it is not added on top of a pid match. */
 function portsFor(row: { kind: ServiceKind; pid: number | null; program: string | null }, listeners: Listener[]): ServicePort[] {
-  const windows = row.kind !== "launchd";
+  const windows = row.kind === "windows-service" || row.kind === "scheduled-task";
   const samePath = (path: string | null): boolean => {
     if (row.program === null || path === null) return false;
     return windows ? path.toLowerCase() === row.program.toLowerCase() : path === row.program;

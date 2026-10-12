@@ -127,8 +127,18 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
     const emit = (kind: string, port: number, process: string | null, oldBind: ListenerBind | null, newBind: ListenerBind | null, container: string | null) => {
       if (!firstScan) event.run(now, machineId, kind, JSON.stringify({ machine: machineId, port, process, oldBind, newBind, ...(container !== null && container !== process ? { container } : {}) }));
     };
+    // A reader that learns the owner of a socket it could only list before changes the row's identity. That is the same listener gaining a name, not a new one appearing and an old one going away.
+    const renamed = new Set<number>();
     for (const [key, fact] of facts) {
-      const before = old.get(key);
+      let before = old.get(key);
+      if (!before && fact.processName) {
+        const unnamed = previous.find((row) => row.goneAt === null && !renamed.has(row.id) && row.port === fact.port && row.protocol === fact.protocol && row.containerName === (fact.container?.name ?? null) && (row.processName === null || row.processName === "") && !facts.has(identity(row)));
+        if (unnamed) {
+          db.prepare("UPDATE listeners SET process_name = ? WHERE id = ?").run(fact.processName, unnamed.id);
+          renamed.add(unnamed.id);
+          before = unnamed;
+        }
+      }
       put.run(machineId, fact.port, fact.protocol, fact.address, fact.bind, fact.pid, fact.processName, fact.processPath, fact.scriptPath ?? null, fact.ppid ?? null, fact.owner ?? null, fact.container?.name ?? null, fact.container?.image ?? null, now, now);
       summary.listeners++;
       if (!before) emit("listener_new", fact.port, fact.processName ?? fact.container?.name ?? null, null, fact.bind, fact.container?.name ?? null);
@@ -138,7 +148,7 @@ export function recordListeners(db: Db, machineId: string, result: ListenerResul
       for (const row of previous) {
         // Each reader proves absence only for its own family; Docker and lsof run separately.
         const owned = result.origin === "docker-ports" ? row.containerName !== null : result.origin === "listeners" || row.containerName === null;
-        if (!owned || row.goneAt !== null || facts.has(identity(row))) continue;
+        if (!owned || row.goneAt !== null || renamed.has(row.id) || facts.has(identity(row))) continue;
         db.prepare("UPDATE listeners SET gone_at = ? WHERE id = ?").run(now, row.id);
         summary.gone++;
         emit("listener_gone", row.port, row.processName ?? row.containerName, row.bind, null, row.containerName);

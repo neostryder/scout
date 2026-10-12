@@ -1,11 +1,11 @@
 import { recordListeners, recordServices, runProbe, type Db, type ListenerAdapter, type ListenerResult, type Probe, type ProbeOutput, type ServiceAdapter, type ServiceResult, type Transport } from "@scout/core";
 import { dockerPortsAdapter, linuxListenersAdapter, macListenersAdapter, windowsListenersAdapter } from "@scout/adapter-listeners";
-import { macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "@scout/adapter-services";
+import { linuxSystemdAdapter, macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "@scout/adapter-services";
 import { alertsFileReader, evaluateAlerts, loadTunnelHosts, type AlertChange, type AlertOptions } from "@scout/core";
 
 export const LISTENER_ADAPTERS: ListenerAdapter[] = [windowsListenersAdapter, macListenersAdapter, linuxListenersAdapter, dockerPortsAdapter];
 
-export const SERVICE_ADAPTERS: ServiceAdapter[] = [windowsServicesAdapter, windowsTasksAdapter, macLaunchdStateAdapter];
+export const SERVICE_ADAPTERS: ServiceAdapter[] = [windowsServicesAdapter, windowsTasksAdapter, macLaunchdStateAdapter, linuxSystemdAdapter];
 
 // Get-ScheduledTaskInfo walks every task and takes about two minutes on a Windows machine with many tasks.
 const TASK_ORIGIN = "win-tasks";

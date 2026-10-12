@@ -11,6 +11,7 @@ export const TEXT = {
   kindsHelp: "Checked kinds leave the panel on every machine.",
   "kind_windows-service": "Windows services",
   kind_launchd: "launchd jobs",
+  kind_systemd: "systemd services",
   "kind_scheduled-task": "Scheduled tasks",
   kind_listener: "Plain listeners",
   kind_container: "Container listeners",

@@ -27,3 +27,8 @@ launchctl print-disabled system 2>/dev/null
 echo '---SCOUT-DISABLED-GUI---'
 launchctl print-disabled "gui/$(id -u)" 2>/dev/null
 `;
+
+export const LINUX_SYSTEMD_SCRIPT = `systemctl show '*.service' --no-pager --property=Id,Description,LoadState,ActiveState,SubState,MainPID,UnitFileState,FragmentPath,ExecStart,User,Type,RemainAfterExit 2>/dev/null
+echo '---SCOUT-FILES---'
+systemctl list-unit-files --type=service --no-legend --no-pager --plain 2>/dev/null
+`;

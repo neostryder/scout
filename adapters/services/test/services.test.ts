@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { ProbeOutputs, ServiceAdapter, ServiceResult } from "@scout/core";
-import { macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "../src/index.ts";
-import { MAC_LAUNCHD_STATE_SCRIPT, WINDOWS_SERVICE_STATE_SCRIPT, WINDOWS_TASKS_SCRIPT } from "../src/probes.ts";
+import { linuxSystemdAdapter, macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "../src/index.ts";
+import { LINUX_SYSTEMD_SCRIPT, MAC_LAUNCHD_STATE_SCRIPT, WINDOWS_SERVICE_STATE_SCRIPT, WINDOWS_TASKS_SCRIPT } from "../src/probes.ts";
 
 const fixture = (name: string): ProbeOutputs => JSON.parse(readFileSync(new URL(`../../../fixtures/servicestate/${name}/outputs.json`, import.meta.url), "utf8"));
 const output = (stdout: string, exitCode = 0) => ({ stdout, exitCode, stderr: "" });
@@ -14,6 +14,7 @@ for (const [adapter, name, id] of [
   [windowsServicesAdapter, "hub-services", "services"],
   [windowsTasksAdapter, "hub-tasks", "tasks"],
   [macLaunchdStateAdapter, "laptop", "state"],
+  [linuxSystemdAdapter, "arch", "state"],
 ] as [ServiceAdapter, string, string][]) {
   test(`${adapter.origin} reads the exact ${name} fixture result`, () => {
     const expected = JSON.parse(readFileSync(new URL(`../../../fixtures/servicestate/${name}/expected.json`, import.meta.url), "utf8")) as ServiceResult;
@@ -28,6 +29,7 @@ test("service adapters use the exact recorded probe commands and fixed argument 
     [windowsServicesAdapter, "windows/service-state.ps1", WINDOWS_SERVICE_STATE_SCRIPT, ["pwsh", "-NoProfile", "-Command"]],
     [windowsTasksAdapter, "windows/tasks.ps1", WINDOWS_TASKS_SCRIPT, ["pwsh", "-NoProfile", "-Command"]],
     [macLaunchdStateAdapter, "macos/launchd-state.sh", MAC_LAUNCHD_STATE_SCRIPT, ["/bin/sh", "-c"]],
+    [linuxSystemdAdapter, "linux/systemd.sh", LINUX_SYSTEMD_SCRIPT, ["/bin/sh", "-c"]],
   ] as [ServiceAdapter, string, string, string[]][]) {
     assert.equal(script, readFileSync(new URL(`../../../tools/probes/${file}`, import.meta.url), "utf8").replaceAll("\r\n", "\n"));
     const probes = adapter.probes({ machineId: "test", os: adapter.os[0]!, roots: {} });
@@ -213,4 +215,31 @@ test("launchd accepts pid 0, status flags and a disabled-only label", () => {
   const partial = macLaunchdStateAdapter.parse({ state: output(`${stdout}not a row\n`) });
   assert.equal(partial.status, "partial");
   assert.ok(partial.facts.length >= 5);
+});
+
+test("systemd units map to running, failed, disabled and unit-file-only rows", () => {
+  const parsed = linuxSystemdAdapter.parse(fixture("arch"));
+  assert.equal(parsed.status, "ok");
+  const byName = (name: string) => parsed.facts.find((fact) => fact.name === name)!;
+  assert.deepEqual([byName("sshd").state, byName("sshd").startMode, byName("sshd").pid !== null, byName("sshd").program, byName("sshd").keepAlive], ["running", "auto", true, "/usr/bin/sshd", true]);
+  assert.deepEqual([byName("scout-broken").state, byName("scout-broken").lastResult], ["stopped", "failed"]);
+  assert.deepEqual([byName("auditd").state, byName("auditd").enabled, byName("auditd").program], ["disabled", false, null]);
+  assert.equal(byName("ldconfig").state, "other");
+  assert.equal(byName("ldconfig").keepAlive, false);
+  assert.ok(parsed.facts.every((fact) => fact.kind === "systemd" && fact.domain === "system" && !fact.name.endsWith(".service") && !fact.name.endsWith("@")));
+  assert.equal(new Set(parsed.facts.map((fact) => fact.name)).size, parsed.facts.length);
+});
+
+test("systemd reports skipped without systemctl or a running systemd, partial on a failed probe with output, and failed on a missing output", () => {
+  const output = (stdout: string, exitCode: number) => ({ stdout, exitCode, stderr: "" });
+  assert.equal(linuxSystemdAdapter.parse({}).status, "failed");
+  assert.equal(linuxSystemdAdapter.parse({ state: output("", 127) }).status, "skipped");
+  assert.equal(linuxSystemdAdapter.parse({ state: output(["---SCOUT-FILES---", "cups.service disabled disabled", ""].join("\n"), 0) }).status, "skipped");
+  const outputs = fixture("arch");
+  outputs["state"]!.exitCode = 1;
+  const parsed = linuxSystemdAdapter.parse(outputs);
+  assert.equal(parsed.status, "partial");
+  assert.ok(parsed.facts.length > 0);
+  const broken = linuxSystemdAdapter.parse({ state: output(["Description=no id", "LoadState=loaded", ""].join("\n"), 0) });
+  assert.equal(broken.status, "failed");
 });

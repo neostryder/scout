@@ -14,6 +14,7 @@ export function openCatalog(path: string): Db {
     const have = new Set((db.prepare("PRAGMA table_info(services)").all() as { name: string }[]).map((c) => c.name));
     for (const def of SERVICE_COLUMNS) if (!have.has(def.split(" ")[0] as string)) db.exec(`ALTER TABLE services ADD COLUMN ${def}`);
   }
+  migrateServiceKinds(db);
   migrateDependencyEdges(db);
   migrateActions(db);
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'listeners'").get()) {
@@ -45,6 +46,24 @@ export function openCatalog(path: string): Db {
     throw new Error(`catalog schema version ${row.value} does not match ${SCHEMA_VERSION}`);
   }
   return db;
+}
+
+/** The first services table limited `kind` to the Windows and macOS readers. SQLite cannot widen a CHECK in place, so the table is rebuilt with its rows copied by column name. */
+function migrateServiceKinds(db: Db): void {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'services'").get() as { sql: string } | undefined;
+  if (!row || row.sql.includes("'systemd'")) return;
+  const columns = (db.prepare("PRAGMA table_info(services)").all() as { name: string }[]).map((column) => column.name).join(", ");
+  db.exec("BEGIN");
+  try {
+    db.exec("ALTER TABLE services RENAME TO services_old");
+    db.exec(SCHEMA_SQL);
+    db.exec(`INSERT INTO services (${columns}) SELECT ${columns} FROM services_old`);
+    db.exec("DROP TABLE services_old");
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 /** The first dependency_edges table limited `source` to the three readers; reviewed edges need a fourth value, and SQLite cannot drop a CHECK in place. */

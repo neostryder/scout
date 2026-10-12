@@ -1,6 +1,7 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { listServices, openCatalog, recordListeners, recordServices, SCHEMA_SQL, SCHEMA_VERSION, upsertMachine, type Db, type ListenerFact, type ListenerResult, type ServiceFact, type ServiceResult } from "../src/index.ts";
 
 const T = "2026-10-06T12:00:00Z";
@@ -206,3 +207,45 @@ for (const [machine, os, file] of [["hub", "windows", "hub-services"], ["hub", "
     assert.deepEqual(events(db), []);
   });
 }
+
+const unit = (over: Partial<ServiceFact> = {}): ServiceFact => ({
+  kind: "systemd", name: "sshd", displayName: "OpenSSH Daemon", domain: "system", program: "/usr/bin/sshd",
+  state: "running", startMode: "auto", enabled: true, pid: 300, runAs: "root", keepAlive: true, triggers: null, lastRun: null, lastResult: null, ...over,
+});
+
+test("systemd units record under their own origin and classify by the systemd rules", (t) => {
+  const db = seed(t);
+  upsertMachine(db, { id: "arch", name: "Arch", os: "linux", kind: "host" });
+  recordServices(db, "arch", result([unit(), unit({ name: "systemd-journald", displayName: "Journal Service" }), unit({ name: "cups", displayName: "CUPS Scheduler" })], "ok", "systemd-state"), T);
+  const rows = listServices(db, { machine: "arch", kind: "systemd" });
+  assert.equal(rows.length, 3);
+  assert.equal(rows.find((row) => row.name === "systemd-journald")!.classification.class, "essential");
+  assert.notEqual(rows.find((row) => row.name === "cups")!.classification.class, "essential");
+  // A windows-services origin cannot retire a systemd row.
+  recordServices(db, "arch", result([], "ok", "win-services"), T2);
+  assert.equal(listServices(db, { machine: "arch", gone: "present" }).length, 3);
+});
+
+test("a catalog built before systemd units gains the kind and keeps its service rows", () => {
+  const dir = mkdtempSync(resolve("services-core-"));
+  const path = `${dir}/legacy.db`.replace(/\\/g, "/");
+  try {
+    const db = openCatalog(path);
+    upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+    recordServices(db, "hub", result([service, task]), T);
+    const legacy = SCHEMA_SQL.match(/CREATE TABLE IF NOT EXISTS services \([\s\S]*?\n\);/)![0].replace(",'systemd'", "");
+    assert.notEqual(legacy, SCHEMA_SQL.match(/CREATE TABLE IF NOT EXISTS services \([\s\S]*?\n\);/)![0]);
+    db.exec("ALTER TABLE services RENAME TO services_new");
+    db.exec(legacy);
+    db.exec("INSERT INTO services SELECT * FROM services_new");
+    db.exec("DROP TABLE services_new");
+    assert.throws(() => db.prepare("UPDATE services SET kind = 'systemd' WHERE id = 1").run());
+    db.close();
+    const reopened = openCatalog(path);
+    try {
+      assert.equal(listServices(reopened, { machine: "hub" }).length, 2);
+      reopened.prepare("UPDATE services SET kind = 'systemd' WHERE id = 1").run();
+      assert.equal(listServices(reopened, { kind: "systemd" }).length, 1);
+    } finally { reopened.close(); }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
