@@ -252,6 +252,14 @@ export function serviceRow(row) {
   return { ...row, stateText: stateLabel(row.state), exposureText: exposureLabel(row.exposure), portsText: row.ports.map(({ port }) => port).join(", ") || "None", pidText: row.pid == null ? "None" : String(row.pid), kindText: ({ "windows-service": "Windows service", "scheduled-task": "Scheduled task", launchd: "launchd" })[row.kind] || row.kind };
 }
 
+/** The third line on a machine's island: how many ports it listens on and how many of them other machines can reach. A hub that does not report listener counts yet leaves the line out. */
+export function listenerSummary(machine) {
+  const listeners = machine.listeners;
+  if (!listeners || !Number.isFinite(listeners.total)) return "";
+  const exposed = (listeners.lan || 0) + (listeners.all || 0);
+  return `${listeners.total} ${listeners.total === 1 ? "port" : "ports"} listening, ${exposed} exposed`;
+}
+
 export function listenerRow(row) {
   return { ...row, exposureText: exposureLabel(row.bind), name: row.containerName || row.label || row.processName || "Unknown process", joinedText: row.serviceName || "No joined service" };
 }

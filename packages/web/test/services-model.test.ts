@@ -274,3 +274,10 @@ test("stack labels, member details, plans, filters and stream events cover contr
   assert.deepEqual(stackFilter(stacks, "blocked"), [stacks[1]]);
   assert.deepEqual(stackEventReducer(stacks, { name: "app", state: "running" }), [{ name: "app", state: "running" }, stacks[1]]);
 });
+
+test("an island's third line counts the listening ports and how many of them other machines can reach", async () => {
+  const { listenerSummary } = await import(new URL("../public/services-model.js", import.meta.url).href);
+  assert.equal(listenerSummary({ listeners: { total: 12, loopback: 7, lan: 3, all: 2 } }), "12 ports listening, 5 exposed");
+  assert.equal(listenerSummary({ listeners: { total: 1, loopback: 1, lan: 0, all: 0 } }), "1 port listening, 0 exposed");
+  assert.equal(listenerSummary({}), "");
+});
