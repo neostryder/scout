@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "Version         : 1.0-1\nDescription     : a block with no name\n\nName            : ok\nVersion         : 2-1\nInstall Reason  : Explicitly installed\n\n---SCOUT-FOREIGN---\nok\n",
+    "stderr": ""
+  }
+}

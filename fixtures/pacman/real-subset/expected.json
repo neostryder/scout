@@ -1,0 +1,175 @@
+{
+  "sourceKind": "pacman",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "pacman",
+      "key": "acl",
+      "name": "acl",
+      "kind": "package",
+      "version": "2.4.0-1",
+      "location": "",
+      "description": "Access control list utilities, libraries and headers",
+      "homepage": "https://savannah.nongnu.org/projects/acl",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "base",
+      "name": "base",
+      "kind": "package",
+      "version": "3-3",
+      "location": "",
+      "description": "Minimal package set to define a basic Arch Linux installation",
+      "homepage": "https://www.archlinux.org",
+      "details": {
+        "arch": "any",
+        "reason": "explicit"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "bash",
+      "name": "bash",
+      "kind": "package",
+      "version": "5.3.20-1",
+      "location": "",
+      "description": "The GNU Bourne Again shell",
+      "homepage": "https://www.gnu.org/software/bash/bash.html",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "glibc",
+      "name": "glibc",
+      "kind": "package",
+      "version": "2.44+r24+g16be1518495f-1",
+      "location": "",
+      "description": "GNU C Library",
+      "homepage": "https://www.gnu.org/software/libc",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "libcap",
+      "name": "libcap",
+      "kind": "package",
+      "version": "2.78-1",
+      "location": "",
+      "description": "POSIX 1003.1e capabilities",
+      "homepage": "https://sites.google.com/site/fullycapable/",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "nginx",
+      "name": "nginx",
+      "kind": "package",
+      "version": "1.30.5-1",
+      "location": "",
+      "description": "Lightweight HTTP server and IMAP/POP3 proxy server",
+      "homepage": "https://nginx.org",
+      "details": {
+        "arch": "x86_64",
+        "reason": "explicit"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "openssh",
+      "name": "openssh",
+      "kind": "package",
+      "version": "10.6p1-1",
+      "location": "",
+      "description": "SSH protocol implementation for remote login, command execution and file transfer",
+      "homepage": "https://www.openssh.com/portable.html",
+      "details": {
+        "arch": "x86_64",
+        "reason": "explicit"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "pacman",
+      "name": "pacman",
+      "kind": "package",
+      "version": "7.1.0.r9.g54d9411-2",
+      "location": "",
+      "description": "A library-based package manager with dependency support",
+      "homepage": "https://www.archlinux.org/pacman/",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "python",
+      "name": "python",
+      "kind": "package",
+      "version": "3.14.8-1",
+      "location": "",
+      "description": "The Python programming language",
+      "homepage": "https://www.python.org/",
+      "details": {
+        "arch": "x86_64",
+        "reason": "explicit"
+      }
+    },
+    {
+      "ecosystem": "aur",
+      "key": "scout-sample",
+      "name": "scout-sample",
+      "kind": "package",
+      "version": "1.0.2-1",
+      "location": "",
+      "description": "A small package built from a local PKGBUILD",
+      "homepage": "https://example.org/scout-sample",
+      "details": {
+        "arch": "any",
+        "reason": "explicit"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "sudo",
+      "name": "sudo",
+      "kind": "package",
+      "version": "1.9.17.p2-6",
+      "location": "",
+      "description": "Give certain users the ability to run some commands as root",
+      "homepage": "https://www.sudo.ws/sudo/",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "systemd",
+      "name": "systemd",
+      "kind": "package",
+      "version": "262-1",
+      "location": "",
+      "description": "system and service manager",
+      "homepage": "https://www.github.com/systemd/systemd",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    }
+  ]
+}

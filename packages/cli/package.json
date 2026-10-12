@@ -19,6 +19,7 @@
     "@scout/adapter-deps": "workspace:*",
     "@scout/adapter-dockerimages": "workspace:*",
     "@scout/adapter-dpkg": "workspace:*",
+    "@scout/adapter-pacman": "workspace:*",
     "@scout/adapter-gobin": "workspace:*",
     "@scout/adapter-homebrew": "workspace:*",
     "@scout/adapter-launchd": "workspace:*",

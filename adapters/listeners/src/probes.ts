@@ -167,6 +167,13 @@ echo "---SCOUT-NETSTAT---"
 netstat -anv -p tcp 2>/dev/null | grep LISTEN
 `;
 
+export const LINUX_LISTENERS_SCRIPT = `(sudo -n ss -H -ltnpe 2>/dev/null || ss -H -ltnpe 2>/dev/null)
+echo "---SCOUT-PS---"
+ps -eo pid=,ppid=,comm= 2>/dev/null
+echo "---SCOUT-ARGS---"
+ps -eo pid=,args= 2>/dev/null | awk '$2 ~ /(^|\\/)(node|nodejs|bun|deno|python[0-9.]*|ruby|java|php|perl)$/'
+`;
+
 export const DOCKER_PORTS_SCRIPT = `for sock in "$HOME/.colima/default/docker.sock" "$HOME/.orbstack/run/docker.sock" /var/run/docker.sock; do
   if [ -S "$sock" ]; then
     DOCKER_HOST="unix://$sock" docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}|{{.Status}}' 2>/dev/null

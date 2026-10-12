@@ -1,0 +1,106 @@
+{
+  "origin": "ss",
+  "status": "ok",
+  "facts": [
+    {
+      "port": 53,
+      "protocol": "tcp",
+      "address": "127.0.0.54",
+      "bind": "loopback",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "systemd-resolved",
+      "container": null
+    },
+    {
+      "port": 53,
+      "protocol": "tcp",
+      "address": "127.0.0.53",
+      "bind": "loopback",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "systemd-resolved",
+      "container": null
+    },
+    {
+      "port": 5355,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "systemd-resolved",
+      "container": null
+    },
+    {
+      "port": 8000,
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "bind": "loopback",
+      "pid": 354,
+      "processName": "python",
+      "processPath": null,
+      "scriptPath": "http.server",
+      "owner": "devapp",
+      "container": null
+    },
+    {
+      "port": 8080,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "allapp",
+      "container": null
+    },
+    {
+      "port": 22,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "sshd",
+      "container": null
+    },
+    {
+      "port": 80,
+      "protocol": "tcp",
+      "address": "0.0.0.0",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "nginx",
+      "container": null
+    },
+    {
+      "port": 5355,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "systemd-resolved",
+      "container": null
+    },
+    {
+      "port": 22,
+      "protocol": "tcp",
+      "address": "::",
+      "bind": "all",
+      "pid": null,
+      "processName": null,
+      "processPath": null,
+      "owner": "sshd",
+      "container": null
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 import type { ListenerAdapter, ListenerBind, ListenerFact, ListenerResult, ProbeOutput, ProbeOutputs } from "@scout/core";
-import { DOCKER_PORTS_SCRIPT, MAC_LISTENERS_SCRIPT, WINDOWS_LISTENERS_SCRIPT } from "./probes.ts";
+import { DOCKER_PORTS_SCRIPT, LINUX_LISTENERS_SCRIPT, MAC_LISTENERS_SCRIPT, WINDOWS_LISTENERS_SCRIPT } from "./probes.ts";
 
 const result = (origin: string, status: ListenerResult["status"], facts: ListenerFact[] = [], message?: string): ListenerResult => ({ origin, status, facts, ...(message === undefined ? {} : { message }) });
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -188,9 +188,68 @@ export const macListenersAdapter: ListenerAdapter = {
   },
 };
 
+/** The process among a socket's users that started the others, such as an nginx master that shares its socket with its workers. */
+function leader(users: { name: string; pid: number }[], parents: Map<number, number>): { name: string; pid: number } | undefined {
+  return users.find((user) => !users.some((other) => other.pid === parents.get(user.pid))) ?? users[0];
+}
+
+export const linuxListenersAdapter: ListenerAdapter = {
+  origin: "ss",
+  os: ["linux"],
+  probes() {
+    return [{ id: "listeners", argv: ["/bin/sh", "-c", LINUX_LISTENERS_SCRIPT] }];
+  },
+  parse(outputs) {
+    const missing = unavailable(outputs, "listeners", "ss");
+    if (missing) return missing;
+    const probe = outputs["listeners"]!;
+    const sections = probe.stdout.split(/^---SCOUT-(?:PS|ARGS)---\r?$/m);
+    let malformed = sections.length < 2 || sections.length > 3;
+    const names = new Map<number, string>();
+    const parents = new Map<number, number>();
+    for (const line of (sections[1] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
+      const match = /^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/.exec(line);
+      if (!match) { malformed = true; continue; }
+      names.set(Number(match[1]), match[3]!);
+      if (Number(match[2]) > 1) parents.set(Number(match[1]), Number(match[2]));
+    }
+    const argv = new Map<number, string>();
+    for (const line of (sections[2] ?? "").split(/\r?\n/).filter((line) => line.trim())) {
+      const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
+      if (match) argv.set(Number(match[1]), match[2]!);
+    }
+    const facts: ListenerFact[] = [];
+    for (const line of sections[0]!.split(/\r?\n/).filter((line) => line.trim())) {
+      const match = /^LISTEN\s+\d+\s+\d+\s+(\S+)\s+\S+(?:\s+(.*))?$/.exec(line.trim());
+      const split = match ? match[1]!.lastIndexOf(":") : -1;
+      const binding = match && split > 0 ? address(match[1]!.slice(0, split)) : null;
+      const port = match && split > 0 ? Number(match[1]!.slice(split + 1)) : Number.NaN;
+      if (!match || !binding || !portNumber(port)) { malformed = true; continue; }
+      const users = [...(match[2] ?? "").matchAll(/\("((?:[^"\\]|\\.)*)",pid=(\d+),fd=\d+\)/g)]
+        .map((user) => ({ name: user[1]!.replace(/\\(.)/g, (_, char: string) => char), pid: Number(user[2]) }))
+        .filter((user) => pidNumber(user.pid) && user.pid > 0);
+      // ss -e also gives the control group of the socket's owner, which systemd names after the service that runs it, and ss shows that to every account.
+      const service = /\bcgroup:\S*\/([A-Za-z0-9:_.@\\-]+)\.service(?:\s|$)/.exec(match[2] ?? "")?.[1];
+      const unit = service && !service.startsWith("user@") ? service : null;
+      const chosen = leader(users, parents);
+      if (!chosen) {
+        // Sockets of other accounts show no process unless ss ran with root rights.
+        facts.push({ port, protocol: "tcp", ...binding, pid: null, processName: null, processPath: null, ...(unit ? { owner: unit } : {}), container: null });
+        continue;
+      }
+      const processName = names.get(chosen.pid) ?? chosen.name;
+      const scriptPath = scriptOf(processName, argv.get(chosen.pid) ?? null);
+      const ppid = parents.get(chosen.pid);
+      const owner = unit && unit.toLowerCase() !== processName.toLowerCase() ? unit : null;
+      facts.push({ port, protocol: "tcp", ...binding, pid: chosen.pid, processName, processPath: null, ...(scriptPath ? { scriptPath } : {}), ...(ppid ? { ppid } : {}), ...(owner ? { owner } : {}), container: null });
+    }
+    return finish("ss", probe, facts, malformed);
+  },
+};
+
 export const dockerPortsAdapter: ListenerAdapter = {
   origin: "docker-ports",
-  os: ["macos"],
+  os: ["macos", "linux"],
   probes() {
     return [{ id: "ports", argv: ["/bin/sh", "-c", DOCKER_PORTS_SCRIPT], optional: true }];
   },

@@ -31,7 +31,7 @@ export function githubRateLimit(status: number, headers: ResponseHeaders = {}): 
 
 export const github: Researcher = {
   source: "github",
-  ecosystems: ["brew", "cask", "npm", "pipx", "uv-tool", "go-bin", "cargo", "bundle", "winget", "winget-local", "msstore", "arp", "binary", "pkgutil", "appx", "dpkg", "image", "python", "launchd", "service", "wsl-distro", "sbx"],
+  ecosystems: ["brew", "cask", "npm", "pipx", "uv-tool", "go-bin", "cargo", "bundle", "winget", "winget-local", "msstore", "arp", "binary", "pkgutil", "appx", "dpkg", "pacman", "aur", "image", "python", "launchd", "service", "wsl-distro", "sbx"],
   ttlMs: SIX_HOURS,
   url(target) {
     const repo = githubRepo(target);

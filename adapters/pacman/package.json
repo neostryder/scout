@@ -1,0 +1,15 @@
+{
+  "name": "@scout/adapter-pacman",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@scout/core": "workspace:*"
+  }
+}

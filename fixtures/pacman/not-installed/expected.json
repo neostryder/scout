@@ -1,0 +1,7 @@
+{
+  "sourceKind": "pacman",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "pacman did not run (exit 127): sh: line 1: pacman: command not found"
+}

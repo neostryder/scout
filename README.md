@@ -49,8 +49,8 @@ The hub and the full feature set target a Windows hub machine. Other machines ar
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
 | How Scout reaches it | As the local hub machine | ssh | ssh (with zsh installed) or local |
-| Installed software | Registry, winget, Store apps, npm, pipx, uv tools, Python and Node runtimes, WSL and Docker Sandboxes guests | Apps, Homebrew, casks, pkgutil, npm, pipx, uv tools, Go and local binaries, container images | dpkg packages only |
-| Listeners and services | Listeners, services, scheduled tasks | Listeners, launchd jobs | Not yet |
+| Installed software | Registry, winget, Store apps, npm, pipx, uv tools, Python and Node runtimes, WSL and Docker Sandboxes guests | Apps, Homebrew, casks, pkgutil, npm, pipx, uv tools, Go and local binaries, container images | dpkg, pacman, and AUR packages |
+| Listeners and services | Listeners, services, scheduled tasks | Listeners, launchd jobs | Listeners and published container ports, no systemd services yet |
 | Usage signals | UserAssist, running processes | Spotlight, running processes | Running processes, file access times |
 | Updates | winget, Store, npm, pipx, uv | brew, cask, npm, pipx, uv | Not yet |
 | Start, stop, restart | Yes | Yes, over ssh | Not yet |
@@ -58,7 +58,7 @@ The hub and the full feature set target a Windows hub machine. Other machines ar
 | Launch recipes and stacks | Yes, on the hub machine | No | No |
 | Running the hub | Yes | Not the target platform | Not tested |
 
-All three platforms also get AI tool use counts, project files that pin tool versions, and dependency facts. Linux support is thin: there is no pacman or AUR adapter, no systemd or Linux listener reader, and no update runner for Linux package managers. Adapters for Arch Linux (pacman, systemd, and `ss`) are the most wanted contribution.
+All three platforms also get AI tool use counts, project files that pin tool versions, and dependency facts. On Linux, Scout reads listening TCP sockets with `ss` and also reads published Docker container ports. It lists packages from both dpkg and pacman, and it puts packages that no sync database carries under the "aur" ecosystem. A host that lacks one of the two package managers reports that one as skipped. Linux has no systemd service listing yet, and it has no start, stop, restart, or disable control. Scout does not check for or run updates of pacman and AUR packages. The lookup of their newest upstream version is not wired yet, although the GitHub release lookup already accepts both ecosystems. A systemd service reader and update runners for pacman and the AUR are the most wanted contributions.
 
 ## Optional integrations
 

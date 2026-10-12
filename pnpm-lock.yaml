@@ -206,6 +206,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  adapters/pacman:
+    dependencies:
+      '@scout/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   adapters/pipxenv:
     dependencies:
       '@scout/core':
@@ -322,6 +328,9 @@ importers:
       '@scout/adapter-npmglobal':
         specifier: workspace:*
         version: link:../../adapters/npmglobal
+      '@scout/adapter-pacman':
+        specifier: workspace:*
+        version: link:../../adapters/pacman
       '@scout/adapter-pipxenv':
         specifier: workspace:*
         version: link:../../adapters/pipxenv

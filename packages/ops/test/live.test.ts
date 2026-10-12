@@ -213,8 +213,11 @@ test("readLive keeps a partial write when a later probe throws", async () => {
     });
     assert.equal(failed.status, "failed");
     assert.equal(failed.error, "listener output is not valid JSON; service output is not valid JSON");
-    const linux = await readLive(db, { id: "guest", os: "linux", transport: local }, { run: async () => { throw new Error("should not run"); } });
+    // A Linux machine runs the ss reader and the Docker reader, and a machine with neither tool reports nothing and no failure.
+    const probes: string[] = [];
+    const linux = await readLive(db, { id: "guest", os: "linux", transport: local }, { run: async (_transport, probe) => { probes.push(probe.id); return { exitCode: 127, stdout: "", stderr: "" }; } });
     assert.deepEqual(linux, { changed: false, tables: [], status: "ok", error: null });
+    assert.deepEqual(probes, ["listeners", "ports"]);
   } finally {
     db.close();
   }

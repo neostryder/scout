@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { ListenerAdapter, ListenerResult, ProbeOutputs } from "@scout/core";
-import { dockerPortsAdapter, macListenersAdapter, windowsListenersAdapter } from "../src/index.ts";
-import { DOCKER_PORTS_SCRIPT, MAC_LISTENERS_SCRIPT, WINDOWS_LISTENERS_SCRIPT } from "../src/probes.ts";
+import { dockerPortsAdapter, linuxListenersAdapter, macListenersAdapter, windowsListenersAdapter } from "../src/index.ts";
+import { DOCKER_PORTS_SCRIPT, LINUX_LISTENERS_SCRIPT, MAC_LISTENERS_SCRIPT, WINDOWS_LISTENERS_SCRIPT } from "../src/probes.ts";
 
 const fixture = (name: string): ProbeOutputs => JSON.parse(readFileSync(new URL(`../../../fixtures/listeners/${name}/outputs.json`, import.meta.url), "utf8"));
 const output = (stdout: string, exitCode = 0) => ({ stdout, exitCode, stderr: "" });
@@ -11,6 +11,7 @@ const output = (stdout: string, exitCode = 0) => ({ stdout, exitCode, stderr: ""
 for (const [adapter, names] of [
   [windowsListenersAdapter, ["hub", "hub-owners"]],
   [macListenersAdapter, ["laptop", "server", "mini", "mini-netstat"]],
+  [linuxListenersAdapter, ["arch-root", "arch-user"]],
   [dockerPortsAdapter, ["docker-laptop", "docker-server", "docker-mini"]],
 ] as [ListenerAdapter, string[]][]) {
   for (const name of names) {
@@ -25,6 +26,7 @@ test("listener adapters use the exact recorded probe commands and fixed argument
   for (const [adapter, file, script, argv] of [
     [windowsListenersAdapter, "windows/listeners.ps1", WINDOWS_LISTENERS_SCRIPT, ["pwsh", "-NoProfile", "-Command"]],
     [macListenersAdapter, "macos/listeners.sh", MAC_LISTENERS_SCRIPT, ["/bin/sh", "-c"]],
+    [linuxListenersAdapter, "linux/listeners.sh", LINUX_LISTENERS_SCRIPT, ["/bin/sh", "-c"]],
     [dockerPortsAdapter, "macos/docker-ports.sh", DOCKER_PORTS_SCRIPT, ["/bin/sh", "-c"]],
   ] as [ListenerAdapter, string, string, string[]][]) {
     assert.equal(script, readFileSync(new URL(`../../../tools/probes/${file}`, import.meta.url), "utf8").replaceAll("\r\n", "\n"));
@@ -35,7 +37,7 @@ test("listener adapters use the exact recorded probe commands and fixed argument
   assert.equal(dockerPortsAdapter.probes({ machineId: "test", os: "macos", roots: {} })[0]!.optional, true);
 });
 
-for (const [adapter, id, name] of [[windowsListenersAdapter, "listeners", "hub"], [macListenersAdapter, "listeners", "laptop"], [dockerPortsAdapter, "ports", "docker-server"]] as const) {
+for (const [adapter, id, name] of [[windowsListenersAdapter, "listeners", "hub"], [macListenersAdapter, "listeners", "laptop"], [linuxListenersAdapter, "listeners", "arch-root"], [dockerPortsAdapter, "ports", "docker-server"]] as const) {
   test(`${adapter.origin} handles missing tools, missing outputs and non-zero exits`, () => {
     assert.equal(adapter.parse({}).status, adapter === dockerPortsAdapter ? "skipped" : "failed");
     for (const exitCode of [127, 9009]) assert.equal(adapter.parse({ [id]: output("", exitCode) }).status, "skipped");
@@ -190,4 +192,30 @@ test("lsof reads the parent of each listening process from the ppid section", ()
   const parsed = macListenersAdapter.parse({ listeners: output(stdout) });
   assert.equal(parsed.status, "ok");
   assert.deepEqual(parsed.facts.map((fact) => [fact.port, fact.pid, fact.ppid]), [[8010, 17215, 17214]]);
+});
+
+test("Linux names a socket by its service when ss cannot show the process, and picks the master that shares a socket with its workers", () => {
+  const root = linuxListenersAdapter.parse(fixture("arch-root"));
+  const nginx = root.facts.find((fact) => fact.port === 80)!;
+  assert.equal(nginx.processName, "nginx");
+  assert.equal(nginx.pid, 350);
+  const user = linuxListenersAdapter.parse(fixture("arch-user"));
+  const sshd = user.facts.find((fact) => fact.port === 22)!;
+  assert.equal(sshd.pid, null);
+  assert.equal(sshd.processName, null);
+  assert.equal(sshd.owner, "sshd");
+  assert.ok(user.facts.every((fact) => fact.owner || fact.processName));
+  const stdout = [
+    'LISTEN 0 128 [::1]:631 [::]:* users:(("cupsd",pid=900,fd=6)) uid:0 ino:1 sk:1 cgroup:/system.slice/cups.service <->',
+    'LISTEN 0 4096 *:8443 *:* users:(("we\\"ird",pid=901,fd=3)) uid:1000 ino:2 sk:2 cgroup:/user.slice/user-1000.slice/user@1000.service/app.slice/dev.service <->',
+    "---SCOUT-PS---",
+    "  900 1 cupsd",
+    '  901 1 we"ird',
+    "---SCOUT-ARGS---",
+    "",
+  ].join("\n");
+  const parsed = linuxListenersAdapter.parse({ listeners: output(stdout) });
+  assert.equal(parsed.status, "ok");
+  assert.deepEqual(parsed.facts.map((fact) => [fact.port, fact.bind, fact.processName, fact.owner ?? null]), [[631, "loopback", "cupsd", "cups"], [8443, "all", 'we"ird', "dev"]]);
+  for (const bad of ["garbage", "LISTEN 0 4096 nonsense:abc x"]) assert.equal(linuxListenersAdapter.parse({ listeners: output(bad) }).status, "failed");
 });

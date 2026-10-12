@@ -1,9 +1,9 @@
 import { recordListeners, recordServices, runProbe, type Db, type ListenerAdapter, type ListenerResult, type Probe, type ProbeOutput, type ServiceAdapter, type ServiceResult, type Transport } from "@scout/core";
-import { dockerPortsAdapter, macListenersAdapter, windowsListenersAdapter } from "@scout/adapter-listeners";
+import { dockerPortsAdapter, linuxListenersAdapter, macListenersAdapter, windowsListenersAdapter } from "@scout/adapter-listeners";
 import { macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "@scout/adapter-services";
 import { alertsFileReader, evaluateAlerts, loadTunnelHosts, type AlertChange, type AlertOptions } from "@scout/core";
 
-export const LISTENER_ADAPTERS: ListenerAdapter[] = [windowsListenersAdapter, macListenersAdapter, dockerPortsAdapter];
+export const LISTENER_ADAPTERS: ListenerAdapter[] = [windowsListenersAdapter, macListenersAdapter, linuxListenersAdapter, dockerPortsAdapter];
 
 export const SERVICE_ADAPTERS: ServiceAdapter[] = [windowsServicesAdapter, windowsTasksAdapter, macLaunchdStateAdapter];
 

@@ -1,0 +1,20 @@
+{
+  "sourceKind": "pacman",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "aur",
+      "key": "ok",
+      "name": "ok",
+      "kind": "package",
+      "version": "2-1",
+      "location": "",
+      "details": {
+        "arch": "",
+        "reason": "explicit"
+      }
+    }
+  ],
+  "message": "skipped 1 malformed block(s)"
+}

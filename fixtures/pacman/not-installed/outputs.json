@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 127,
+    "stdout": "",
+    "stderr": "sh: line 1: pacman: command not found\n"
+  }
+}

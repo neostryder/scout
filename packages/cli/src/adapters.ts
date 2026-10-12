@@ -10,6 +10,7 @@ import { adapter as winservices } from "@scout/adapter-winservices";
 import { adapter as winwinget } from "@scout/adapter-winwinget";
 import { adapter as dockerimages } from "@scout/adapter-dockerimages";
 import { adapter as dpkg } from "@scout/adapter-dpkg";
+import { adapter as pacman } from "@scout/adapter-pacman";
 import { wslAdapter, sbxAdapter } from "@scout/adapter-winguests";
 import { adapter as pyruntimes } from "@scout/adapter-pyruntimes";
 import { adapter as uvtools } from "@scout/adapter-uvtools";
@@ -44,6 +45,8 @@ export const ADAPTERS: Adapter[] = [
   localbin,
   projectsel,
   noderuntime,
+  dpkg,
+  pacman,
 ];
 
 /** Sources with one instance per machine use location "". Homebrew has one per prefix. */
@@ -52,7 +55,7 @@ export const PER_PREFIX = new Set(["brew", "cask"]);
 /** Adapters that read a guest: `host` ones run their CLI on the host and describe the guest, `linux` ones run inside it. */
 export const GUEST_ADAPTERS: { host: Adapter[]; linux: Adapter[] } = {
   host: [dockerimages],
-  linux: [dpkg],
+  linux: [dpkg, pacman],
 };
 
 /** Sources whose CLI may start a background service when it is not already up. They run only while this process exists. */

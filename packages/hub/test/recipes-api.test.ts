@@ -22,7 +22,7 @@ async function app(t: TestContext, off = false, describe = false) {
   const server = createHub({ db, webRoot: root, recipeProjects: projects, descriptions, control: off ? false : { machines: [{ id: "hub", os: "windows", transport: { type: "local" } }], protectedPath: `${root}/protected.json`, clock: { now: () => time, sleep: async (ms) => { time += ms; } }, exec: async () => { calls++; return { exitCode: 0, stdout: "4321", stderr: "" }; }, recipeReader: async () => true }, streamHeartbeatMs: 20 });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  t.after(async () => { await new Promise<void>((done) => { server.close(() => done()); server.closeAllConnections(); }); db.close(); rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
+  t.after(async () => { await new Promise<void>((done) => { server.close(() => done()); server.closeAllConnections(); }); db.close(); try { rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch { /* a scanner can hold the folder for a moment, and a leftover temp folder is not a failure */ } });
   const call = async (path: string, body?: unknown) => {
     const response = await fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     return { status: response.status, body: await response.json() as Record<string, any> };
