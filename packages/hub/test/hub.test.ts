@@ -170,3 +170,32 @@ test("the updates route lists installs behind the latest answer, with the update
   assert.equal(JSON.parse((await get("/api/updates?q=nothing")).body).total, 0);
   assert.equal(JSON.parse((await get("/api/updates?machine=hub")).body).total, 0);
 });
+
+test("an API read carries an ETag and a poll that already holds the answer gets a 304 without a body", async () => {
+  const first = await get("/api/summary");
+  assert.equal(first.status, 200);
+  const etag = String(first.headers["etag"]);
+  assert.match(etag, /^"[0-9a-f]{32}"$/);
+  assert.equal(first.headers["cache-control"], "private, no-cache");
+  const again = await get("/api/summary", undefined, "GET", { headers: { "if-none-match": etag } });
+  assert.equal(again.status, 304);
+  assert.equal(again.body, "");
+  assert.equal(again.headers["etag"], etag);
+  assert.equal(again.headers["x-content-type-options"], "nosniff");
+  const weak = await get("/api/summary", undefined, "GET", { headers: { "if-none-match": `"other", W/${etag}` } });
+  assert.equal(weak.status, 304);
+  const stale = await get("/api/summary", undefined, "GET", { headers: { "if-none-match": '"0000"' } });
+  assert.equal(stale.status, 200);
+  assert.equal(stale.body, first.body);
+});
+
+test("only the polled reads are validated, and everything else stays no-store", async () => {
+  const page = await get("/");
+  assert.equal(page.headers["etag"], undefined);
+  const research = await get("/api/research/status");
+  assert.equal(research.headers["etag"], undefined);
+  assert.equal(research.headers["cache-control"], "no-store");
+  const refused = await get("/api/does-not-exist");
+  assert.equal(refused.status, 404);
+  assert.equal(refused.headers["etag"], undefined);
+});

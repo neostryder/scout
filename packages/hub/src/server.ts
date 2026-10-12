@@ -4,6 +4,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { hubMachineId, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
+import { revalidate } from "./etag.ts";
 import { trayApi } from "./tray-api.ts";
 import { isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
@@ -284,6 +285,7 @@ export function createHub(options: HubOptions): Server {
     }
   };
   const server = createServer((req, res) => {
+    revalidate(req, res);
     handle(req, res).catch((err: Error) => {
       if (!res.headersSent) json(res, 500, { error: err.message });
       else res.end();
