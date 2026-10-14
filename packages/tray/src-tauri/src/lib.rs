@@ -57,6 +57,8 @@ struct Shared {
     open: AtomicBool,
     last_hide: Mutex<Option<Instant>>,
     opened_at: Mutex<Option<Instant>>,
+    /// Where the tray icon last reported itself, so the menu entries can place the panel under it the way a left click does.
+    tray_rect: Mutex<Option<Rect>>,
     wake: Notify,
     text: HashMap<String, String>,
     config_dir: std::path::PathBuf,
@@ -234,9 +236,28 @@ fn place(app: &AppHandle, window: &WebviewWindow, rect: &Rect) {
     let _ = window.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 
+/// The rectangle to place the panel against: the one the caller has, else the last one the icon reported, else the icon's own answer right now.
+fn pick_rect<T>(given: Option<T>, remembered: Option<T>, live: impl FnOnce() -> Option<T>) -> Option<T> {
+    given.or(remembered).or_else(live)
+}
+
+fn event_rect(event: &TrayIconEvent) -> Option<Rect> {
+    match event {
+        TrayIconEvent::Click { rect, .. }
+        | TrayIconEvent::DoubleClick { rect, .. }
+        | TrayIconEvent::Enter { rect, .. }
+        | TrayIconEvent::Move { rect, .. }
+        | TrayIconEvent::Leave { rect, .. } => Some(rect.clone()),
+        _ => None,
+    }
+}
+
 fn show_panel(app: &AppHandle, shared: &Handle, rect: Option<&Rect>) {
     let Some(window) = app.get_webview_window("panel") else { return };
-    if let Some(rect) = rect {
+    let remembered = shared.tray_rect.lock().ok().and_then(|r| r.clone());
+    let live = || app.tray_by_id(TRAY_ID).and_then(|tray| tray.rect().ok().flatten());
+    let rect = pick_rect(rect.cloned(), remembered, live);
+    if let Some(rect) = &rect {
         place(app, &window, rect);
     }
     let _ = window.show();
@@ -427,6 +448,7 @@ pub fn run() {
                 open: AtomicBool::new(false),
                 last_hide: Mutex::new(None),
                 opened_at: Mutex::new(None),
+                tray_rect: Mutex::new(None),
                 wake: Notify::new(),
                 text,
                 config_dir,
@@ -469,6 +491,11 @@ pub fn run() {
                     _ => {}
                 })
                 .on_tray_icon_event(move |tray, event| {
+                    if let Some(rect) = event_rect(&event) {
+                        if let Ok(mut slot) = click_shared.tray_rect.lock() {
+                            *slot = Some(rect);
+                        }
+                    }
                     if let TrayIconEvent::Click { button, button_state, .. } = &event {
                         trace(&click_shared, &format!("tray click {button:?} {button_state:?}"));
                     }
@@ -548,7 +575,7 @@ fn open_portal_inner(app: &AppHandle, shared: &Handle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::meter_lines;
+    use super::{meter_lines, pick_rect};
 
     const T: &str = "{name} {cpu}% CPU {mem}% RAM{vram}";
     const V: &str = " {vram}% VRAM";
@@ -572,5 +599,27 @@ Eru 12% CPU 38% RAM 20% VRAM");
     fn no_body_or_unreadable_body_adds_nothing() {
         assert_eq!(meter_lines("{name}", V, None, 100), "");
         assert_eq!(meter_lines("{name}", V, Some("not json"), 100), "");
+    }
+
+    #[test]
+    fn a_menu_entry_without_a_rectangle_places_the_panel_at_the_remembered_one() {
+        assert_eq!(pick_rect(Some(1), Some(2), || Some(3)), Some(1));
+        assert_eq!(pick_rect(None, Some(2), || Some(3)), Some(2));
+    }
+
+    #[test]
+    fn with_nothing_remembered_the_icon_is_asked_and_unplaced_only_when_it_has_no_answer() {
+        assert_eq!(pick_rect(None, None, || Some(3)), Some(3));
+        assert_eq!(pick_rect::<i32>(None, None, || None), None);
+    }
+
+    #[test]
+    fn the_live_lookup_is_skipped_when_a_rectangle_is_already_known() {
+        let mut asked = false;
+        let _ = pick_rect(None, Some(2), || {
+            asked = true;
+            Some(3)
+        });
+        assert!(!asked);
     }
 }

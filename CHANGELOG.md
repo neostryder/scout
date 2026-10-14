@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- [Visible] [UI] **On macOS, the tray menu entries that open the panel place it under the menu bar icon.** The panel used to open away from the menu bar or not at all, so the click looked like it did nothing. It now lands in the same spot a left click on the icon uses.
 - [Visible] [Services] **A listener whose process name becomes known between scans no longer raises a "new listener" alert and a "listener gone" alert for the same port.** Scout used to record such a listener as a gone listener plus a brand-new listener, for example after a probe improvement or when sudo became available. Scout now renames the existing row in place, so learning a process name raises no alert.
 
 ## [0.2.0] - 2026-10-11
