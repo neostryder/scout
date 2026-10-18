@@ -153,17 +153,41 @@ export function loadDescriptionResolver(db: Db, options: { hints?: readonly Proj
   }
   for (const rows of installs.values()) rows.sort((a, b) => b.location.length - a.location.length);
   for (const rows of projects.values()) rows.sort((a, b) => b.root.length - a.root.length);
+  // Thousands of services make a scan per row too slow for the hub's event loop, so each machine's services are indexed once: first by pid, then by program path for those without a pid. The first service in id order wins, as a scan would.
+  const serviceIndex = new Map<string, { byPid: Map<number, DescriptionRow>; byPath: Map<string, DescriptionRow> }>();
+  for (const [machine, rows] of byMachine) {
+    const byPid = new Map<number, DescriptionRow>();
+    const byPath = new Map<string, DescriptionRow>();
+    for (const service of rows) {
+      if (service.pid !== null && service.pid !== undefined) { if (!byPid.has(service.pid)) byPid.set(service.pid, service); }
+      else if (service.program != null) { const key = pathKey(service.program, windows.has(machine)); if (!byPath.has(key)) byPath.set(key, service); }
+    }
+    serviceIndex.set(machine, { byPid, byPath });
+  }
   const joined = (row: DescriptionRow): DescriptionRow => {
     if (row.kind !== undefined) return row;
-    const mine = byMachine.get(row.machineId) ?? [];
+    const index = serviceIndex.get(row.machineId);
+    if (!index) return row;
     const path = row.processPath === null || row.processPath === undefined ? null : pathKey(row.processPath, windows.has(row.machineId));
-    return mine.find((service) => row.pid !== null && row.pid !== undefined && service.pid === row.pid) ??
-      mine.find((service) => service.pid === null && path !== null && service.program != null && pathKey(service.program, windows.has(row.machineId)) === path) ?? row;
+    return (row.pid !== null && row.pid !== undefined ? index.byPid.get(row.pid) : undefined) ?? (path !== null ? index.byPath.get(path) : undefined) ?? row;
   };
   const subject = (row: DescriptionRow): string => {
     const service = joined(row);
     return service.kind !== undefined ? `service:${service.kind}:${service.name}` :
       `process:${row.machineId}:${(row.processPath ?? row.processName ?? "").replace(/\\/g, "/").toLowerCase()}`;
+  };
+  // Rows share program paths heavily and every lookup scans a machine's project roots and install locations, so each answer is remembered per machine and path.
+  const projectByPath = new Map<string, Stored | undefined>();
+  const installByPath = new Map<string, Installed | undefined>();
+  const projectFor = (machine: string, path: string): Stored | undefined => {
+    const key = `${machine}|${path}`;
+    if (!projectByPath.has(key)) projectByPath.set(key, projects.get(machine)?.find((item) => contains(item.root, path))?.row);
+    return projectByPath.get(key);
+  };
+  const installFor = (machine: string, path: string): Installed | undefined => {
+    const key = `${machine}|${path}`;
+    if (!installByPath.has(key)) installByPath.set(key, installs.get(machine)?.find((item) => contains(item.location, path)));
+    return installByPath.get(key);
   };
   const describe = (row: DescriptionRow): Description | null => {
     const key = subject(row);
@@ -187,9 +211,9 @@ export function loadDescriptionResolver(db: Db, options: { hints?: readonly Proj
     const matches = [row.name, service.name, row.processName, row.port === undefined ? undefined : String(row.port), ...(row.ports ?? []).map((port) => String(port.port))].filter((value): value is string => value !== undefined && value !== null);
     const hint = hints.find((hint) => hint.machine === row.machineId && matches.some((match) => windows.has(row.machineId) ? match.toLowerCase() === hint.match.toLowerCase() : match === hint.match));
     const hinted = hint ? projects.get(row.machineId)?.find((item) => item.root === pathKey(hint.root, windows.has(row.machineId)))?.row : undefined;
-    const project = sources?.get("project") ?? hinted ?? projects.get(row.machineId)?.find((item) => contains(item.root, path))?.row;
+    const project = sources?.get("project") ?? hinted ?? projectFor(row.machineId, path);
     if (project) return fromStored(project);
-    const install = installs.get(row.machineId)?.find((item) => contains(item.location, path));
+    const install = installFor(row.machineId, path);
     if (install?.text && ["source", "sibling", "manual"].includes(install.source ?? "")) {
       return { ...base, text: install.text, source: "install", generated: false, confidence: null, at: install.at, evidence: [] };
     }

@@ -131,6 +131,9 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   const descriptions = loadDescriptionResolver(db, { hints: [] });
   const services = listServices(db, {}, descriptions);
   const listeners = listListeners(db, {}, descriptions);
+  // Tens of thousands of stored alerts and listeners make a linear search per alert block the hub for seconds, so lookups by id go through maps.
+  const serviceById = new Map(services.map((row) => [row.id, row]));
+  const listenerById = new Map(listeners.map((row) => [row.id, row]));
   const routes = listRoutes(db, { tunnelHosts: options.tunnelHosts }, descriptions);
   const file = options.loadMutes?.() ?? EMPTY;
   const mutes = alertMutes(db, file);
@@ -212,7 +215,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
     const next: Record<string, RouteSnapshot> = {};
     for (const route of routes) {
       const key = `${route.hostname}:${route.path ?? ""}`;
-      const listener = listeners.find((row) => row.id === route.listener?.id);
+      const listener = route.listener?.id === undefined ? undefined : listenerById.get(route.listener.id);
       const service = services.find((row) => row.machineId === listener?.machineId && row.name === route.listener?.serviceName);
       next[key] = { state: route.state, machineId: route.machineId, listenerId: route.listener?.id ?? null, serviceId: service?.id ?? null, port: route.origin?.port ?? null };
       if (previous && (!route.machineId || !initialized.has(route.machineId)) && routeStates[key]?.state !== route.state && (route.state === "origin-down" || route.state === "dns-dangling")) candidates.push({ at: now, kind: "domain-origin-down", severity: "high", machineId: route.machineId, machineName: route.machineName, key: `domain-origin-down:${key}`, title: `Domain origin is down${route.machineName ? ` on ${route.machineName}` : ""}: ${route.hostname}`, detail: `The route is ${route.state}.`, target: { type: "route", id: null }, condition: { hostname: route.hostname, path: route.path } });
@@ -220,7 +223,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
     db.prepare("INSERT INTO meta (key, value) VALUES ('alert_routes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(next));
     for (const row of db.prepare(`${SELECT} WHERE state <> 'resolved'`).all() as unknown as StoredAlert[]) {
       const condition: Condition = JSON.parse(row.condition);
-      const target = row.targetType === "service" ? services.find((item) => item.id === row.targetId) : listeners.find((item) => item.id === row.targetId);
+      const target = row.targetId === null ? undefined : row.targetType === "service" ? serviceById.get(row.targetId) : listenerById.get(row.targetId);
       const route = routes.find((item) => item.hostname === condition.hostname && item.path === condition.path);
       const health = condition.healthKey && healthKeys.has(condition.healthKey) ? healthTarget(db, condition.healthKey, now) : null;
       const clears = row.kind === "machine-outage" || row.kind === "service-outage" ? !condition.outageKey || !openOutageKeys.has(condition.outageKey) :
@@ -235,9 +238,11 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
       db.prepare("UPDATE alerts SET state = 'resolved', resolved_at = ? WHERE id = ?").run(now, row.id);
       changes.push({ alert: { ...alertObject(row), state: "resolved", resolvedAt: now }, change: "resolved" });
     }
-    for (const row of db.prepare(`${SELECT} WHERE state = 'resolved' AND kind IN ('new-listener','new-daemon') ORDER BY id DESC`).all() as unknown as StoredAlert[]) {
-      const target = row.targetType === "service" ? services.find((item) => item.id === row.targetId) : listeners.find((item) => item.id === row.targetId);
-      if (!target || target.goneAt !== null || !visible(target) || candidates.some((candidate) => candidate.key === row.key)) continue;
+    const candidateKeys = new Set(candidates.map((candidate) => candidate.key));
+    for (const row of db.prepare(`${SELECT} WHERE state = 'resolved' AND kind IN ('new-listener','new-daemon') AND key NOT IN (SELECT key FROM alerts WHERE state <> 'resolved') ORDER BY id DESC`).all() as unknown as StoredAlert[]) {
+      const target = row.targetId === null ? undefined : row.targetType === "service" ? serviceById.get(row.targetId) : listenerById.get(row.targetId);
+      if (!target || target.goneAt !== null || !visible(target) || candidateKeys.has(row.key)) continue;
+      candidateKeys.add(row.key);
       candidates.push({ at: now, kind: row.kind, severity: "bind" in target ? target.bind === "all" ? "warn" : "info" : "info", machineId: row.machineId, machineName: row.machineName, key: row.key, title: row.title, detail: row.detail, target: { type: row.targetType, id: row.targetId }, condition: JSON.parse(row.condition) });
     }
     for (const candidate of candidates) {
