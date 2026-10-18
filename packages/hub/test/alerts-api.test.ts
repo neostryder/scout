@@ -225,3 +225,25 @@ test("scans and live reads outside the cadence publish alerts through the hub", 
   assert.equal(read.status, "ok");
   await waitFor(() => events.some((event) => event.kind === "alert" && event.data.change === "resolved"));
 });
+
+test("evaluations requested together run once with every machine named", async () => {
+  const { HubAlerts } = await import("../src/alerts.ts");
+  const calls: { now: string; machineId?: string; machineIds?: string[] }[] = [];
+  const alerts = new HubAlerts(openCatalog(":memory:"), { coalesceMs: 20, evaluate: (_db, now, options) => { calls.push({ now, ...(options.machineId ? { machineId: options.machineId } : {}), ...(options.machineIds ? { machineIds: options.machineIds } : {}) }); return []; }, alertsPath: "fixtures/alerts/missing.json" });
+  alerts.evaluate(T, "eru");
+  alerts.evaluate(T2, "bilbo");
+  alerts.evaluate(T2);
+  assert.equal(calls.length, 0);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.now, T2);
+  assert.deepEqual(calls[0]!.machineIds, ["eru", "bilbo"]);
+  alerts.evaluate(T, "eru");
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1]!.machineId, "eru");
+  alerts.evaluate(T);
+  alerts.stop();
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(calls.length, 2);
+});

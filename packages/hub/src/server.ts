@@ -310,6 +310,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { alerts.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

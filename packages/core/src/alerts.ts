@@ -35,7 +35,7 @@ export interface Alert {
 export interface AlertChange { alert: Alert; change: "created" | "resolved" | "acknowledged" | "muted" }
 export interface AlertMute { key: string; match: string; reason: string; source: "file" | "page"; at: string }
 export interface AlertFile { ungatedHosts: string[]; mute: { match: string; reason: string }[]; at: string | null; fileError: string | null }
-export interface AlertOptions { loadMutes?: () => AlertFile; loadBackup?: () => BackupReading; loadPorts?: () => RegistryFile<PortRegistry>; tunnelHosts?: Record<string, string>; machineId?: string; loadWatch?: () => WatchConfig }
+export interface AlertOptions { loadMutes?: () => AlertFile; loadBackup?: () => BackupReading; loadPorts?: () => RegistryFile<PortRegistry>; tunnelHosts?: Record<string, string>; machineId?: string; machineIds?: string[]; loadWatch?: () => WatchConfig }
 interface Condition { hostname?: string; path?: string | null; fromBind?: "loopback" | "lan" | "all"; hostnames?: string[]; healthKey?: string; outageKey?: string; backup?: true }
 interface RouteSnapshot { state: string; machineId: string | null; listenerId: number | null; serviceId: number | null; port: number | null }
 interface EventDetail { port?: number; process?: string | null; container?: string | null; oldBind?: string; newBind?: string; name?: string; kind?: string; domain?: string; old?: { state?: string } | null }
@@ -183,7 +183,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   db.exec("SAVEPOINT evaluate_alerts");
   try {
     const initialized = new Set<string>();
-    const machines = db.prepare("SELECT id FROM machines WHERE id = ? OR id IN (SELECT machine_id FROM services UNION SELECT machine_id FROM listeners UNION SELECT machine_id FROM events)").all(options.machineId ?? null) as { id: string }[];
+    const machines = db.prepare("SELECT id FROM machines WHERE id IN (SELECT value FROM json_each(?)) OR id IN (SELECT machine_id FROM services UNION SELECT machine_id FROM listeners UNION SELECT machine_id FROM events)").all(JSON.stringify([...(options.machineId === undefined ? [] : [options.machineId]), ...(options.machineIds ?? [])])) as { id: string }[];
     for (const machine of machines) {
       const latest = (db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM events WHERE machine_id = ?").get(machine.id) as { id: number }).id;
       const baseline = db.prepare("SELECT event_id AS id FROM alert_baseline WHERE machine_id = ?").get(machine.id) as { id: number } | undefined;

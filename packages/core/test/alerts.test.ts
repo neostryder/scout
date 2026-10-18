@@ -347,3 +347,13 @@ test("the evaluator rolls back watermarks and alert changes after a catalog erro
   assert.equal(evaluateAlerts(db, T2).length, 1);
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()!.value, "3");
 });
+
+test("machineIds baselines every named machine even when it has no rows yet", (t) => {
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  upsertMachine(db, { id: "eru", name: "Eru", os: "windows", kind: "host" });
+  assert.deepEqual(evaluateAlerts(db, T, { machineIds: ["hub", "eru"] }), []);
+  const baselined = (db.prepare("SELECT machine_id AS id FROM alert_baseline ORDER BY machine_id").all() as { id: string }[]).map((row) => row.id);
+  assert.deepEqual(baselined, ["eru", "hub"]);
+});
