@@ -218,21 +218,34 @@ fn paint_current(app: &AppHandle, shared: &Handle) {
     }
 }
 
+/// Where the panel's top-left corner goes: centered under an icon on a bar along the top (the macOS menu bar), centered above one on a bar along the bottom (a taskbar), and kept on the monitor. Everything is in physical pixels; `monitor` is its `(x, y, width, height)` when it is known.
+fn panel_position(icon: (f64, f64, f64, f64), panel: (f64, f64), monitor: Option<(f64, f64, f64, f64)>, gap: f64) -> (f64, f64) {
+    let (ix, iy, iw, ih) = icon;
+    let (w, h) = panel;
+    let (mut x, mut y) = (ix + iw / 2.0 - w / 2.0, iy - h - gap);
+    let on_top_bar = match monitor {
+        Some((mx, my, mw, mh)) => {
+            x = x.clamp(mx + gap, (mx + mw - w - gap).max(mx + gap));
+            iy < my + mh / 2.0
+        }
+        // With no monitor answer, an icon in the top few hundred pixels is a menu bar; a panel placed above it would sit off the screen.
+        None => iy < 300.0,
+    };
+    if on_top_bar {
+        y = iy + ih + gap;
+    }
+    (x, y)
+}
+
 fn place(app: &AppHandle, window: &WebviewWindow, rect: &Rect) {
     let scale = window.scale_factor().unwrap_or(1.0);
     let pos = rect.position.to_physical::<f64>(scale);
     let size = rect.size.to_physical::<f64>(scale);
     let Ok(outer) = window.outer_size() else { return };
-    let (w, h) = (outer.width as f64, outer.height as f64);
-    let gap = 8.0 * scale;
-    let (mut x, mut y) = (pos.x + size.width / 2.0 - w / 2.0, pos.y - h - gap);
-    if let Ok(Some(monitor)) = app.monitor_from_point(pos.x, pos.y) {
-        let (mx, my) = (monitor.position().x as f64, monitor.position().y as f64);
-        let (mw, mh) = (monitor.size().width as f64, monitor.size().height as f64);
-        x = x.clamp(mx + gap, (mx + mw - w - gap).max(mx + gap));
-        // A bar along the top (the macOS menu bar) opens the panel below it; a taskbar along the bottom opens it above.
-        y = if pos.y < my + mh / 2.0 { pos.y + size.height + gap } else { pos.y - h - gap };
-    }
+    // The icon's top edge can sit exactly on the monitor's top edge, which some platforms count as outside it, so the lookup uses the icon's center.
+    let monitor = app.monitor_from_point(pos.x + size.width / 2.0, pos.y + size.height / 2.0).ok().flatten().or_else(|| app.primary_monitor().ok().flatten());
+    let area = monitor.map(|m| (m.position().x as f64, m.position().y as f64, m.size().width as f64, m.size().height as f64));
+    let (x, y) = panel_position((pos.x, pos.y, size.width, size.height), (outer.width as f64, outer.height as f64), area, 8.0 * scale);
     let _ = window.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 
@@ -575,7 +588,39 @@ fn open_portal_inner(app: &AppHandle, shared: &Handle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{meter_lines, pick_rect};
+    use super::{meter_lines, panel_position, pick_rect};
+
+    const PANEL: (f64, f64) = (420.0, 600.0);
+
+    #[test]
+    fn a_menu_bar_icon_at_the_top_edge_opens_the_panel_below_it_even_without_a_monitor_answer() {
+        let (x, y) = panel_position((1604.0, 0.0, 22.0, 24.0), PANEL, None, 8.0);
+        assert_eq!(y, 32.0);
+        assert_eq!(x, 1604.0 + 11.0 - 210.0);
+    }
+
+    #[test]
+    fn a_menu_bar_icon_on_a_known_monitor_opens_the_panel_below_it_and_stays_on_the_monitor() {
+        let monitor = Some((0.0, 0.0, 2560.0, 1440.0));
+        assert_eq!(panel_position((1604.0, 0.0, 22.0, 24.0), PANEL, monitor, 8.0).1, 32.0);
+        assert_eq!(panel_position((2540.0, 0.0, 22.0, 24.0), PANEL, monitor, 8.0).0, 2560.0 - 420.0 - 8.0);
+        assert_eq!(panel_position((2.0, 0.0, 22.0, 24.0), PANEL, monitor, 8.0).0, 8.0);
+    }
+
+    #[test]
+    fn a_taskbar_icon_opens_the_panel_above_it() {
+        let monitor = Some((0.0, 0.0, 2560.0, 1440.0));
+        let (_, y) = panel_position((2300.0, 1400.0, 24.0, 40.0), PANEL, monitor, 8.0);
+        assert_eq!(y, 1400.0 - 600.0 - 8.0);
+    }
+
+    #[test]
+    fn an_icon_on_a_second_monitor_uses_that_monitor_s_own_edges() {
+        let monitor = Some((2560.0, 0.0, 1920.0, 1080.0));
+        let (x, y) = panel_position((4470.0, 0.0, 22.0, 24.0), PANEL, monitor, 8.0);
+        assert_eq!(y, 32.0);
+        assert_eq!(x, 2560.0 + 1920.0 - 420.0 - 8.0);
+    }
 
     const T: &str = "{name} {cpu}% CPU {mem}% RAM{vram}";
     const V: &str = " {vram}% VRAM";

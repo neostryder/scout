@@ -12,7 +12,7 @@
 
 ### Fixed
 
-- [Visible] [UI] **On macOS, the tray menu entries that open the panel place it under the menu bar icon.** The panel used to open away from the menu bar or not at all, so the click looked like it did nothing. It now lands in the same spot a left click on the icon uses.
+- [Visible] [UI] **The tray panel now opens on macOS.** It appears centered below the menu bar icon, whether from a left click or from Settings, Quit, or Open Scout in the right-click menu, and stays on the monitor where the icon sits. Before this fix the panel was placed above the top edge of the screen and never showed up. On Windows the panel still opens above the taskbar icon.
 - [Visible] [Services] **A listener whose process name becomes known between scans no longer raises a "new listener" alert and a "listener gone" alert for the same port.** Scout used to record such a listener as a gone listener plus a brand-new listener, for example after a probe improvement or when sudo became available. Scout now renames the existing row in place, so learning a process name raises no alert.
 
 ## [0.2.0] - 2026-10-11
