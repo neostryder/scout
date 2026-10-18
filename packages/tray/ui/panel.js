@@ -1,4 +1,4 @@
-import { actionOutcome, ago, applyRule, contextEntries, fill, hiddenTotal, meterStrip, needsConfirm, pickTab, planBody, rowActions, sparkRuns, tabs, totals, visibleRows } from "./model.js";
+import { actionOutcome, ago, connectAfterSnapshot, applyRule, contextEntries, fill, hiddenTotal, meterStrip, needsConfirm, pickTab, planBody, rowActions, sparkRuns, tabs, totals, visibleRows } from "./model.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const ICONS = {
@@ -56,6 +56,7 @@ const ui = {
   menu: null,
   toast: null,
   connect: false,
+  connectAuto: false,
   quit: false,
 };
 const t = (key, vars) => fill(ui.text[key] ?? key, vars);
@@ -78,6 +79,9 @@ async function api(method, path, body) {
 }
 
 function setSnapshot(snapshot) {
+  const next = connectAfterSnapshot({ before: ui.link, after: snapshot.link, connect: ui.connect, auto: ui.connectAuto });
+  ui.connect = next.connect;
+  ui.connectAuto = next.auto;
   ui.link = snapshot.link;
   ui.detail = snapshot.detail ?? null;
   if (snapshot.link === "ok" && snapshot.body) {
@@ -86,7 +90,6 @@ function setSnapshot(snapshot) {
       ui.fetchedAt = Date.now();
     } catch { /* keep the last good data */ }
   }
-  if (snapshot.link === "unconfigured") ui.connect = true;
   ui.tab = pickTab(ui.data, ui.tab, ui.config.localHost);
   render();
 }
@@ -103,7 +106,7 @@ function header() {
     h("div", { class: "brand" }, "Scout"),
     sum.down ? h("span", { class: "pill down" }, t("pillDown", { n: sum.down })) : null,
     sum.changed ? h("span", { class: "pill changed" }, t("pillChanged", { n: sum.changed })) : null,
-    h("button", { class: "icon-btn", title: t("settingsLabel"), "aria-label": t("settingsLabel"), onclick: () => { ui.connect = true; render(); } }, svg("gear")),
+    h("button", { class: "icon-btn", title: t("settingsLabel"), "aria-label": t("settingsLabel"), onclick: () => { ui.connect = true; ui.connectAuto = false; render(); } }, svg("gear")),
     h("button", { class: "icon-btn", title: t("ariaClose"), "aria-label": t("ariaClose"), onclick: () => bridge.invoke("close_panel") }, svg("close")),
   );
 }
@@ -339,7 +342,7 @@ async function chooseEntry(entry, row) {
 document.addEventListener("click", (e) => { if (ui.menu && !e.target.closest(".menu")) { ui.menu = null; render(); } });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (ui.quit) { ui.quit = false; render(); } else if (ui.menu) { ui.menu = null; render(); } else if (ui.connect && ui.link !== "unconfigured") { ui.connect = false; render(); } else bridge.invoke("close_panel");
+  if (ui.quit) { ui.quit = false; render(); } else if (ui.menu) { ui.menu = null; render(); } else if (ui.connect && ui.link !== "unconfigured") { ui.connect = false; ui.connectAuto = false; render(); } else bridge.invoke("close_panel");
 });
 
 // ---- connection screen -----------------------------------------------------------
@@ -361,17 +364,17 @@ function renderConnect() {
       ui.config = await bridge.invoke("get_config");
       result.className = "result ok";
       result.textContent = t("connectOk");
-      setTimeout(() => { ui.connect = false; render(); }, 700);
+      setTimeout(() => { ui.connect = false; ui.connectAuto = false; render(); }, 700);
     } catch (err) {
       ui.config = await bridge.invoke("get_config").catch(() => ui.config);
       result.className = "result bad";
       result.textContent = t("connectFailed", { reason: String(err?.message ?? err) });
     } finally { save.disabled = false; }
   } }, t("connectSave"));
-  const back = ui.link === "unconfigured" ? null : h("button", { class: "plain", onclick: () => { ui.connect = false; render(); } }, t("connectBack"));
+  const back = ui.link === "unconfigured" ? null : h("button", { class: "plain", onclick: () => { ui.connect = false; ui.connectAuto = false; render(); } }, t("connectBack"));
   void status;
   connectView = h("div", { class: "connect" },
-    h("h1", {}, t("connectTitle")), h("p", {}, t("connectHelp")),
+    h("h1", {}, t("connectTitle")), ui.link === "refused" ? h("p", { class: "result bad", role: "alert" }, t("bannerRefused")) : null, h("p", {}, t("connectHelp")),
     h("label", {}, h("span", {}, t("fieldHub")), hub), h("label", {}, h("span", {}, t("fieldClient")), client), h("label", {}, h("span", {}, t("fieldSecret")), secret),
     h("div", { class: "buttons" }, save, back), result);
   root.replaceChildren(connectView);
@@ -392,7 +395,7 @@ function renderQuit() {
 
 applyTheme();
 await bridge.listen("snapshot", (event) => setSnapshot(event.payload));
-await bridge.listen("show-connect", () => { ui.connect = true; render(); });
+await bridge.listen("show-connect", () => { ui.connect = true; if (ui.link !== "unconfigured" && ui.link !== "refused") ui.connectAuto = false; render(); });
 await bridge.listen("confirm-quit", () => { ui.quit = true; render(); });
 await bridge.listen("panel-open", () => { ui.menu = null; if (!ui.connect && !ui.quit) { render(); searchInput?.focus(); } });
 setSnapshot(await bridge.invoke("get_snapshot"));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 // @ts-expect-error The panel's model is plain JavaScript with no declaration file.
-import { actionOutcome, applyRule, contextEntries, fill, needsConfirm, pickTab, planBody, rowActions, sparkRuns, tabs, totals, visibleRows } from "../ui/model.js";
+import { actionOutcome, applyRule, connectAfterSnapshot, contextEntries, fill, needsConfirm, pickTab, planBody, rowActions, sparkRuns, tabs, totals, visibleRows } from "../ui/model.js";
 
 const row = (over: Record<string, unknown> = {}) => ({ key: "service:eru:x", target: "service", id: 7, name: "x", label: "X", machineId: "eru", kind: "windows-service", vendor: "other", state: "up", port: null, detail: null, mine: false, pinned: false, actions: [{ action: "start", available: false }, { action: "stop", available: true }, { action: "restart", available: true }], ...over });
 const snapshot = () => ({ machines: [
@@ -125,4 +125,15 @@ test("the meter strip lists processor, memory, the busiest disk, and video memor
 test("a meter reading older than 150 seconds is stale", () => {
   assert.equal(meterStrip({ meters: { ageSeconds: 151, cpuPct: 1, memPct: 1, diskPct: null, diskMount: null, vramPct: null, netBps: null } })[0].stale, true);
   assert.equal(meterStrip({ meters: { ageSeconds: 150, cpuPct: 1, memPct: 1, diskPct: null, diskMount: null, vramPct: null, netBps: null } })[0].stale, false);
+});
+
+test("the connection screen opens by itself for a missing or refused token and closes once the link works", () => {
+  const was = (before: string, after: string, connect: boolean, auto: boolean) => connectAfterSnapshot({ before, after, connect, auto });
+  assert.deepEqual(was("unconfigured", "unconfigured", false, false), { connect: true, auto: true });
+  assert.deepEqual(was("unconfigured", "ok", true, true), { connect: false, auto: false });
+  assert.deepEqual(was("ok", "refused", false, false), { connect: true, auto: true });
+  assert.deepEqual(was("refused", "refused", false, false), { connect: false, auto: false });
+  assert.deepEqual(was("refused", "ok", true, true), { connect: false, auto: false });
+  assert.deepEqual(was("ok", "ok", true, false), { connect: true, auto: false });
+  assert.deepEqual(was("unconfigured", "unreachable", true, true), { connect: false, auto: false });
 });

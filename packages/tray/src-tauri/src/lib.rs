@@ -23,6 +23,8 @@ use icon::IconState;
 const TRAY_ID: &str = "scout";
 const POLL_CLOSED: Duration = Duration::from_secs(30);
 const POLL_OPEN: Duration = Duration::from_secs(5);
+// How long to wait before looking again for a saved secret that could not be read.
+const SECRET_RETRY: Duration = Duration::from_secs(120);
 // A click on the icon first takes focus away from the panel, which hides it; without this the same click would open it again.
 const REOPEN_GUARD: Duration = Duration::from_millis(300);
 // How long a just-opened panel is given to take focus before the macOS watcher may hide it.
@@ -50,6 +52,10 @@ struct Snapshot {
 struct Shared {
     config: Mutex<Config>,
     secret: Mutex<Option<String>>,
+    /// When the saved secret was last looked for after the first read missed, so a missing one is retried without asking the system again on every poll.
+    secret_tried: Mutex<Option<Instant>>,
+    /// The link state the person was last asked to fix, so the connection screen opens once per problem and not on every poll.
+    prompted: Mutex<Option<Link>>,
     client: reqwest::Client,
     snapshot: Mutex<Snapshot>,
     etag: Mutex<Option<String>>,
@@ -182,7 +188,52 @@ fn paint(app: &AppHandle, shared: &Shared, snapshot: &Snapshot) {
     *shown = Some(wanted);
 }
 
+/// A secret the first read could not give is looked for again now and then, so a keychain that was locked or answered late does not leave the panel signed out.
+fn retry_secret(shared: &Shared) {
+    if shared.secret.lock().map(|s| s.is_some()).unwrap_or(true) {
+        return;
+    }
+    let ready = shared.config.lock().map(|c| !c.hub_url.is_empty() && !c.client_id.is_empty()).unwrap_or(false);
+    let due = shared.secret_tried.lock().map(|t| t.map_or(true, |at| at.elapsed() >= SECRET_RETRY)).unwrap_or(false);
+    if !ready || !due {
+        return;
+    }
+    if let Ok(mut at) = shared.secret_tried.lock() {
+        *at = Some(Instant::now());
+    }
+    match hub::read_secret() {
+        hub::SecretRead::Found(secret) => {
+            trace(shared, "secret found on retry");
+            if let Ok(mut slot) = shared.secret.lock() {
+                *slot = Some(secret);
+            }
+        }
+        hub::SecretRead::Missing => trace(shared, "secret retry: none saved"),
+        hub::SecretRead::Failed(why) => trace(shared, &format!("secret retry failed: {why}")),
+    }
+}
+
+/// Brings the connection screen up when the panel has no credentials or the hub turns them down, once for each problem.
+fn prompt_if_needed(app: &AppHandle, shared: &Handle, link: Link) {
+    let needs = matches!(link, Link::Unconfigured | Link::Refused);
+    {
+        let Ok(mut slot) = shared.prompted.lock() else { return };
+        if !needs {
+            *slot = None;
+            return;
+        }
+        if *slot == Some(link) {
+            return;
+        }
+        *slot = Some(link);
+    }
+    trace(shared, &format!("prompt for credentials link={link:?}"));
+    show_panel(app, shared, None);
+    let _ = app.emit("show-connect", ());
+}
+
 async fn refresh(app: &AppHandle, shared: &Handle) {
+    retry_secret(shared);
     let next = match shared.credentials() {
         None => Snapshot { link: Link::Unconfigured, body: None, detail: None },
         Some((config, secret)) => {
@@ -208,6 +259,7 @@ async fn refresh(app: &AppHandle, shared: &Handle) {
     }
     paint(app, shared, &next);
     let _ = app.emit("snapshot", &next);
+    prompt_if_needed(app, shared, next.link);
 }
 
 fn paint_current(app: &AppHandle, shared: &Handle) {
@@ -452,9 +504,15 @@ pub fn run() {
 
             let config_dir = app.path().app_config_dir()?;
             let text: HashMap<String, String> = serde_json::from_str(include_str!("../../ui/text.json"))?;
+            let first_read = hub::read_secret();
             let shared: Handle = Arc::new(Shared {
                 config: Mutex::new(hub::load_config(&config_dir)),
-                secret: Mutex::new(hub::load_secret()),
+                secret: Mutex::new(match &first_read {
+                    hub::SecretRead::Found(secret) => Some(secret.clone()),
+                    _ => None,
+                }),
+                secret_tried: Mutex::new(Some(Instant::now())),
+                prompted: Mutex::new(None),
                 client: hub::client(),
                 snapshot: Mutex::new(Snapshot { link: Link::Unconfigured, body: None, detail: None }),
                 etag: Mutex::new(None),
@@ -467,6 +525,11 @@ pub fn run() {
                 text,
                 config_dir,
             });
+            match &first_read {
+                hub::SecretRead::Found(_) => {}
+                hub::SecretRead::Missing => trace(&shared, "secret read at start: none saved"),
+                hub::SecretRead::Failed(why) => trace(&shared, &format!("secret read at start failed: {why}")),
+            }
             app.manage(Arc::clone(&shared));
 
             let handle = app.handle().clone();

@@ -68,8 +68,23 @@ fn short_host(raw: &str) -> String {
     raw.trim().split('.').next().unwrap_or("").to_lowercase()
 }
 
-pub fn load_secret() -> Option<String> {
-    keyring::Entry::new(SERVICE, SECRET_USER).ok()?.get_password().ok().filter(|s| !s.is_empty())
+/// What reading the saved secret found. A read that failed is told apart from an empty slot so the log can say which.
+pub enum SecretRead {
+    Found(String),
+    Missing,
+    Failed(String),
+}
+
+pub fn read_secret() -> SecretRead {
+    let entry = match keyring::Entry::new(SERVICE, SECRET_USER) {
+        Ok(entry) => entry,
+        Err(e) => return SecretRead::Failed(e.to_string()),
+    };
+    match entry.get_password() {
+        Ok(secret) if !secret.is_empty() => SecretRead::Found(secret),
+        Ok(_) | Err(keyring::Error::NoEntry) => SecretRead::Missing,
+        Err(e) => SecretRead::Failed(e.to_string()),
+    }
 }
 
 /// An item left by an earlier build of the app can refuse an in-place update ("already exists"); the item is removed and written again.

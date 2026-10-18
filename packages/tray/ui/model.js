@@ -170,3 +170,13 @@ export function meterStrip(machine) {
   if (m.vramPct != null) rows.push(row("vram", "meterVram", m.vramPct));
   return rows;
 }
+
+/**
+ * Whether the connection screen should be up after a snapshot arrives. A panel with no credentials or a refused token opens it by itself; it closes
+ * by itself once the link works, because the first snapshot can arrive before the first hub check has finished. A screen the person opened stays.
+ */
+export function connectAfterSnapshot({ before, after, connect, auto }) {
+  if (after === "unconfigured") return { connect: true, auto: true };
+  if (after === "refused") return before === "refused" ? { connect, auto } : { connect: true, auto: true };
+  return auto ? { connect: false, auto: false } : { connect, auto };
+}

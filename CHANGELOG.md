@@ -14,6 +14,10 @@
 
 ### Fixed
 
+- [Visible] [UI] **On macOS, the Keychain no longer asks for the password every time the tray app starts.** The app is now signed ad hoc as a whole bundle, so its signature is valid and it carries the identifier `dev.neostryder.scout-tray`. Before this fix the bundle signature was broken, and choosing Always Allow did not stick. Each new build has its own signature, so the Keychain still asks once after an update.
+- [Visible] [UI] **The tray panel no longer shows the connection screen at start when credentials are saved.** The panel could read its first status before the first hub check finished, open the connection screen, and leave it up. The connection screen now closes by itself once the hub answers.
+- [Visible] [UI] **The tray panel opens the connection screen by itself when no credentials are saved or Cloudflare Access refuses the token.** It opens once for each problem and shows the refusal message at the top of the screen.
+- [Visible] [UI] **The tray panel tries again every two minutes to read a saved secret it could not read at start.** A locked keychain is one cause. Each attempt and its result are written to `panel.log` in the config folder.
 - [Visible] [UI] **The tray panel now opens on macOS.** It appears centered below the menu bar icon, whether from a left click or from Settings, Quit, or Open Scout in the right-click menu, and stays on the monitor where the icon sits. Before this fix the panel was placed above the top edge of the screen and never showed up. On Windows the panel still opens above the taskbar icon.
 - [Visible] [Services] **A listener whose process name becomes known between scans no longer raises a "new listener" alert and a "listener gone" alert for the same port.** Scout used to record such a listener as a gone listener plus a brand-new listener, for example after a probe improvement or when sudo became available. Scout now renames the existing row in place, so learning a process name raises no alert.
 
