@@ -10,8 +10,9 @@ import { portClashes, portsFileReader, type PortRegistry, type RegistryFile } fr
 import { recipesResponse } from "./recipes.ts";
 import { listenerWatchKey, listOutages, serviceWatchable, serviceWatchKey, watchContext } from "./outages.ts";
 import { isWatched, type WatchConfig } from "./watch-file.ts";
+import { backupAlert, backupAlertState, type BackupReading } from "./backup-health.ts";
 
-export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "machine-outage", "service-outage"] as const;
+export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "machine-outage", "service-outage", "backup-unhealthy"] as const;
 export const ALERT_STATES = ["open", "acknowledged", "resolved"] as const;
 export type AlertKind = typeof ALERT_KINDS[number];
 export type AlertState = typeof ALERT_STATES[number];
@@ -34,8 +35,8 @@ export interface Alert {
 export interface AlertChange { alert: Alert; change: "created" | "resolved" | "acknowledged" | "muted" }
 export interface AlertMute { key: string; match: string; reason: string; source: "file" | "page"; at: string }
 export interface AlertFile { ungatedHosts: string[]; mute: { match: string; reason: string }[]; at: string | null; fileError: string | null }
-export interface AlertOptions { loadMutes?: () => AlertFile; loadPorts?: () => RegistryFile<PortRegistry>; tunnelHosts?: Record<string, string>; machineId?: string; loadWatch?: () => WatchConfig }
-interface Condition { hostname?: string; path?: string | null; fromBind?: "loopback" | "lan" | "all"; hostnames?: string[]; healthKey?: string; outageKey?: string }
+export interface AlertOptions { loadMutes?: () => AlertFile; loadBackup?: () => BackupReading; loadPorts?: () => RegistryFile<PortRegistry>; tunnelHosts?: Record<string, string>; machineId?: string; loadWatch?: () => WatchConfig }
+interface Condition { hostname?: string; path?: string | null; fromBind?: "loopback" | "lan" | "all"; hostnames?: string[]; healthKey?: string; outageKey?: string; backup?: true }
 interface RouteSnapshot { state: string; machineId: string | null; listenerId: number | null; serviceId: number | null; port: number | null }
 interface EventDetail { port?: number; process?: string | null; container?: string | null; oldBind?: string; newBind?: string; name?: string; kind?: string; domain?: string; old?: { state?: string } | null }
 interface StoredAlert extends Omit<Alert, "target" | "muted"> { targetType: Alert["target"]["type"]; targetId: number | null; muted: number; condition: string }
@@ -146,6 +147,10 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   const candidates: Candidate[] = [];
   const clashes = portClashes((options.loadPorts ?? readPorts)().config, listeners, recipesResponse(db).recipes);
   for (const clash of clashes) candidates.push({ at: now, kind: "port-clash", severity: clash.kind === "recipe-port-shared" ? "warn" : "high", machineId: hubMachineId(), machineName: hubMachineName(), key: `port-clash:${clash.key}`, title: `Port clash: ${clash.port}`, detail: clash.detail, target: { type: null, id: null }, condition: {} });
+  const backupReading = options.loadBackup?.();
+  const backupMachine = hubMachineName();
+  const backup = backupReading ? backupAlert(backupReading, backupMachine) : null;
+  if (backup) candidates.push({ at: now, kind: "backup-unhealthy", severity: backup.severity, machineId: hubMachineId(), machineName: backupMachine, key: "backup-unhealthy:galadriel", title: backup.title, detail: backup.detail, target: { type: null, id: null }, condition: { backup: true } });
   const openOutages = listOutages(db, { state: "open", limit: 500, now }).filter((row) => row.kind === "machine" || row.kind === "flapping" || row.kind === "service");
   const machineName = (id: string | null): string | null => id === null ? null : (db.prepare("SELECT name FROM machines WHERE id = ?").get(id) as { name: string } | undefined)?.name ?? null;
   for (const row of openOutages) {
@@ -219,6 +224,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
       const route = routes.find((item) => item.hostname === condition.hostname && item.path === condition.path);
       const health = condition.healthKey && healthKeys.has(condition.healthKey) ? healthTarget(db, condition.healthKey, now) : null;
       const clears = row.kind === "machine-outage" || row.kind === "service-outage" ? !condition.outageKey || !openOutageKeys.has(condition.outageKey) :
+        row.kind === "backup-unhealthy" ? backupReading !== undefined && backupAlertState(backupReading) === "clear" :
         row.kind === "port-clash" ? !clashes.some((clash) => `port-clash:${clash.key}` === row.key) :
         row.kind === "unhealthy" ? !health || ["up", "slow", "not-http"].includes(health.state) :
         row.kind === "cert-expiring" ? !health || health.tlsDaysLeft !== null && health.tlsDaysLeft > 14 :
@@ -237,9 +243,9 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
     for (const candidate of candidates) {
       const existing = db.prepare(`${SELECT} WHERE key = ? AND state <> 'resolved'`).get(candidate.key) as unknown as StoredAlert | undefined;
       if (existing) {
-        if ((candidate.kind === "cert-expiring" || candidate.kind === "unhealthy" || candidate.kind === "crash-loop" || candidate.kind === "port-clash" || candidate.kind === "machine-outage" || candidate.kind === "service-outage") && (candidate.severity !== existing.severity || candidate.detail !== existing.detail)) {
-          db.prepare("UPDATE alerts SET severity = ?, detail = ? WHERE id = ?").run(candidate.severity, candidate.detail, existing.id);
-          changes.push({ alert: { ...alertObject(existing), severity: candidate.severity, detail: candidate.detail }, change: "created" });
+        if ((candidate.kind === "cert-expiring" || candidate.kind === "unhealthy" || candidate.kind === "crash-loop" || candidate.kind === "port-clash" || candidate.kind === "backup-unhealthy" || candidate.kind === "machine-outage" || candidate.kind === "service-outage") && (candidate.severity !== existing.severity || candidate.detail !== existing.detail || candidate.title !== existing.title)) {
+          db.prepare("UPDATE alerts SET severity = ?, detail = ?, title = ? WHERE id = ?").run(candidate.severity, candidate.detail, candidate.title, existing.id);
+          changes.push({ alert: { ...alertObject(existing), severity: candidate.severity, detail: candidate.detail, title: candidate.title }, change: "created" });
         }
         if (candidate.kind === "exposure-change" && candidate.severity === "high" && existing.severity !== "high") {
           db.prepare("UPDATE alerts SET severity = 'high', at = ?, detail = ? WHERE id = ?").run(now, candidate.detail, existing.id);

@@ -6,7 +6,7 @@ const { servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, ro
 test("alert labels, tones, titles and sorting cover contract values", () => {
   assert.deepEqual(["info", "warn", "high"].map(alertSeverityLabel), ["Info", "Warning", "High"]);
   assert.deepEqual(["info", "warn", "high"].map(alertSeverityTone), ["info", "warn", "high"]);
-  assert.deepEqual(ALERT_KINDS.map(alertKindLabel), ["New listener", "New daemon", "Service down", "Domain origin down", "Exposure change", "Unhealthy target", "Certificate expiring", "Crash loop", "Port clash"]);
+  assert.deepEqual(ALERT_KINDS.map(alertKindLabel), ["New listener", "New daemon", "Service down", "Domain origin down", "Exposure change", "Unhealthy target", "Certificate expiring", "Crash loop", "Port clash", "Backup unhealthy"]);
   assert.equal(alertTitle({ title: "New listener on Hub" }), "New listener on Hub");
   const items = groupAlerts([{ id: 1, severity: "info", at: "2026-10-07T02:00:00Z" }, { id: 2, severity: "high", at: "2026-10-07T00:00:00Z" }, { id: 3, severity: "high", at: "2026-10-07T01:00:00Z" }]);
   assert.deepEqual(items.map((item: any) => item.id), [3, 2, 1]);

@@ -340,6 +340,14 @@ To change the rules, open the Alerts section under the machine cards on the Reso
 
 A machine whose reading is older than 150 seconds is skipped, so a machine that cannot be read raises and clears nothing. The hub keeps alert state in memory, so after a restart the count starts over, and a meter still over its threshold alerts again after its minutes. Turning metering off with `--no-meters`, or turning live reads off, turns the alerts off too.
 
+### Backup alert
+
+When Galadriel runs on the hub machine, Scout reads the health file it rewrites every minute and raises a "Backup unhealthy" alert on the Alerts tab in two cases. While the file reports a critical level, the alert reads "Backup is critical on <machine>" and repeats Galadriel's reasons, along with how long ago the last complete pass finished. When the file has gone 3 minutes without a rewrite, or cannot be read and has not changed in 3 minutes, the alert reads "Backup service is not running on <machine>". Galadriel's own settings decide what counts as critical. A warn level raises nothing, and a machine without the health file, which means Galadriel is not installed, never sees the alert.
+
+The alert clears when the file reports ok or warn again, and a file caught partway through a rewrite neither raises nor clears it. The hub checks the file every minute while live reads are on (`--live` or `--production`). It sends one high-severity notice to the usual channels (see [Notices](#notices)) when the alert is raised and one "Backup is healthy again" notice when it clears, and a hub that starts while the backup is already critical sends the notice once.
+
+The optional file `.scout-data/backup-health.json` on the hub machine holds `enabled` (true by default), `path` (`C:/ProgramData/Galadriel/health.json` by default), and `staleMinutes`, the number of minutes without a rewrite before the service counts as stopped (1 to 1440, 3 by default). A malformed file falls back to the defaults.
+
 ## Provenance flags
 
 The page shows small flags beside installs, services, and listeners. Hover over a flag to see the evidence behind it, or open the detail panel, where the Provenance list shows the same evidence. There are four kinds:
@@ -524,6 +532,7 @@ Everything Scout writes lives in `.scout-data/`:
 | `stacks.json` | Optional stacks: ordered lists of recipes and services with wait-for-port steps. |
 | `alerts.json` | Alert mutes. |
 | `watch.json` | Outage watch switches, set from the Outages tab or the `outages watch` and `unwatch` commands. Everything is watched until a switch is turned off. |
+| `backup-health.json` | Optional backup alert settings: whether the alert is `enabled`, the `path` to Galadriel's health file, and `staleMinutes`, how long the file can go without a rewrite before the backup service counts as stopped. |
 | `mine.json` | Optional profile for the Mine flag: your GitHub account and organization names (`owners`) and git author emails (`emails`). Git ignores it. |
 | `heartbeat.json` | The hub's heartbeat, rewritten every 30 seconds. The watchdog reads it, and the hub reads it at startup to record a monitor gap. |
 | `tunnel-hosts.json` | Optional tunnel name to machine id map. |

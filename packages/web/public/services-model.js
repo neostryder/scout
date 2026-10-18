@@ -305,10 +305,10 @@ export function mergeFacets(facets = [], selected = "", machines = []) {
 
 export function isExposed(row) { return ["lan", "all"].includes(row.exposure || row.bind); }
 
-export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash"];
+export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "backup-unhealthy"];
 export function alertSeverityLabel(value) { return ({ info: "Info", warn: "Warning", high: "High" })[value] || "Unknown"; }
 export function alertSeverityTone(value) { return ({ info: "info", warn: "warn", high: "high" })[value] || "quiet"; }
-export function alertKindLabel(value) { return ({ "new-listener": "New listener", "new-daemon": "New daemon", "service-down": "Service down", "domain-origin-down": "Domain origin down", "exposure-change": "Exposure change", unhealthy: "Unhealthy target", "cert-expiring": "Certificate expiring", "crash-loop": "Crash loop", "port-clash": "Port clash" })[value] || "Unknown alert"; }
+export function alertKindLabel(value) { return ({ "new-listener": "New listener", "new-daemon": "New daemon", "service-down": "Service down", "domain-origin-down": "Domain origin down", "exposure-change": "Exposure change", unhealthy: "Unhealthy target", "cert-expiring": "Certificate expiring", "crash-loop": "Crash loop", "port-clash": "Port clash", "backup-unhealthy": "Backup unhealthy" })[value] || "Unknown alert"; }
 export function alertTitle(alert) { return String(alert?.title || `${alertKindLabel(alert?.kind)} on ${alert?.machineName || "unknown machine"}`); }
 export function groupAlerts(alerts = []) {
   return [...alerts].sort((a, b) => ({ high: 0, warn: 1, info: 2 }[a.severity] ?? 3) - ({ high: 0, warn: 1, info: 2 }[b.severity] ?? 3) || Date.parse(b.at) - Date.parse(a.at));

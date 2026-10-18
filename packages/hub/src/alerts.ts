@@ -6,6 +6,8 @@ export interface HubAlertOptions {
   evaluate?: typeof evaluateAlerts;
   log?: (line: string) => void;
   loadPorts?: AlertOptions["loadPorts"];
+  /** Reads the backup health file; omit it and no backup alert is raised. */
+  loadBackup?: AlertOptions["loadBackup"];
   /** The outage watch's config, so a service it reports is not also reported the moment it stops. */
   loadWatch?: () => WatchConfig;
 }
@@ -24,7 +26,7 @@ export class HubAlerts {
   }
 
   options(): AlertOptions {
-    return { loadMutes: this.loadMutes, loadPorts: this.config.loadPorts, tunnelHosts: loadTunnelHosts(this.config.tunnelHostsPath), ...(this.config.loadWatch ? { loadWatch: this.config.loadWatch } : {}) };
+    return { loadMutes: this.loadMutes, loadPorts: this.config.loadPorts, ...(this.config.loadBackup ? { loadBackup: this.config.loadBackup } : {}), tunnelHosts: loadTunnelHosts(this.config.tunnelHostsPath), ...(this.config.loadWatch ? { loadWatch: this.config.loadWatch } : {}) };
   }
 
   subscribe(listener: (change: AlertChange) => void): () => void {

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
+import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { revalidate } from "./etag.ts";
@@ -24,6 +24,7 @@ import { HubAlerts, type HubAlertOptions } from "./alerts.ts";
 import { HealthSchedule, type HealthScheduleOptions } from "./health.ts";
 import type { MeterSchedule } from "./meters.ts";
 import type { HubMeterAlerts } from "./meter-alerts.ts";
+import { HubBackupWatch, type BackupWatchOptions } from "./backup-watch.ts";
 import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import { HubStacks } from "./stacks.ts";
@@ -83,6 +84,8 @@ export interface HubOptions {
   meters?: MeterSchedule;
   /** The quiet meter alerts: their settings and the alerts that are up. Omit it and the settings route answers 404. */
   meterAlerts?: HubMeterAlerts;
+  /** Watches the Galadriel backup health file and raises an alert while the backup is critical. Omit it and no backup alert is raised. */
+  backup?: Omit<BackupWatchOptions, "machineName">;
   /** Outage watch: machine, web address and service checks, notices and the heartbeat. Omit it and the outage routes answer with an empty, read-only record. */
   watch?: HubWatch;
   /** Heartbeat comment interval for /api/services/live. Tests pass a short one. */
@@ -183,7 +186,8 @@ export function createHub(options: HubOptions): Server {
   const stacksPath = options.stacksPath ?? (options.control ? options.control.stacksPath : undefined);
   const stacks = new HubStacks(db, stacksPath);
   const registries = { ports: () => portsResponse(db, readPorts()), stacks };
-  const alerts = new HubAlerts(db, { tunnelHostsPath: options.tunnelHostsPath, loadPorts: readPorts, ...(options.watch ? { loadWatch: options.watch.configReader() } : {}), ...options.alerts });
+  const alerts = new HubAlerts(db, { tunnelHostsPath: options.tunnelHostsPath, loadPorts: readPorts, ...(options.watch ? { loadWatch: options.watch.configReader() } : {}), ...(options.backup ? { loadBackup: options.backup.read } : {}), ...options.alerts });
+  const backupWatch = options.backup ? new HubBackupWatch(alerts, { ...options.backup, machineName: hubMachineName }) : undefined;
   options.watch?.attachAlerts(alerts);
   const unsubscribeWatchLive = options.live?.subscribeStored((read) => { if (read.status === "ok") void options.watch?.observeServices(read.machineId, read.at); });
   const unsubscribeStacksLive = options.live?.subscribeStored(() => stacks.evaluate());
@@ -298,6 +302,7 @@ export function createHub(options: HubOptions): Server {
   if (options.health && options.health.scheduled) server.once("listening", () => health?.start());
   if (options.watch) server.once("listening", () => options.watch?.start());
   if (options.meters) server.once("listening", () => options.meters?.start());
+  if (backupWatch) server.once("listening", () => backupWatch.start());
   // Git facts of the projects are read once the hub is listening and every 6 hours after, only where project roots are configured.
   let gitTimer: ReturnType<typeof setInterval> | undefined;
   if (options.recipeProjects) {
@@ -305,6 +310,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

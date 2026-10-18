@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { meterAlertsFileReader, openCatalog } from "@scout/core";
+import { backupHealthSettingsReader, meterAlertsFileReader, openCatalog, readBackupHealthFile } from "@scout/core";
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
@@ -59,6 +59,9 @@ const live = liveOn ? new LiveSchedule(db, { machines: liveMachineList(resolve(r
 const meterAlertsPath = resolve(root, ".scout-data/meter-alerts.json");
 const meterAlerts = liveOn && !args.includes("--no-meters") ? new HubMeterAlerts(db, { settings: meterAlertsFileReader(meterAlertsPath), path: meterAlertsPath, notifier: new Notifier(), log: (line) => console.error(line) }) : undefined;
 const meters = liveOn && !args.includes("--no-meters") ? new MeterSchedule(db, { machines: () => liveMachineList(resolve(root, "machines.json")).map(({ id, os, transport }) => ({ id, os, transport })), log: (line) => console.error(line), ...(meterAlerts ? { afterCycle: () => meterAlerts.check() } : {}) }) : undefined;
+// The Galadriel backup writes a health file on the hub machine; a missing file means it is not installed and raises nothing. Alerts need live reads, like the outage watch.
+const backupSettings = backupHealthSettingsReader(resolve(root, ".scout-data/backup-health.json"));
+const backup = liveOn ? { read: () => readBackupHealthFile(backupSettings()), notifier: new Notifier(), log: (line: string) => console.error(line) } : undefined;
 const watchSeconds = Number(opt("--watch-interval") ?? WATCH_INTERVAL_MS / 1000);
 if (!Number.isInteger(watchSeconds) || watchSeconds < 30) throw new Error("watch interval must be an integer of at least 30 seconds");
 const watch = liveOn && !args.includes("--no-watch") ? new HubWatch(db, { intervalMs: watchSeconds * 1000, machines: () => watchMachines(loadMachines(resolve(root, "machines.json"))), configPath: resolve(root, ".scout-data/watch.json"), heartbeatPath: resolve(root, ".scout-data/heartbeat.json") }) : undefined;
@@ -77,7 +80,7 @@ const scheduled = !args.includes("--no-schedule") && (access || args.includes("-
 if (scheduled) research.start();
 // Release-note summaries run a few minutes after start and then daily, a small batch each time, only where the schedule runs.
 const summaries = model && scheduled && modelsOnSchedule ? [setTimeout(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 600_000), setInterval(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 86_400_000)] : [];
-const server = createHub({ db, recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(meterAlerts ? { meterAlerts } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json") }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
+const server = createHub({ db, recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(meterAlerts ? { meterAlerts } : {}), ...(backup ? { backup } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json") }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
 live?.start();
 cloudflareSchedule?.start();
 server.once("close", () => { research.stop(); live?.stop(); cloudflareSchedule?.stop(); for (const timer of summaries) clearTimeout(timer); });
