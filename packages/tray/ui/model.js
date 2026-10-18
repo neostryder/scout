@@ -39,10 +39,19 @@ export function tabs(snapshot) {
   return list.sort((a, b) => (a.id === "stacks") - (b.id === "stacks"));
 }
 
-export function pickTab(snapshot, wanted) {
+/** The tab for this computer, matched by its short host name against each machine's id or name; null when none matches. */
+export function ownTab(snapshot, host) {
+  const own = String(host ?? "").trim().toLowerCase();
+  if (!own) return null;
+  return tabs(snapshot).find((m) => m.id !== "stacks" && (m.id.toLowerCase() === own || String(m.name ?? "").toLowerCase() === own))?.id ?? null;
+}
+
+export function pickTab(snapshot, wanted, host) {
   const list = tabs(snapshot);
   if (list.some((m) => m.id === wanted)) return wanted;
-  // First open: the tab that most needs a look, or the first one.
+  // First open: this computer's own tab, else the tab that most needs a look, or the first one.
+  const own = ownTab(snapshot, host);
+  if (own) return own;
   const worst = list.find((m) => m.worst === "down") ?? list.find((m) => m.worst === "changed") ?? list[0];
   return worst?.id ?? null;
 }

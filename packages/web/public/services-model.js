@@ -336,3 +336,12 @@ export function muteCoverage(match, key) {
 export function alertFilter(alerts, state = "open", kind = "") {
   return groupAlerts(alerts.filter((alert) => (alert.muted ? state === "muted" || state === "all" : state === "all" || alert.state === state) && (!kind || alert.kind === kind)));
 }
+
+const NO_MACHINE_FILTER = new Set(["recipes", "outages", "ports", "stacks"]);
+
+/** On a phone the chart room opens on the hub machine's own readings: the machine to filter to, or null when the link already chooses one, the screen is wide, or the tab has no machine filter. */
+export function phoneDefaultMachine(params, machines, phone) {
+  if (!phone || params.has("machine")) return null;
+  if (NO_MACHINE_FILTER.has(params.get("tab") ?? "")) return null;
+  return machines.find((machine) => machine.hub)?.id ?? null;
+}

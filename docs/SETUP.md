@@ -190,6 +190,8 @@ The portal works in a phone's browser and as an app saved to the home screen. To
 
 When the window is narrower than 720 pixels, the top navigation moves to a tab bar along the bottom of the screen. The tabs are Services, Resources, Alerts, Outages, and More, and More opens a sheet with Updates, Catalog, Review queue, Jobs, and Settings. The Alerts tab carries the number of open alerts. The Catalog and Updates tables show each row as a card, and the detail panel takes the whole screen when it opens.
 
+On a narrow screen, Services opens filtered to the hub machine when the link does not name a machine. Choose All machines in the machine menu to see the rest. A link that names a machine opens on that machine.
+
 The density button in the header cycles through Auto, Comfortable, and Compact. Auto gives taller rows and 44-pixel touch targets on a touch screen and the tight desktop rows with a mouse, and each browser remembers its own setting.
 
 ### Find a port, machine, or service
@@ -399,6 +401,8 @@ Hover over a row to see Start when it is stopped, or Restart and Stop when it is
 Right-click a row for Hide this row, Hide all of its kind, Hide everything from its vendor, Pin to top, and Open in Scout. The footer has Open Scout, a count of rows hidden by rules, and a theme toggle that cycles through system, dark, and light. Right-click the tray icon for Open Scout, Connection settings, Start at login, and Quit. Only one copy of the panel runs at a time.
 
 The panel checks the hub every 30 seconds while it is closed and every 5 seconds while it is open.
+
+The panel first opens on the tab for the computer it runs on, found by matching this computer's short host name against each machine's id or name, and keeps whichever tab you pick after that. When no machine matches, it opens on the tab that most needs a look.
 
 Under the machine tabs, a strip shows how busy the selected machine is in up to four small rows: Processor, Memory, Disk, and Video memory. Disk is the busiest disk, labeled with its mount (for example "Disk C:"), and Video memory is the highest of the machine's graphics cards. Each row has a name, a bar, and a percentage, colored as on the Resources page (see [Reading a meter](#reading-a-meter)): amber with the word "High" at 70 percent and above, and red with "Very high" at 85 percent and above. A reading older than 150 seconds is dimmed, and the strip is labeled as out of date for screen readers. The strip is hidden for a machine the hub has not read yet.
 

@@ -1,5 +1,6 @@
 import { h, flagRow, marked } from "./lib.js";
 import { servicesQuery, routesQuery, routeRow, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, stateLabel, exposureLabel, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertKindLabel, alertSeverityLabel, alertSeverityTone, alertFilter, alertEventReducer, countAlerts, muteCoverage, alertEndpointMissing } from "./services-model.js";
+import { phoneDefaultMachine } from "./services-model.js";
 import { recipeCommand, recipeFilter, recipeCounts, recipeEventReducer, recipeButtons } from "./services-model.js";
 import { healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer } from "./services-model.js";
 import { rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, stackFilter, stackEventReducer } from "./services-model.js";
@@ -280,7 +281,7 @@ export function createServicesView(root) {
       if (route === "stacksRows") { stacksState.stacks = result.value.stacks || []; stacksState.supported = true; tabs.children[TABS.indexOf("stacks")].hidden = false; stacksPanel.hidden = currentTab !== "stacks"; if (currentTab === "stacks") renderStacks(); }
       if (route === "outageRows") { tabs.children[TABS.indexOf("outages")].hidden = false; outages.setData(result.value); outagesPanel.hidden = currentTab !== "outages"; }
       if (route === "controlRows") state.controlAvailable = !result.value.rows.some((row) => row.control?.actions?.length && row.control.actions.every((action) => action.reason === "Control is off."));
-      if (route === "overview") { state.machines = result.value.machines.map((machine) => ({ ...machine, live: { ...machine.live, ...state.liveMachines.get(machine.id) } })); state.liveMachines.clear(); renderFigures(); paintLive(); }
+      if (route === "overview") { state.machines = result.value.machines.map((machine) => ({ ...machine, live: { ...machine.live, ...state.liveMachines.get(machine.id) } })); state.liveMachines.clear(); renderFigures(); paintLive(); const own = state.phoneDefault ? phoneDefaultMachine(state.params, state.machines, true) : null; state.phoneDefault = false; if (own) change("machine", own); }
       if (route === "alertRows") { state.alertSupported = true; state.alerts = result.value.alerts || []; state.mutes = result.value.mutes || []; state.alertCounts = result.value.counts || countAlerts(state.alerts); tabs.children[TABS.indexOf("alerts")].hidden = false; paintAlertTab(); if (state.data && tab() !== "alerts") renderTable(); }
       if (route === "healthRows") { state.healthSupported = true; state.healthError = ""; state.healthOff = result.value.probe?.intervalSeconds === 0; state.health = healthEventReducer(state.health, result.value); tabs.children[TABS.indexOf("health")].hidden = false; paintHealthTab(); if (currentTab === "health") renderHealth(); if (detail.open) refreshDetailHealth(); }
       if (route === "descriptionOverview") { state.descriptionOverview = result.value; renderFigures(false); paintDescribe(); }
@@ -899,7 +900,7 @@ export function createServicesView(root) {
   window.addEventListener("pageshow", (event) => { if (event.persisted && state.shown) { load(); startLive(); state.tick = setInterval(tick, 1000); } });
   return {
     show(params) {
-      state.shown = true; root.hidden = false; state.params = new URLSearchParams(params); state.limit = PAGE; state.data = null; tableStatus.textContent = "The catalog is loading.";
+      state.shown = true; root.hidden = false; state.params = new URLSearchParams(params); state.phoneDefault = matchMedia("(max-width: 719px)").matches; state.limit = PAGE; state.data = null; tableStatus.textContent = "The catalog is loading.";
       syncControls(); load(); startLive(); clearInterval(state.tick); state.tick = setInterval(tick, 1000);
     },
     hide() {

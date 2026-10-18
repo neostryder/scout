@@ -315,6 +315,7 @@ struct ConfigOut {
     client_id: String,
     has_secret: bool,
     theme: String,
+    local_host: String,
 }
 
 #[tauri::command]
@@ -326,7 +327,7 @@ fn get_snapshot(shared: State<'_, Handle>) -> Snapshot {
 fn get_config(shared: State<'_, Handle>) -> ConfigOut {
     let config = shared.config.lock().map(|c| c.clone()).unwrap_or_default();
     let has_secret = shared.secret.lock().map(|s| s.is_some()).unwrap_or(false);
-    ConfigOut { hub_url: config.hub_url, client_id: config.client_id, has_secret, theme: if config.theme.is_empty() { "system".to_string() } else { config.theme } }
+    ConfigOut { hub_url: config.hub_url, client_id: config.client_id, has_secret, theme: if config.theme.is_empty() { "system".to_string() } else { config.theme }, local_host: hub::local_host() }
 }
 
 #[tauri::command]

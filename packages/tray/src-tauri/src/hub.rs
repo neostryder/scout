@@ -49,6 +49,25 @@ pub fn save_config(dir: &Path, config: &Config) -> Result<(), String> {
     std::fs::rename(&temp, &target).map_err(|e| e.to_string())
 }
 
+/// This computer's name, so the panel can open on its own tab. Empty when it cannot be read.
+pub fn local_host() -> String {
+    static HOST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    HOST.get_or_init(|| {
+        let raw = if cfg!(windows) {
+            std::env::var("COMPUTERNAME").unwrap_or_default()
+        } else {
+            std::process::Command::new("hostname").output().ok().map(|out| String::from_utf8_lossy(&out.stdout).into_owned()).unwrap_or_default()
+        };
+        short_host(&raw)
+    })
+    .clone()
+}
+
+/// The first label of a host name, lowercase: "Bilbo.local" becomes "bilbo".
+fn short_host(raw: &str) -> String {
+    raw.trim().split('.').next().unwrap_or("").to_lowercase()
+}
+
 pub fn load_secret() -> Option<String> {
     keyring::Entry::new(SERVICE, SECRET_USER).ok()?.get_password().ok().filter(|s| !s.is_empty())
 }
@@ -136,6 +155,13 @@ pub async fn request(client: &reqwest::Client, config: &Config, secret: &str, me
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_host_name_is_cut_to_its_first_label() {
+        assert_eq!(short_host("Bilbo.local\n"), "bilbo");
+        assert_eq!(short_host("ERU"), "eru");
+        assert_eq!(short_host(""), "");
+    }
 
     #[test]
     fn the_hub_address_must_be_https_or_a_local_hub() {

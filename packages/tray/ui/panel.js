@@ -87,7 +87,7 @@ function setSnapshot(snapshot) {
     } catch { /* keep the last good data */ }
   }
   if (snapshot.link === "unconfigured") ui.connect = true;
-  ui.tab = pickTab(ui.data, ui.tab);
+  ui.tab = pickTab(ui.data, ui.tab, ui.config.localHost);
   render();
 }
 

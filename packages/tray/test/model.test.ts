@@ -23,6 +23,15 @@ test("tabs put Stacks last, and the first tab shown is the one that needs a look
   assert.deepEqual(totals(snapshot()), { down: 2, changed: 1 });
 });
 
+test("the first tab shown is this computer's own, whatever its state", () => {
+  assert.equal(pickTab(snapshot(), null, "bilbo"), "bilbo");
+  assert.equal(pickTab(snapshot(), null, " Eru "), "eru");
+  assert.equal(pickTab(snapshot(), "eru", "bilbo"), "eru");
+  assert.equal(pickTab(snapshot(), null, "stacks"), "eru");
+  assert.equal(pickTab(snapshot(), null, "nobody"), "eru");
+  assert.equal(pickTab(snapshot(), null, ""), "eru");
+});
+
 test("search and chips narrow the rows", () => {
   const machine = { rows: [row({ label: "Redis", state: "down" }), row({ label: "Nginx", mine: true }), row({ label: "Dev server", state: "changed", port: 3000 })] };
   assert.equal(visibleRows(machine, { query: "red" }).length, 1);

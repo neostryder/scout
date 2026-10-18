@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, routeChain, routeConfidence, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, exposureLabel, stateLabel, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertSeverityLabel, alertSeverityTone, alertKindLabel, alertTitle, groupAlerts, alertEventReducer, badgeModel, alertEndpointMissing, muteCoverage, alertFilter, countAlerts, healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer, rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, planStepsText, stackFilter, stackEventReducer } = await import(new URL("../public/services-model.js", import.meta.url).href);
+const { phoneDefaultMachine, servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, routeChain, routeConfidence, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, exposureLabel, stateLabel, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertSeverityLabel, alertSeverityTone, alertKindLabel, alertTitle, groupAlerts, alertEventReducer, badgeModel, alertEndpointMissing, muteCoverage, alertFilter, countAlerts, healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer, rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, planStepsText, stackFilter, stackEventReducer } = await import(new URL("../public/services-model.js", import.meta.url).href);
 
 test("alert labels, tones, titles and sorting cover contract values", () => {
   assert.deepEqual(["info", "warn", "high"].map(alertSeverityLabel), ["Info", "Warning", "High"]);
@@ -288,4 +288,14 @@ test("an island's third line counts the listening ports and how many of them oth
   assert.equal(listenerSummary({ listeners: { total: 12, loopback: 7, lan: 3, all: 2 } }), "12 ports listening, 5 exposed");
   assert.equal(listenerSummary({ listeners: { total: 1, loopback: 1, lan: 0, all: 0 } }), "1 port listening, 0 exposed");
   assert.equal(listenerSummary({}), "");
+});
+
+test("on a phone the chart room opens on the hub machine unless the link or the tab says otherwise", () => {
+  const machines = [{ id: "aragorn", hub: false }, { id: "eru", hub: true }];
+  assert.equal(phoneDefaultMachine(new URLSearchParams(""), machines, true), "eru");
+  assert.equal(phoneDefaultMachine(new URLSearchParams("tab=alerts"), machines, true), "eru");
+  assert.equal(phoneDefaultMachine(new URLSearchParams("machine=aragorn"), machines, true), null);
+  assert.equal(phoneDefaultMachine(new URLSearchParams("tab=ports"), machines, true), null);
+  assert.equal(phoneDefaultMachine(new URLSearchParams(""), machines, false), null);
+  assert.equal(phoneDefaultMachine(new URLSearchParams(""), [{ id: "aragorn", hub: false }], true), null);
 });
