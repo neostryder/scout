@@ -69,11 +69,13 @@ test("per-connection launchd jobs never alert and launchd wording names the job"
   assert.deepEqual(evaluateAlerts(db, T3).filter((event) => event.alert.kind === "service-down" && /sshd|application/.test(event.alert.title)), []);
 });
 
-test("loopback listeners in the dynamic port range stay quiet but exposed ones alert", (t) => {
+test("listeners in the dynamic port range stay quiet on every interface", (t) => {
   const db = seed(t);
   listen(db, [listener(8000), listener(60000), listener(60001, "all")]);
   const created = evaluateAlerts(db, T2).filter((event) => event.change === "created");
-  assert.deepEqual(created.map((event) => event.alert.title), ["New listener on Hub: port 60001 (node)"]);
+  assert.deepEqual(created.map((event) => event.alert.title), []);
+  listen(db, [listener(8000), listener(60000), listener(60001, "all"), listener(9000, "all")], T3);
+  assert.deepEqual(evaluateAlerts(db, T3).filter((event) => event.change === "created").map((event) => event.alert.title), ["New listener on Hub: port 9000 (node)"]);
 });
 
 test("new listeners deduplicate, resolve when gone and create a new occurrence when they return", (t) => {

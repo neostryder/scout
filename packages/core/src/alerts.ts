@@ -140,8 +140,8 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   const changes: AlertChange[] = [];
   const previous = db.prepare("SELECT value FROM meta WHERE key = 'alert_routes'").get() as { value: string } | undefined;
   const routeStates: Record<string, RouteSnapshot> = previous ? JSON.parse(previous.value) : {};
-  // Per-connection and per-app launchd jobs (sshd instances, application.* sessions) and loopback listeners in the dynamic port range come and go constantly and carry no signal.
-  const ephemeral = (row: Service | Listener): boolean => "port" in row ? row.bind === "loopback" && row.port >= 49152 : row.kind === "launchd" && /\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^application\.|\.\d{4,}\.\d{4,}$/i.test(row.name);
+  // Per-connection and per-app launchd jobs (sshd instances, application.* sessions) and listeners in the dynamic port range (49152 and up, on any interface, unless a route points at them) come and go constantly and carry no signal.
+  const ephemeral = (row: Service | Listener): boolean => "port" in row ? row.port >= 49152 && !routeTarget(row) : row.kind === "launchd" && /\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^application\.|\.\d{4,}\.\d{4,}$/i.test(row.name);
   const visible = (row: Service | Listener): boolean => !row.classification.hidden && row.classification.class !== "essential" && !ephemeral(row);
   const noun = (kind: string | null): string => kind === "launchd" ? "launchd job" : kind === "systemd" ? "systemd service" : kind === "windows-service" ? "Windows service" : kind === "scheduled-task" ? "scheduled task" : "service";
   const expected = (type: "service" | "listener", id: number): boolean => (db.prepare(`SELECT expected_down AS value FROM ${type === "service" ? "services" : "listeners"} WHERE id = ?`).get(id) as { value: number } | undefined)?.value === 1;
