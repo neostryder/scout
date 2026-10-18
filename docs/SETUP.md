@@ -461,6 +461,13 @@ pnpm --filter @scout/tray dev
 
 `build` makes an installer, `exec tauri build --no-bundle` makes only the executable (`src-tauri/target/release/scout-tray.exe` on Windows), and `dev` runs the panel from source. The macOS app is not notarized, so the first time you open it, right-click it and choose Open.
 
+If you build the tray yourself on a Mac, run `packages/tray/tools/make-mac-signing-identity.sh` once. It creates a code-signing identity named "Scout Local Signing" in a keychain of its own, with an empty password. Build from the repository root with the two commands below, which open that keychain and sign with the identity. Every build signed this way has the same designated requirement, so Always Allow for the saved hub secret still holds after a rebuild. A build without the identity is signed ad hoc, and the Keychain asks again after each one.
+
+```
+security unlock-keychain -p "" ~/Library/Keychains/scout-signing.keychain-db
+APPLE_SIGNING_IDENTITY="Scout Local Signing" pnpm --filter @scout/tray exec tauri build
+```
+
 To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui/index.html`. It runs against the mock hub in `packages/tray/dev`.
 
 ### Troubleshooting the panel
