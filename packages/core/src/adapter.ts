@@ -21,7 +21,7 @@ export interface ProbeOutput {
 
 export type ProbeOutputs = Record<string, ProbeOutput>;
 
-export type InstallKind = "package" | "app" | "binary" | "service" | "image" | "runtime" | "vm";
+export type InstallKind = "package" | "app" | "binary" | "service" | "image" | "runtime" | "vm" | "repo" | "model";
 
 /** One discovered install. Identity is (ecosystem, key); the catalog merges nothing on its own. */
 export interface InstallRecord {

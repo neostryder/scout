@@ -94,6 +94,14 @@ CREATE TABLE IF NOT EXISTS assertions (
 );
 CREATE INDEX IF NOT EXISTS assertions_pkg ON assertions(package_id, observed_at);
 
+CREATE TABLE IF NOT EXISTS source_intel (
+  package_id  INTEGER NOT NULL REFERENCES packages(id),
+  source      TEXT NOT NULL,                    -- the researcher that wrote the document
+  fetched_at  TEXT NOT NULL,
+  data_json   TEXT NOT NULL,                    -- one JSON object, shape owned by the source
+  PRIMARY KEY (package_id, source)
+);
+
 CREATE TABLE IF NOT EXISTS priority_flags (
   package_id  INTEGER NOT NULL REFERENCES packages(id),
   version     TEXT NOT NULL,

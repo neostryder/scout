@@ -11,6 +11,7 @@ export * from "./enrichment.ts";
 export * from "./proposals.ts";
 export * from "./version.ts";
 export * from "./assertions.ts";
+export * from "./intel.ts";
 export * from "./updates-query.ts";
 export * from "./transport.ts";
 export * from "./jobs.ts";
