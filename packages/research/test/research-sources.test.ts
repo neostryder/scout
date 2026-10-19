@@ -29,7 +29,7 @@ for (const researcher of sources) {
 }
 
 test("research registers every source with its cache lifetime", () => {
-  assert.deepEqual(RESEARCHERS.map((source) => [source.source, source.ttlMs]), [["brew-api", DAILY], ["npm", DAILY], ["pypi", DAILY], ["goproxy", DAILY], ["crates", DAILY], ["sparkle", SIX_HOURS], ["github", SIX_HOURS], ["gitclone", DAILY], ["endoflife", DAILY], ["vendor", WEEKLY]]);
+  assert.deepEqual(RESEARCHERS.map((source) => [source.source, source.ttlMs]), [["brew-api", DAILY], ["npm", DAILY], ["pypi", DAILY], ["goproxy", DAILY], ["crates", DAILY], ["sparkle", SIX_HOURS], ["github", SIX_HOURS], ["gitclone", DAILY], ["huggingface", DAILY], ["endoflife", DAILY], ["vendor", WEEKLY]]);
   assert.deepEqual(crates.ecosystems, ["cargo"]);
 });
 

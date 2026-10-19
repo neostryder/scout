@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-CONFIG---\n[media]\nmodel_dirs = [\"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/Stability Matrix/Data/Models\"]\nstore_dir = \"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/store\"\n---SCOUT-FILE---\n/c/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/Stability Matrix/Data/Models/Checkpoints/example.safetensors\t4\t2026-10-01T00:00:00Z\n---SCOUT-META /c/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/Stability Matrix/Data/Models/Checkpoints/example.cogitator.json---\n{\"repo\":\"example/image-checkpoint\",\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"kind\":\"image\"}\n---SCOUT-END---\n---SCOUT-FILE---\n/c/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/Stability Matrix/Data/Models/LoRA/custom.bin\t4\t2026-10-01T00:00:00Z\n---SCOUT-FOLDER---\n/c/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/Stability Matrix/Data/Models/MLX\t2026-10-19T06:44:46Z\n---SCOUT-FILE---\n/c/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/media/Stability Matrix/Data/Models/MLX/model.safetensors\t4\t2026-10-01T00:00:00Z\n---SCOUT-DONE---\n",
+    "stderr": ""
+  }
+}

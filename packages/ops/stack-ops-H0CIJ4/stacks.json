@@ -1,0 +1,1 @@
+{"stacks":[{"name":"dev","label":"Development","members":[{"type":"service","machine":"hub","kind":"scheduled-task","name":"First","waitPort":8470,"waitSeconds":5},{"type":"recipe","project":"stack-ops-H0CIJ4","source":"launch-json","name":"dev","waitPort":8471,"waitSeconds":5},{"type":"service","machine":"hub","kind":"scheduled-task","name":"Last","waitSeconds":30}]}]}

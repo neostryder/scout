@@ -38,7 +38,7 @@ export interface SourceSummary {
 
 const HEADERS = { "user-agent": "scout-version-tracker (github.com/neostryder/scout)", accept: "application/json" };
 
-function githubRequest(source: string, env: Record<string, string | undefined>): Record<string, string> {
+function researchHeaders(source: string, env: Record<string, string | undefined>): Record<string, string> {
   const headers: Record<string, string> = { ...HEADERS };
   if (source === "github" || source === "gitclone") {
     headers["accept"] = "application/vnd.github+json";
@@ -46,12 +46,16 @@ function githubRequest(source: string, env: Record<string, string | undefined>):
     const token = env["SCOUT_GITHUB_TOKEN"];
     if (token) headers["authorization"] = `Bearer ${token}`;
   }
+  if (source === "huggingface") {
+    const token = env["HF_TOKEN"] || env["HUGGINGFACE_HUB_TOKEN"];
+    if (token) headers["authorization"] = `Bearer ${token}`;
+  }
   return headers;
 }
 
 function rateHeaders(headers: { get(name: string): string | null } | undefined): ResponseHeaders {
   const responseHeaders: ResponseHeaders = {};
-  for (const name of ["x-ratelimit-remaining", "x-ratelimit-reset"]) {
+  for (const name of ["x-ratelimit-remaining", "x-ratelimit-reset", "retry-after"]) {
     const value = headers?.get(name);
     if (value !== undefined && value !== null) responseHeaders[name] = value;
   }
@@ -71,6 +75,15 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
   );
   // The release lookup and the clone lookup share one GitHub quota, so either one stopping closes both.
   let githubStopped = false;
+  let huggingfaceStopped = false;
+  let huggingfaceLastRequest = 0;
+  const pacedFetch: Fetcher = async (url, init) => {
+    while (Date.now() - huggingfaceLastRequest < 250) {
+      await new Promise((resolve) => setTimeout(resolve, 250 - (Date.now() - huggingfaceLastRequest)));
+    }
+    huggingfaceLastRequest = Date.now();
+    return doFetch(url, init);
+  };
   for (const r of researchers) {
     const s: SourceSummary = { source: r.source, asked: 0, ok: 0, notfound: 0, failed: 0, skipped: 0, answers: 0 };
     summaries.push(s);
@@ -90,6 +103,10 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
           s.skipped++;
           continue;
         }
+        if (r.source === "huggingface" && huggingfaceStopped) {
+          s.skipped++;
+          continue;
+        }
         const url = r.url(t);
         if (url === null) {
           s.skipped++;
@@ -99,14 +116,15 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
         let result: Researched;
         let windows: SupportWindow[] | undefined;
         try {
-          const headers = githubRequest(r.source, options.env ?? process.env);
+          const headers = researchHeaders(r.source, options.env ?? process.env);
+          const request = r.source === "huggingface" ? pacedFetch : doFetch;
           if (r.follow) {
             const steps: { url: string; status: number; body: string }[] = [];
             let next: string | null = url;
             let limited: string | null = null;
             let responseHeaders: ResponseHeaders = {};
             while (next !== null && steps.length < 5) {
-              const res = await doFetch(next, { headers, signal: AbortSignal.timeout(timeoutMs) });
+              const res = await request(next, { headers, signal: AbortSignal.timeout(timeoutMs) });
               responseHeaders = rateHeaders(res.headers);
               const hit = githubRateLimit(res.status, responseHeaders);
               if (hit) {
@@ -122,7 +140,7 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
               : r.parse(steps[0]?.status ?? 0, JSON.stringify(steps), t, responseHeaders);
           } else {
             const page = r.source === "vendor" ? await fetchPublicPage(doFetch, url, timeoutMs, { accept: "text/html" }) : null;
-            const res = page ? { status: page.status, text: async () => page.body, headers: undefined } : await doFetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+            const res = page ? { status: page.status, text: async () => page.body, headers: undefined } : await request(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
             const responseHeaders = rateHeaders(res.headers);
             const limited = r.source === "github" ? githubRateLimit(res.status, responseHeaders) : null;
             if (limited) {
@@ -131,7 +149,20 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
             } else {
               const body = await res.text();
               result = r.parse(res.status, body, t, responseHeaders);
+              if (r.source === "huggingface" && res.status === 429) huggingfaceStopped = true;
               if (result.status === "ok") {
+                if (r.followups && r.combine) {
+                  const responses: Record<string, { status: number; body: string }> = {};
+                  for (const [name, nextUrl] of Object.entries(r.followups(t, body))) {
+                    if (r.source === "huggingface" && huggingfaceStopped) break;
+                    try {
+                      const next = await request(nextUrl, { headers, signal: AbortSignal.timeout(timeoutMs) });
+                      responses[name] = { status: next.status, body: await next.text() };
+                      if (r.source === "huggingface" && next.status === 429) huggingfaceStopped = true;
+                    } catch { responses[name] = { status: 0, body: "" }; }
+                  }
+                  result = r.combine(result, responses, t);
+                }
                 windows = r.extra?.(t, res.status, body);
                 if (r.source === "vendor" && options.extractVersion && !result.answers.length) {
                   const evidence = vendorEvidence(body);
@@ -148,9 +179,9 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
         }
         recordResearch(db, t.id, r.source, result.status, result.answers, result.message ?? null, now.toISOString());
         if (result.status === "ok" && windows) recordSupportWindows(db, t.id, windows, now.toISOString());
-        if (result.status === "ok" && result.intel) {
+        if (result.intel) {
           // putIntel replaces the document, and a later machine still needs the clone commits it did not just measure.
-          const data = r.source === "gitclone" ? mergeCloneIntel(getIntel(db, t.id, r.source)?.data ?? null, result.intel) : result.intel;
+          const data = r.source === "gitclone" && result.status === "ok" ? mergeCloneIntel(getIntel(db, t.id, r.source)?.data ?? null, result.intel) : result.intel;
           putIntel(db, t.id, r.source, data, now.toISOString());
         }
         s[result.status]++;
@@ -158,7 +189,7 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
         options.onProgress?.(`${r.source} ${t.key}: ${result.status}${result.answers[0] ? ` ${result.answers[0].version}` : ""}`);
       }
     };
-    await Promise.all(Array.from({ length: r.source === "github" || r.source === "gitclone" || r.source === "vendor" ? 1 : concurrency }, work));
+    await Promise.all(Array.from({ length: r.source === "github" || r.source === "gitclone" || r.source === "huggingface" || r.source === "vendor" ? 1 : concurrency }, work));
   }
   return summaries;
 }

@@ -12,6 +12,7 @@ import { adapter as dockerimages } from "@scout/adapter-dockerimages";
 import { adapter as dpkg } from "@scout/adapter-dpkg";
 import { adapter as pacman } from "@scout/adapter-pacman";
 import { adapter as gitclone } from "@scout/adapter-gitclone";
+import { adapter as cogmodels } from "@scout/adapter-cogitator-models";
 import { wslAdapter, sbxAdapter } from "@scout/adapter-winguests";
 import { adapter as pyruntimes } from "@scout/adapter-pyruntimes";
 import { adapter as uvtools } from "@scout/adapter-uvtools";
@@ -49,6 +50,7 @@ export const ADAPTERS: Adapter[] = [
   dpkg,
   pacman,
   gitclone,
+  cogmodels,
 ];
 
 /** Sources with one instance per machine use location "". Homebrew has one per prefix. */

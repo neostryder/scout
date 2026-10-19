@@ -45,6 +45,8 @@ export interface Researcher {
   parse(status: number, body: string, target: ResearchTarget, headers?: ResponseHeaders): Researched;
   /** The next request, when an earlier response decides it. Sources that need one request omit this. */
   follow?(target: ResearchTarget, prior: { url: string; status: number; body: string }[]): string | null;
+  followups?(target: ResearchTarget, body: string): Record<string, string>;
+  combine?(result: Researched, responses: Record<string, { status: number; body: string }>, target: ResearchTarget): Researched;
   extra?(target: ResearchTarget, status: number, body: string): SupportWindow[];
 }
 

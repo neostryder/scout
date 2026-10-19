@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-CONFIG---\r\n[[engines]]\r\nid = \"gemma-4-12b\"\r\nargs = [\"-m\", \"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lmstudio/.lmstudio/models/mradermacher/Gemma-4-12B-uncensored-bf16-GGUF/Gemma-4-12B-uncensored-bf16.Q5_K_M.gguf\"]\r\n---SCOUT-FILE---\nC:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lmstudio/.lmstudio/models/mradermacher/Gemma-4-12B-uncensored-bf16-GGUF/Gemma-4-12B-uncensored-bf16.Q5_K_M.gguf\t8\t2026-10-01T00:00:00.0000000Z\r\n---SCOUT-DONE---\r\n",
+    "stderr": ""
+  }
+}

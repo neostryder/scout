@@ -2,6 +2,12 @@
 
 Scout runs on one computer, the hub machine, and reads every other machine over ssh. Pick the hub machine first. The full feature set targets a Windows hub machine, so read the platform notes at the end of this page before you choose anything else.
 
+## Cogitator model inventory
+
+The `cogmodels` source runs on Windows, macOS, and Linux when the standard Cogitator data directory exists. It reads selected engine and media paths from `cogitator.toml`, optional model lock records and catalog entries, model sidecars, and directory metadata. It skips secret files, peer settings, and key paths. Model files are never hashed; GGUF files receive a header check only.
+
+Hugging Face research works without a token for public repositories. An optional `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` grants the API access that token permits. Scout records revisions, variants, and possible successors; it never downloads or updates model weights.
+
 ## Prerequisites
 
 On the hub machine:

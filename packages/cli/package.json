@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@scout/adapter-aiuse": "workspace:*",
+    "@scout/adapter-cogitator-models": "workspace:*",
     "@scout/adapter-deps": "workspace:*",
     "@scout/adapter-dockerimages": "workspace:*",
     "@scout/adapter-dpkg": "workspace:*",

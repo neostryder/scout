@@ -1,0 +1,41 @@
+{
+  "sourceKind": "cogmodels",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "model",
+      "kind": "model",
+      "key": "hf:unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL",
+      "name": "gemma-4-E4B-it-qat-GGUF UD-Q4_K_XL",
+      "version": "0123456789ab",
+      "location": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+      "details": {
+        "quant": "UD-Q4_K_XL",
+        "format": "gguf",
+        "family": "vision",
+        "sizeBytes": 21,
+        "modifiedAt": "2026-10-01T00:00:00.000Z",
+        "source": "hf:unsloth/gemma-4-E4B-it-qat-GGUF",
+        "sourceFrom": "lock",
+        "revision": "0123456789abcdef0123456789abcdef01234567",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "engineIds": [
+          "gemma-4-e4b-it-qat"
+        ],
+        "roles": [
+          "describe"
+        ],
+        "companions": [
+          {
+            "path": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/mmproj-BF16.gguf",
+            "sizeBytes": 13,
+            "modifiedAt": "2026-10-01T00:00:00.000Z"
+          }
+        ]
+      },
+      "publisher": "unsloth",
+      "homepage": "https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF"
+    }
+  ]
+}

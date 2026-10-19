@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-CONFIG---\r\n[[engines]]\r\nid = \"qwen3-asr-1.7b\"\r\nargs = [\"--model\", \"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/owner-folder/Cogitator/data/models/handy-computer__Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf\"]\r\n[[roles]]\r\nname = \"transcribe\"\r\nchain = [\"qwen3-asr-1.7b\"]\r\n---SCOUT-FILE---\nC:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/owner-folder/Cogitator/data/models/handy-computer__Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf\t8\t2026-10-01T00:00:00.0000000Z\r\n---SCOUT-DONE---\r\n",
+    "stderr": ""
+  }
+}
