@@ -477,7 +477,7 @@ To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui
 
 ## Agents and the command line
 
-You can check on your machines from a terminal, or let an AI agent do it, without opening the Scout page. The commands and the MCP server below read the hub machine's catalog directly (`.scout-data/catalog.db`, or another file with `--db`), so they work even when the hub is stopped. Run them from the Scout folder on the hub machine.
+You can check on your machines from a terminal, or let an AI agent do it, without opening the Scout page. The commands and the MCP server below read the hub machine's catalog directly (`.scout-data/catalog.db`, or another file with `--db`), so they work even when the hub is stopped. Run them from the Scout install folder on the hub machine, or from the checkout when it holds the live data.
 
 ### Check status, ports, and the systems map
 
@@ -551,43 +551,55 @@ Everything Scout writes lives in `.scout-data/`:
 | `tunnel-hosts.json` | Optional tunnel name to machine id map. |
 | `cogitator.json` | Optional local AI gateway settings. |
 | `hub.log` | Output of the Windows supervisor script. |
+| `hub-settings.json` | Optional settings for `tools/run-hub.ps1`: `aiToolkit`, `modelRoutePublic`, and `modelRouteInternal`. |
 
 The page and the CLI write most of these for you. Back up `.scout-data` to keep your descriptions and recipe approvals.
 
 ## Run the hub at login
 
-On Windows, `tools/run-hub.ps1` runs the hub in production mode, appends its output to `.scout-data/hub.log`, and restarts the hub 10 seconds after any exit. Any extra arguments go to the hub. To start it at logon, register the script as a scheduled task from a `pwsh` window run as administrator. Give the task the full path to `pwsh.exe`, because a scheduled task does not see your shell's PATH.
+On Windows, `tools/install-app.ps1` installs Scout as a per-user app that starts at logon. Run it from the repository:
 
 ```powershell
-$pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
-$action = New-ScheduledTaskAction -Execute $pwsh -Argument '-NoProfile -WindowStyle Hidden -File "C:\Projects\scout\tools\run-hub.ps1"'
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName "Scout hub" -Action $action -Trigger $trigger -Settings $settings
+pwsh -NoProfile -File tools/install-app.ps1
 ```
 
-The task needs a time limit of zero. The supervisor never exits, and the default limit would stop it after three days. A logon task does not run your shell profile, so set any optional environment variables (`SCOUT_AI_TOOLKIT`, `BWS_ACCESS_TOKEN`, and so on) at the top of the script. To run local mode at login, copy the script and change the copy to run `pnpm --filter @scout/hub start -- --live`.
+The installer stops the Scout tasks and their `node` processes, copies the code to `%LOCALAPPDATA%\Scout` (skipping `node_modules`, `.git`, `.scout-data`, build output, `machines.json`, and `access.json`), and runs `pnpm install --prod --frozen-lockfile` there. On the first install it copies `.scout-data` from the repository, leaving out names that start with an underscore, profiling leftovers, and backup copies, and it copies `machines.json` and `access.json` only when the install folder has none. The repository's `.scout-data` is left as it is.
 
-The outage watchdog is `pnpm --filter @scout/hub watchdog`, and `tools/run-watchdog.ps1` runs it and restarts it after any exit. On Windows, register that script as a second logon task next to the hub. Give it the same environment variables as the hub, or the `.scout-data/discord-webhook.dpapi` file, so it can send the Discord post. The watchdog also runs until logoff, so its task needs the same zero time limit.
+It then registers and starts two logon tasks, "Scout Hub" for `tools\run-hub.ps1` and "Scout Watchdog" for `tools\run-watchdog.ps1`. Each runs the full `pwsh.exe` path through `conhost.exe --headless`, has no time limit, never runs a second instance, and restarts after a failure, up to 999 times for the hub and 3 for the watchdog. A reinstall keeps the task names an earlier install chose. `.scout-data\install.json` records the source, target, and task names.
 
-```powershell
-$pwsh = "C:\Program Files\PowerShell\7\pwsh.exe"
-$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"$pwsh`" -NoProfile -NonInteractive -File C:\Projects\scout\tools\run-watchdog.ps1"
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName "Scout watchdog" -Action $action -Trigger $trigger -Settings $settings
+`-Target` installs to another folder, `-NoTasks` builds the copy without touching any process or task, `-NoStart` registers the tasks but leaves them stopped, and `-NoData` never copies `.scout-data`.
+
+The install folder owns the live data: the catalog, settings, logs, `machines.json`, and `access.json`. Nothing running from it refers to the repository, so the repository can be moved or deleted. The CLI and the MCP server read the catalog of the folder they run from, so run them from the install folder to see live data.
+
+`tools/run-hub.ps1` finds its folder from its own location, runs the hub in production mode with scheduled models, appends its output to `.scout-data/hub.log`, and restarts the hub 10 seconds after any exit. Each optional setting comes from its environment variable, then `.scout-data/hub-settings.json`, then the default:
+
+```json
+{
+  "aiToolkit": "C:\\Users\\you\\AppData\\Local\\AiCliToolkit\\ai.ps1",
+  "modelRoutePublic": "m3",
+  "modelRouteInternal": "luna"
+}
 ```
 
-On macOS or Linux, use any service manager, such as a launchd agent or a systemd user unit, to run the same command from the repository folder and restart it when it exits.
+`aiToolkit` (`SCOUT_AI_TOOLKIT`) is the path to `ai.ps1`, by default `%LOCALAPPDATA%\AiCliToolkit\ai.ps1`. When that file is missing, models stay off and `hub.log` says so. `modelRoutePublic` (`SCOUT_MODEL_ROUTE_PUBLIC`) defaults to `m3`, and `modelRouteInternal` (`SCOUT_MODEL_ROUTE_INTERNAL`) defaults to `luna`.
+
+A logon task does not run your shell profile. The watchdog needs the Discord address to send its post, from `SCOUT_DISCORD_WEBHOOK` or the `.scout-data/discord-webhook.dpapi` file.
+
+On macOS or Linux, have a service manager such as launchd or systemd run `pnpm --filter @scout/hub start:production` and `pnpm --filter @scout/hub watchdog` from the Scout folder and restart them when they exit.
 
 ## Updating Scout
+
+On Windows, update the repository and run the installer again:
 
 ```
 git pull
 pnpm install --frozen-lockfile
+pwsh -NoProfile -File tools/install-app.ps1
 ```
 
-Then restart the hub. Under the supervisor, stopping the `node` process is enough, and it comes back within 10 seconds. The catalog upgrades its schema in place the next time it opens.
+The installer replaces the code, keeps the data and settings in the install folder, and restarts both tasks. The catalog upgrades its schema in place the next time it opens.
+
+Without the installer, on macOS, Linux, or a development checkout, run `git pull` and `pnpm install --frozen-lockfile` in the folder the hub runs from, then restart the hub. Under `tools/run-hub.ps1`, stopping the `node` process is enough, and the hub comes back within 10 seconds.
 
 ## Troubleshooting
 
