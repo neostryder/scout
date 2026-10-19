@@ -20,6 +20,7 @@
     "@scout/adapter-dockerimages": "workspace:*",
     "@scout/adapter-dpkg": "workspace:*",
     "@scout/adapter-pacman": "workspace:*",
+    "@scout/adapter-gitclone": "workspace:*",
     "@scout/adapter-gobin": "workspace:*",
     "@scout/adapter-homebrew": "workspace:*",
     "@scout/adapter-launchd": "workspace:*",

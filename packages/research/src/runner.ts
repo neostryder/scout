@@ -1,8 +1,9 @@
-import { packagesDue, recordResearch, recordSupportWindows, type Db, type SupportWindow } from "@scout/core";
+import { getIntel, packagesDue, putIntel, recordResearch, recordSupportWindows, type Db, type SupportWindow } from "@scout/core";
 import { githubRateLimit } from "./github.ts";
+import { mergeCloneIntel } from "./gitclone.ts";
 import { fetchPublicPage } from "./fetch.ts";
 import { vendorEvidence, vendorVersion } from "./vendor.ts";
-import type { Researcher, ResearchTarget, ResponseHeaders } from "./types.ts";
+import type { Researcher, ResearchTarget, Researched, ResponseHeaders } from "./types.ts";
 
 // The runner asks each researcher about the packages that are due, records every answer, and logs the lookup so the
 // same package is not asked about again until its cache lapses. It fetches public endpoints only and sends nothing
@@ -37,6 +38,26 @@ export interface SourceSummary {
 
 const HEADERS = { "user-agent": "scout-version-tracker (github.com/neostryder/scout)", accept: "application/json" };
 
+function githubRequest(source: string, env: Record<string, string | undefined>): Record<string, string> {
+  const headers: Record<string, string> = { ...HEADERS };
+  if (source === "github" || source === "gitclone") {
+    headers["accept"] = "application/vnd.github+json";
+    headers["X-GitHub-Api-Version"] = "2022-11-28";
+    const token = env["SCOUT_GITHUB_TOKEN"];
+    if (token) headers["authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function rateHeaders(headers: { get(name: string): string | null } | undefined): ResponseHeaders {
+  const responseHeaders: ResponseHeaders = {};
+  for (const name of ["x-ratelimit-remaining", "x-ratelimit-reset"]) {
+    const value = headers?.get(name);
+    if (value !== undefined && value !== null) responseHeaders[name] = value;
+  }
+  return responseHeaders;
+}
+
 export async function runResearch(db: Db, researchers: Researcher[], options: RunOptions = {}): Promise<SourceSummary[]> {
   const doFetch: Fetcher = options.fetch ?? ((url, init) => fetch(url, init));
   const now = options.now ?? new Date();
@@ -48,6 +69,7 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
     `SELECT p.homepage, i.details_json FROM packages p JOIN installs i ON i.package_id = p.id
      WHERE p.id = ? AND i.removed_at IS NULL ORDER BY i.last_seen DESC, i.id DESC LIMIT 1`,
   );
+  // The release lookup and the clone lookup share one GitHub quota, so either one stopping closes both.
   let githubStopped = false;
   for (const r of researchers) {
     const s: SourceSummary = { source: r.source, asked: 0, ok: 0, notfound: 0, failed: 0, skipped: 0, answers: 0 };
@@ -64,7 +86,7 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
           s.skipped++;
           continue;
         }
-        if (r.source === "github" && githubStopped) {
+        if ((r.source === "github" || r.source === "gitclone") && githubStopped) {
           s.skipped++;
           continue;
         }
@@ -74,52 +96,69 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
           continue;
         }
         s.asked++;
-        let result;
+        let result: Researched;
         let windows: SupportWindow[] | undefined;
         try {
-          const headers: Record<string, string> = { ...HEADERS };
-          if (r.source === "github") {
-            headers["accept"] = "application/vnd.github+json";
-            headers["X-GitHub-Api-Version"] = "2022-11-28";
-            const token = (options.env ?? process.env)["SCOUT_GITHUB_TOKEN"];
-            if (token) headers["authorization"] = `Bearer ${token}`;
-          }
-          const page = r.source === "vendor" ? await fetchPublicPage(doFetch, url, timeoutMs, { accept: "text/html" }) : null;
-          const res = page ? { status: page.status, text: async () => page.body, headers: undefined } : await doFetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
-          const responseHeaders: ResponseHeaders = {};
-          for (const name of ["x-ratelimit-remaining", "x-ratelimit-reset"]) {
-            const value = res.headers?.get(name);
-            if (value !== undefined && value !== null) responseHeaders[name] = value;
-          }
-          const limited = r.source === "github" ? githubRateLimit(res.status, responseHeaders) : null;
-          if (limited) {
-            githubStopped = true;
-            result = { status: "failed" as const, answers: [], message: limited };
+          const headers = githubRequest(r.source, options.env ?? process.env);
+          if (r.follow) {
+            const steps: { url: string; status: number; body: string }[] = [];
+            let next: string | null = url;
+            let limited: string | null = null;
+            let responseHeaders: ResponseHeaders = {};
+            while (next !== null && steps.length < 5) {
+              const res = await doFetch(next, { headers, signal: AbortSignal.timeout(timeoutMs) });
+              responseHeaders = rateHeaders(res.headers);
+              const hit = githubRateLimit(res.status, responseHeaders);
+              if (hit) {
+                githubStopped = true;
+                limited = hit;
+                break;
+              }
+              steps.push({ url: next, status: res.status, body: await res.text() });
+              next = r.follow(t, steps);
+            }
+            result = limited
+              ? { status: "failed", answers: [], message: limited }
+              : r.parse(steps[0]?.status ?? 0, JSON.stringify(steps), t, responseHeaders);
           } else {
-            const body = await res.text();
-            result = r.parse(res.status, body, t, responseHeaders);
-            if (result.status === "ok") {
-              windows = r.extra?.(t, res.status, body);
-              if (r.source === "vendor" && options.extractVersion && !result.answers.length) {
-                const evidence = vendorEvidence(body);
-                if (!evidence.versions.length && evidence.text) {
-                  const version = vendorVersion(await options.extractVersion({ name: t.name, url, text: evidence.text }));
-                  if (version) result.answers.push({ channel: "stable", version, advisory: true, installable: false });
+            const page = r.source === "vendor" ? await fetchPublicPage(doFetch, url, timeoutMs, { accept: "text/html" }) : null;
+            const res = page ? { status: page.status, text: async () => page.body, headers: undefined } : await doFetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+            const responseHeaders = rateHeaders(res.headers);
+            const limited = r.source === "github" ? githubRateLimit(res.status, responseHeaders) : null;
+            if (limited) {
+              githubStopped = true;
+              result = { status: "failed", answers: [], message: limited };
+            } else {
+              const body = await res.text();
+              result = r.parse(res.status, body, t, responseHeaders);
+              if (result.status === "ok") {
+                windows = r.extra?.(t, res.status, body);
+                if (r.source === "vendor" && options.extractVersion && !result.answers.length) {
+                  const evidence = vendorEvidence(body);
+                  if (!evidence.versions.length && evidence.text) {
+                    const version = vendorVersion(await options.extractVersion({ name: t.name, url, text: evidence.text }));
+                    if (version) result.answers.push({ channel: "stable", version, advisory: true, installable: false });
+                  }
                 }
               }
             }
           }
         } catch {
-          result = { status: "failed" as const, answers: [], message: "request failed" };
+          result = { status: "failed", answers: [], message: "request failed" };
         }
         recordResearch(db, t.id, r.source, result.status, result.answers, result.message ?? null, now.toISOString());
         if (result.status === "ok" && windows) recordSupportWindows(db, t.id, windows, now.toISOString());
+        if (result.status === "ok" && result.intel) {
+          // putIntel replaces the document, and a later machine still needs the clone commits it did not just measure.
+          const data = r.source === "gitclone" ? mergeCloneIntel(getIntel(db, t.id, r.source)?.data ?? null, result.intel) : result.intel;
+          putIntel(db, t.id, r.source, data, now.toISOString());
+        }
         s[result.status]++;
         s.answers += result.answers.length;
         options.onProgress?.(`${r.source} ${t.key}: ${result.status}${result.answers[0] ? ` ${result.answers[0].version}` : ""}`);
       }
     };
-    await Promise.all(Array.from({ length: r.source === "github" || r.source === "vendor" ? 1 : concurrency }, work));
+    await Promise.all(Array.from({ length: r.source === "github" || r.source === "gitclone" || r.source === "vendor" ? 1 : concurrency }, work));
   }
   return summaries;
 }

@@ -146,6 +146,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  adapters/gitclone:
+    dependencies:
+      '@scout/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   adapters/gobin:
     dependencies:
       '@scout/core':
@@ -298,6 +304,9 @@ importers:
       '@scout/adapter-dpkg':
         specifier: workspace:*
         version: link:../../adapters/dpkg
+      '@scout/adapter-gitclone':
+        specifier: workspace:*
+        version: link:../../adapters/gitclone
       '@scout/adapter-gobin':
         specifier: workspace:*
         version: link:../../adapters/gobin

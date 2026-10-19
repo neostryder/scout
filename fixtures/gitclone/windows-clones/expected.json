@@ -1,0 +1,134 @@
+{
+  "sourceKind": "gitclone",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "gitclone",
+      "key": "github.com/scoutfixture/seen",
+      "name": "Seen",
+      "kind": "repo",
+      "version": "07cebd4dd708",
+      "location": "C:/Users/user/AppData/Local/Temp/scout-gitclone-bg68xiyj/a/b/seen",
+      "homepage": "https://github.com/ScoutFixture/Seen",
+      "details": {
+        "commit": "07cebd4dd708e36729c8bc13edca9ef0361beaae",
+        "branch": "main",
+        "defaultBranch": null,
+        "remote": "https://github.com/ScoutFixture/Seen.git",
+        "describe": "07cebd4",
+        "nearestTag": null,
+        "dirty": 0,
+        "ahead": null,
+        "behind": null,
+        "lastCommitAt": "2026-10-18T23:54:45-07:00"
+      }
+    },
+    {
+      "ecosystem": "gitclone",
+      "key": "github.com/scoutfixture/detached",
+      "name": "Detached",
+      "kind": "repo",
+      "version": "0d5b49c2ef52",
+      "location": "C:/Users/user/AppData/Local/Temp/scout-gitclone-bg68xiyj/detached",
+      "homepage": "https://github.com/ScoutFixture/Detached",
+      "details": {
+        "commit": "0d5b49c2ef52b4942400074ceb2819eb1a60e570",
+        "branch": null,
+        "defaultBranch": null,
+        "remote": "https://github.com/ScoutFixture/Detached.git",
+        "describe": "0d5b49c",
+        "nearestTag": null,
+        "dirty": 0,
+        "ahead": null,
+        "behind": null,
+        "lastCommitAt": "2026-10-18T23:54:19-07:00"
+      }
+    },
+    {
+      "ecosystem": "gitclone",
+      "key": "github.com/scoutfixture/ssh",
+      "name": "Ssh",
+      "kind": "repo",
+      "version": "b2015ec5ba3f",
+      "location": "C:/Users/user/AppData/Local/Temp/scout-gitclone-bg68xiyj/ssh",
+      "homepage": "https://github.com/ScoutFixture/Ssh",
+      "details": {
+        "commit": "b2015ec5ba3fb35e173c4ee9f73823d5fb9653aa",
+        "branch": "main",
+        "defaultBranch": null,
+        "remote": "git@github.com:ScoutFixture/Ssh.git",
+        "describe": "b2015ec",
+        "nearestTag": null,
+        "dirty": 1,
+        "ahead": null,
+        "behind": null,
+        "lastCommitAt": "2026-10-18T23:54:29-07:00"
+      }
+    },
+    {
+      "ecosystem": "gitclone",
+      "key": "github.com/scoutfixture/tagged",
+      "name": "Tagged",
+      "kind": "repo",
+      "version": "v1.2.3-1-g196515e",
+      "location": "C:/Users/user/AppData/Local/Temp/scout-gitclone-bg68xiyj/tagged",
+      "homepage": "https://github.com/ScoutFixture/Tagged",
+      "details": {
+        "commit": "196515e2e07f0521499f6ec6a5c311838b870dc0",
+        "branch": "main",
+        "defaultBranch": "origin/main",
+        "remote": "https://github.com/ScoutFixture/Tagged.git",
+        "describe": "v1.2.3-1-g196515e",
+        "nearestTag": "v1.2.3",
+        "dirty": 0,
+        "ahead": 1,
+        "behind": 0,
+        "lastCommitAt": "2026-10-18T23:54:17-07:00"
+      }
+    },
+    {
+      "ecosystem": "gitclone",
+      "key": "codeberg.org/scoutfixture/kept",
+      "name": "Kept",
+      "kind": "repo",
+      "version": "b445457008e1",
+      "location": "C:/Users/user/AppData/Local/Temp/scout-gitclone-bg68xiyj-kept",
+      "homepage": "https://codeberg.org/ScoutFixture/Kept",
+      "details": {
+        "commit": "b445457008e1ab30ed8285f13ccbcd2505345524",
+        "branch": "main",
+        "defaultBranch": null,
+        "remote": "https://codeberg.org/ScoutFixture/Kept.git",
+        "describe": "b445457",
+        "nearestTag": null,
+        "dirty": 0,
+        "ahead": null,
+        "behind": null,
+        "lastCommitAt": "2026-10-18T23:54:53-07:00"
+      }
+    },
+    {
+      "ecosystem": "gitclone",
+      "key": "gitlab.com/scoutfixture/explicit",
+      "name": "Explicit",
+      "kind": "repo",
+      "version": "0298967556b7",
+      "location": "C:/Users/user/AppData/Local/Temp/_scout-gitclone-explicit",
+      "homepage": "https://gitlab.com/ScoutFixture/Explicit",
+      "details": {
+        "commit": "0298967556b72a5b9fa6371061658936543fbfbf",
+        "branch": "main",
+        "defaultBranch": null,
+        "remote": "https://gitlab.com/ScoutFixture/Explicit.git",
+        "describe": "0298967",
+        "nearestTag": null,
+        "dirty": 0,
+        "ahead": null,
+        "behind": null,
+        "lastCommitAt": "2026-10-19T00:10:38-07:00"
+      }
+    }
+  ],
+  "message": "skipped 1 clone with no remote"
+}

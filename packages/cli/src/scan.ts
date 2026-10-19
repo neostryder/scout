@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { proposeMerges, applyCategoryRules, deriveConstraints, inheritDescriptions, deriveScanAssertions, deriveUsage, inheritUsage, linkIdentity, openCatalog, recordDependencies, recordScan, recordUsage, upsertMachine, runProbe, type Transport, type Adapter, type ProbeOutputs, type ScanResult } from "@scout/core";
 import { createAdapter as aiUseAdapter, loadCheckpoints, saveCheckpoints } from "@scout/adapter-aiuse";
-import { configureHubMachine, collectListeners, collectServices } from "@scout/ops";
+import { configureHubMachine, cloneRootsFor, collectListeners, collectServices } from "@scout/ops";
 import { alertsFileReader, loadTunnelHosts } from "@scout/core";
 import { ADAPTERS, DEPENDENCY_ADAPTERS, GUEST_ADAPTERS, GUEST_USAGE_ADAPTERS, PER_PREFIX, PROCESS_GATES, USAGE_ADAPTERS } from "./adapters.ts";
 import { GUEST_PS_SCRIPT, runningGuests } from "./guests.ts";
@@ -19,6 +19,8 @@ interface MachineConfig {
   transport: Transport;
   /** Folders that hold projects, for the project-selector scan. A trailing `/*` means each child folder not starting with `_` or `.`. */
   projectRoots?: string[];
+  /** Git clone folders. Absent means the home defaults plus each project root. */
+  cloneRoots?: string[];
 }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -84,6 +86,12 @@ function projectRootsFor(m: MachineConfig): Record<string, string[]> {
     }
   }
   return { project: roots };
+}
+
+function scanRoots(m: MachineConfig, sourceKind: string): Record<string, string[]> {
+  if (sourceKind === "projectsel") return projectRootsFor(m);
+  if (sourceKind === "gitclone") return { clone: cloneRootsFor(m) };
+  return {};
 }
 
 async function collectDependencies(m: MachineConfig): Promise<void> {
@@ -184,7 +192,7 @@ for (const m of config.machines) {
     }
     const locations = PER_PREFIX.has(adapter.sourceKind) ? prefixes : [""];
     for (const location of locations) {
-      report(m.id, await scanSource(m.id, m.os, m.transport, adapter, location, adapter.sourceKind === "projectsel" ? projectRootsFor(m) : {}));
+      report(m.id, await scanSource(m.id, m.os, m.transport, adapter, location, scanRoots(m, adapter.sourceKind)));
     }
   }
   if (!only || only.includes("deps")) await collectDependencies(m);

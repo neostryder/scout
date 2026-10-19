@@ -30,6 +30,8 @@ export interface Researched {
   status: "ok" | "notfound" | "failed";
   answers: Answer[];
   message?: string;
+  /** Stored with putIntel. Omitted when the source has nothing beyond its version answers. */
+  intel?: Record<string, unknown>;
 }
 
 export interface Researcher {
@@ -41,6 +43,8 @@ export interface Researcher {
   /** The request for this package, or null when this source cannot be asked about it (a third-party tap, an odd name). */
   url(target: ResearchTarget): string | null;
   parse(status: number, body: string, target: ResearchTarget, headers?: ResponseHeaders): Researched;
+  /** The next request, when an earlier response decides it. Sources that need one request omit this. */
+  follow?(target: ResearchTarget, prior: { url: string; status: number; body: string }[]): string | null;
   extra?(target: ResearchTarget, status: number, body: string): SupportWindow[];
 }
 

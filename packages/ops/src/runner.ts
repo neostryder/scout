@@ -4,7 +4,13 @@ import { planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } f
 import { findHubMachine, setHubMachine, downloadFileName, downloadHttps, type ConfirmedDownload, type DownloadPlan } from "@scout/core";
 import { dependencyRefusal, softConfirmation, updateBreaks, type SoftConfirmation, type UpdateBreaks } from "./guard.ts";
 
-export interface MachineConfig extends PlanMachine { id: string; arch?: "x64" | "arm64"; paused?: boolean }
+export interface MachineConfig extends PlanMachine {
+  id: string;
+  arch?: "x64" | "arm64";
+  paused?: boolean;
+  /** Git clone folders. Absent means the home defaults plus each project root. */
+  cloneRoots?: string[];
+}
 export interface ResolvedDownload { preview: DownloadPlan; download: ConfirmedDownload | null; transport: Transport | null }
 export interface RunnerDeps { exec?: Exec; machines: MachineConfig[]; updateTimeoutMs?: number; checkTimeoutMs?: number; resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null> }
 export interface Preview { installId: number; machineId: string; name: string; ecosystem: string; from: string | null; to: string | null; command: string; disruptive: boolean; needsAdmin: boolean; running: boolean; warnings: string[]; allowed: boolean; refusal: string | null; breaks: UpdateBreaks; softConfirmation: SoftConfirmation | null }
@@ -23,7 +29,31 @@ export function loadAllMachines(path: string): MachineConfig[] {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`${path} not found: copy machines.example.json to machines.json and list your machines`);
     throw error;
   }
-  return (JSON.parse(text) as { machines: MachineConfig[] }).machines;
+  const machines = (JSON.parse(text) as { machines: MachineConfig[] }).machines;
+  for (const machine of machines) assertCloneRoots(machine);
+  return machines;
+}
+
+const DEFAULT_CLONE_ROOTS = ["Repositories", "repos", "src", "code", "git", "Projects", "projects", "dev"];
+
+// An empty list is a choice to scan nothing, so a present key must not fall through to the defaults.
+export function cloneRootsFor(machine: { cloneRoots?: string[]; projectRoots?: string[] }): string[] {
+  if (machine.cloneRoots !== undefined) return machine.cloneRoots.slice();
+  const roots = DEFAULT_CLONE_ROOTS.map((name) => `~/${name}`);
+  const seen = new Set(roots);
+  for (const entry of machine.projectRoots ?? []) {
+    const base = entry.endsWith("/*") ? entry.slice(0, -2) : entry;
+    if (base.length === 0 || seen.has(base)) continue;
+    seen.add(base);
+    roots.push(base);
+  }
+  return roots;
+}
+
+export function assertCloneRoots(machine: { cloneRoots?: unknown }): void {
+  const roots = machine.cloneRoots;
+  if (roots === undefined) return;
+  if (!Array.isArray(roots) || roots.some((entry) => typeof entry !== "string")) throw new Error("cloneRoots must be an array of strings");
 }
 
 /** Reads machines.json and makes its local machine the hub, so every module agrees on which machine runs Scout. */

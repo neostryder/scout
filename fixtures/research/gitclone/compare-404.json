@@ -1,0 +1,54 @@
+{
+  "target": {
+    "id": 1,
+    "ecosystem": "gitclone",
+    "key": "github.com/example/demo",
+    "name": "demo",
+    "tap": null,
+    "homepage": null,
+    "details": { "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    "observedAt": "2026-10-18T12:00:00.000Z"
+  },
+  "steps": [
+    {
+      "url": "https://api.github.com/repos/example/demo",
+      "status": 200,
+      "body": "{\"default_branch\":\"main\",\"archived\":false,\"pushed_at\":\"2026-10-01T00:00:00Z\"}"
+    },
+    {
+      "url": "https://api.github.com/repos/example/demo/releases/latest",
+      "status": 200,
+      "body": "{\"tag_name\":\"v2.0.0\",\"draft\":false,\"prerelease\":false,\"published_at\":\"2026-10-02T00:00:00Z\",\"html_url\":\"https://github.com/example/demo/releases/tag/v2.0.0\"}"
+    },
+    {
+      "url": "https://api.github.com/repos/example/demo/commits/main",
+      "status": 200,
+      "body": "{\"sha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"commit\":{\"committer\":{\"date\":\"2026-10-03T00:00:00Z\"}}}"
+    },
+    {
+      "url": "https://api.github.com/repos/example/demo/compare/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...main",
+      "status": 404,
+      "body": "{\"message\":\"Not Found\"}"
+    }
+  ],
+  "expected": {
+    "status": "ok",
+    "answers": [{ "channel": "stable", "version": "v2.0.0", "installable": false }],
+    "intel": {
+      "defaultBranch": "main",
+      "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "headAt": "2026-10-03T00:00:00Z",
+      "latestRelease": {
+        "tag": "v2.0.0",
+        "publishedAt": "2026-10-02T00:00:00Z",
+        "url": "https://github.com/example/demo/releases/tag/v2.0.0"
+      },
+      "newestTag": "v2.0.0",
+      "behindBy": null,
+      "behindKnown": false,
+      "archived": false,
+      "checkedAt": "2026-10-18T12:00:00.000Z",
+      "clones": { "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": null }
+    }
+  }
+}

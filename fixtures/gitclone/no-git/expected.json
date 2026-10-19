@@ -1,0 +1,7 @@
+{
+  "sourceKind": "gitclone",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "git is not installed"
+}

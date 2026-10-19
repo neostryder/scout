@@ -22,6 +22,12 @@ An adapter never touches a machine. `probes(ctx, location)` returns the fixed co
 
 Each adapter is tested against `fixtures/<sourceKind>/<case>/`, where `outputs.json` is probe output recorded from a real machine and `expected.json` is the exact parse. `tools/record-pwsh.mjs` and `tools/record-mac.mjs` record cases, and `tools/redact-fixtures.mjs` strips usernames. A new platform starts here: pacman, systemd, and `ss` adapters for Arch Linux would follow the shape of `adapters/services` and `adapters/listeners`.
 
+## Local git clones
+
+The gitclone adapter lists clones under the machine's clone roots. The probe walks each root to depth 3, records a directory whose `.git` entry is a directory, and skips a `.git` file, `node_modules`, and any directory whose name starts with `_` or `.`. An explicit root is entered even when its own name starts with `_` or `.`. Each repository gets 20 seconds. The probe runs `git -C` read commands only, with `GIT_OPTIONAL_LOCKS=0`, and does not fetch or update the clone. A clone with no remote is counted and not stored. The package key is the remote reduced to `host/owner/repo`, so the https and ssh forms of one repository are one package. Credentials in a remote URL are removed before the row is stored.
+
+The gitclone researcher asks the GitHub API only when the key starts with `github.com/`. It stores the default branch, the branch head, and the latest release in `source_intel`, plus a map from clone commit to how far that commit is behind the default branch. The map keeps at most 20 commits. Other forges stay in the catalog and are not looked up. When a release exists, Scout records it as a stable assertion with `installable` false.
+
 ## The catalog
 
 Scans write into `.scout-data/catalog.db`, diffing each result against the last so rows are added, updated, or marked removed. Core then links installs across ecosystems by fixed rules (a winget id to its registry key, a cask to its app bundle), queues merges it cannot prove for the Review page, records version pins found in your projects as advisory constraints, and applies category rules. The schema upgrades in place on open.
