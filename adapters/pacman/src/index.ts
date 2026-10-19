@@ -4,7 +4,8 @@ import type { Adapter, InstallRecord, ProbeContext, ProbeOutputs, ScanResult } f
 // lists the foreign ones, which are the packages no sync database carries, usually built from the AUR or locally.
 // The script text is byte-identical to tools/probes/linux/pacman.sh. LC_ALL=C keeps the field names in English.
 
-const PACMAN_SH = 'LC_ALL=C pacman -Qi 2>/dev/null\necho "---SCOUT-FOREIGN---"\nLC_ALL=C pacman -Qmq 2>/dev/null\n';
+// `pacman -Qmq` exits 1 when no foreign package exists, so the script exits with the status of `pacman -Qi` alone.
+const PACMAN_SH = 'LC_ALL=C pacman -Qi 2>/dev/null\nrc=$?\necho "---SCOUT-FOREIGN---"\nLC_ALL=C pacman -Qmq 2>/dev/null\nexit $rc\n';
 
 const firstLine = (text: string): string => text.trim().split("\n")[0] ?? "";
 const NONE = new Set(["", "None", "N/A"]);

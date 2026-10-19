@@ -176,8 +176,8 @@ function scanAlerts(db: Db, machineId: string, options: CollectOptions): void {
   try {
     const changes = (options.alerts?.evaluate ?? evaluateAlerts)(db, at, { loadMutes: scanMutes, tunnelHosts: loadTunnelHosts(".scout-data/tunnel-hosts.json"), ...options.alerts, machineId });
     options.alerts?.onChanges?.(changes);
-  } catch {
-    (options.log ?? console.error)("Alert evaluation failed; the next scan will retry.");
+  } catch (error) {
+    (options.log ?? console.error)(`Alert evaluation failed (${error instanceof Error ? error.message : "unknown error"}); the next scan will retry.`);
   }
 }
 
