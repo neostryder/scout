@@ -152,7 +152,7 @@ export function linkIdentity(db: Db, now = new Date().toISOString()): LinkSummar
     evidence.set(p.a.package_id, [...(evidence.get(p.a.package_id) ?? []), p.rule]);
   }
 
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("DELETE FROM item_links WHERE basis = 'deterministic'");
     db.exec("DELETE FROM install_relations");

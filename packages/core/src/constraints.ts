@@ -17,7 +17,7 @@ export function deriveConstraints(db: Db, now = new Date().toISOString()): Const
     )
     .all() as unknown as { id: number; package_id: number; version: string | null; location: string; ecosystem: string; details_json: string }[];
   const summary: ConstraintSummary = { freezes: 0, gatedRanges: 0 };
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("DELETE FROM constraints WHERE json_extract(detail_json, '$.derived') = 1");
     const insert = db.prepare(

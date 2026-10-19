@@ -105,7 +105,7 @@ function owns(origin: string, kind: ServiceKind): boolean {
 export function recordServices(db: Db, machineId: string, result: ServiceResult, now: string): { services: number; gone: number } {
   const summary = { services: 0, gone: 0 };
   if (result.status === "failed" || result.status === "skipped") return summary;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const previous = listServices(db, { machine: machineId });
     const baselineKey = `services_observed:${machineId}`;

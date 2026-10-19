@@ -82,7 +82,7 @@ export function applyCategoryRules(db: Db): { assigned: number } {
     )
     .all() as unknown as { pid: number; ecosystem: string; key: string; name: string; kind: string; location: string; details_json: string }[];
   let assigned = 0;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const set = db.prepare("UPDATE packages SET category = ?, category_source = 'rule' WHERE id = ?");
     const clear = db.prepare("UPDATE packages SET category = NULL, category_source = NULL WHERE id = ? AND category_source = 'rule'");

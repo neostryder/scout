@@ -90,7 +90,7 @@ export function recordUsage(db: Db, machineId: string, result: UsageResult, now:
   const summary: UsageSummary = { signals: 0, unmatched: 0 };
   if (result.status === "failed" || result.status === "skipped") return summary;
   const all = targets(db, machineId);
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const clear = db.prepare("DELETE FROM usage_signals WHERE install_id = ? AND kind = ? AND origin = ?");
     const put = db.prepare("INSERT INTO usage_signals (install_id, kind, value, available, origin, observed_at) VALUES (?, ?, ?, ?, ?, ?)");
@@ -134,7 +134,7 @@ export function deriveUsage(db: Db, now = new Date().toISOString()): { signals: 
     )
     .all() as unknown as { id: number; ecosystem: string; details_json: string }[];
   let count = 0;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("DELETE FROM usage_signals WHERE origin = 'catalog'");
     const put = db.prepare("INSERT INTO usage_signals (install_id, kind, value, available, origin, observed_at) VALUES (?, ?, ?, 1, 'catalog', ?)");
@@ -188,7 +188,7 @@ export function inheritUsage(db: Db, now = new Date().toISOString()): { signals:
     const better = old === undefined ? true : r.kind === "use_count" ? BigInt(r.value) > BigInt(old) : r.value > old; // ISO times and "0"/"1" compare as text
     if (better) best.set(key, r.value);
   }
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("DELETE FROM usage_signals WHERE origin = 'item'");
     const put = db.prepare("INSERT INTO usage_signals (install_id, kind, value, available, origin, observed_at) VALUES (?, ?, ?, 1, 'item', ?)");

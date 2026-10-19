@@ -96,7 +96,7 @@ function insertOutage(db: Db, fields: { key: string; kind: OutageKind; machineId
 export function recordObservations(db: Db, observations: Observation[], options: { confirmAfter?: number } = {}): OutageChange[] {
   const confirmAfter = options.confirmAfter ?? CONFIRM_AFTER;
   const changes: OutageChange[] = [];
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     for (const obs of observations) {
       const saved = db.prepare("SELECT key, failures, first_failed_at AS firstFailedAt, last_state AS lastState, last_checked_at AS lastCheckedAt, last_ok_at AS lastOkAt, episodes_json AS episodes FROM watch_state WHERE key = ?").get(obs.key) as WatchRow | undefined;

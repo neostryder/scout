@@ -126,7 +126,7 @@ function readReader(db: Db): ReaderRow | null {
 export function recordCloudflare(db: Db, snapshot: CloudflareSnapshot, at: string, error: string | null): { changed: boolean } {
   const dataBefore = dataFingerprint(db);
   const readerBefore = readerFingerprint(db);
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     if (snapshot.zones) {
       db.prepare("DELETE FROM cf_zones").run();

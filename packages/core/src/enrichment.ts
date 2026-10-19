@@ -68,7 +68,7 @@ export function validateAnswer(a: Answer): string | null {
 export function applyEnrichment(db: Db, answers: Answer[], now = new Date().toISOString(), minConfidence = 0.5): { applied: number; rejected: Rejection[] } {
   const rejected: Rejection[] = [];
   let applied = 0;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const desc = db.prepare(
       `UPDATE packages SET description = ?1, description_source = 'generated', description_confidence = ?2, description_at = ?3
@@ -104,7 +104,7 @@ export function applyEnrichment(db: Db, answers: Answer[], now = new Date().toIS
  */
 export function inheritDescriptions(db: Db, now = new Date().toISOString()): { inherited: number } {
   let inherited = 0;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("UPDATE packages SET description = NULL, description_source = NULL, description_at = NULL WHERE description_source = 'sibling'");
     const byItem = db.prepare(

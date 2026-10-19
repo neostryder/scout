@@ -145,7 +145,7 @@ export async function runDiscovery(db: Db, model: ModelRunner, now = new Date().
   const parsed = parseDiscovery(answer, keys);
   result.skipped = parsed.rejected;
   if (entries.length && !parsed.proposals.length) return { ...result, status: "unusable" };
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const excluded = new Set(knownEdges(db).map(signature));
     for (const row of db.prepare("SELECT subject_json FROM findings WHERE kind = 'dependency_proposal' AND state IN ('confirmed', 'rejected')").all() as { subject_json: string }[]) {
@@ -179,7 +179,7 @@ export async function runDiscovery(db: Db, model: ModelRunner, now = new Date().
 }
 
 function decideDependency(db: Db, findingId: number, accept: boolean, now: string): void {
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const finding = db.prepare("SELECT state, subject_json FROM findings WHERE id = ? AND kind = 'dependency_proposal'").get(findingId) as { state: string; subject_json: string } | undefined;
     if (!finding) throw new Error(`no dependency proposal ${findingId}`);

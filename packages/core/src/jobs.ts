@@ -53,7 +53,7 @@ export function enqueueBatch(db: Db, installs: { installId: number; machineId: s
   const batchId = randomUUID();
   const now = new Date().toISOString();
   const jobs: Job[] = [];
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     for (const i of installs) {
       const existing = db.prepare("SELECT id FROM jobs WHERE install_id = ? AND state IN ('queued','preflight','running')").get(i.installId);

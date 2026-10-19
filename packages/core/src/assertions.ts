@@ -58,7 +58,7 @@ export function recordResearch(
   message: string | null,
   now = new Date().toISOString(),
 ): void {
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     for (const a of answers) recordAssertion(db, { ...a, packageId, source }, now);
     db.prepare(
@@ -140,7 +140,7 @@ export function deriveScanAssertions(db: Db, now = new Date().toISOString()): { 
     const prior = best.get(key);
     best.set(key, { packageId: r.packageId, source, version: prior ? (maxVersion([prior.version, r.available]) ?? prior.version) : r.available });
   }
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("DELETE FROM assertions WHERE source IN ('winget-scan', 'msstore-scan')");
     for (const b of best.values()) recordAssertion(db, { packageId: b.packageId, source: b.source, channel: "stable", version: b.version, installable: true }, now);

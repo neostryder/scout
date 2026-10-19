@@ -54,7 +54,7 @@ function migrateServiceKinds(db: Db): void {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'services'").get() as { sql: string } | undefined;
   if (!row || row.sql.includes("'systemd'")) return;
   const columns = (db.prepare("PRAGMA table_info(services)").all() as { name: string }[]).map((column) => column.name).join(", ");
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("ALTER TABLE services RENAME TO services_old");
     db.exec(SCHEMA_SQL);
@@ -71,7 +71,7 @@ function migrateServiceKinds(db: Db): void {
 function migrateDependencyEdges(db: Db): void {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dependency_edges'").get() as { sql: string } | undefined;
   if (!row || !/CHECK \(source IN/.test(row.sql)) return;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("ALTER TABLE dependency_edges RENAME TO dependency_edges_old");
     db.exec("DROP INDEX IF EXISTS dependency_target");
@@ -89,7 +89,7 @@ function migrateDependencyEdges(db: Db): void {
 function migrateActions(db: Db): void {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'actions'").get() as { sql: string } | undefined;
   if (!row || row.sql.includes("'stack'") && row.sql.includes("'disable'")) return;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("ALTER TABLE actions RENAME TO actions_old");
     db.exec("DROP INDEX IF EXISTS actions_machine");

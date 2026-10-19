@@ -48,7 +48,7 @@ export function proposeMerges(db: Db, now = new Date().toISOString()): { propose
     (db.prepare("SELECT subject_json FROM findings WHERE kind = 'merge_proposal' AND state IN ('rejected', 'confirmed')").all() as { subject_json: string }[]).map((f) => f.subject_json),
   );
   let proposed = 0;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.exec("DELETE FROM findings WHERE kind = 'merge_proposal' AND state = 'open'");
     const insert = db.prepare("INSERT INTO findings (kind, subject_json, state, created_at) VALUES ('merge_proposal', ?, 'open', ?)");
@@ -82,7 +82,7 @@ export function decideProposal(db: Db, findingId: number, accept: boolean, now =
   const f = db.prepare("SELECT subject_json FROM findings WHERE id = ? AND kind = 'merge_proposal' AND state = 'open'").get(findingId) as { subject_json: string } | undefined;
   if (!f) throw new Error(`no open merge proposal ${findingId}`);
   const subject = JSON.parse(f.subject_json) as { packageIds: number[] };
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     if (accept) {
       const first = db.prepare("SELECT item_id FROM item_links WHERE package_id = ?").get(subject.packageIds[0] ?? -1) as { item_id: number };

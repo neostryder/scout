@@ -19,7 +19,7 @@ export function supportEnded(eol: SupportWindow["eol"], now: string): boolean {
 }
 
 export function recordSupportWindows(db: Db, packageId: number, windows: SupportWindow[], now = new Date().toISOString()): void {
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare("DELETE FROM support_windows WHERE package_id = ?").run(packageId);
     const insert = db.prepare("INSERT INTO support_windows (package_id, cycle, eol, eol_passed, latest, lts, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)");

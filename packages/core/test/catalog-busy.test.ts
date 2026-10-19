@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openCatalog } from "../src/db.ts";
@@ -25,4 +25,17 @@ test("a catalog connection waits for a write lock held by another connection", (
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("every catalog transaction starts immediate, so a read-then-write cannot hit a stale snapshot", () => {
+  const dir = join(import.meta.dirname, "../..");
+  const offenders: string[] = [];
+  for (const pkg of ["core", "ops", "hub", "cli", "research"]) {
+    const src = join(dir, pkg, "src");
+    for (const name of readdirSync(src, { recursive: true, encoding: "utf8" })) {
+      if (!name.endsWith(".ts")) continue;
+      if (/exec\("BEGIN"\)/.test(readFileSync(join(src, name), "utf8"))) offenders.push(`${pkg}/src/${name}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
 });

@@ -63,7 +63,7 @@ function resolveTarget(all: Target[], fact: DependencyFact, from: Target): Targe
 export function recordDependencies(db: Db, machineId: string, result: DependencyResult, now: string): { edges: number; skipped: number } {
   const summary = { edges: 0, skipped: 0 };
   if (result.status === "failed" || result.status === "skipped") return summary;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const all = db.prepare(
       `SELECT i.id, p.ecosystem, p.key, p.name, i.machine_id AS machine, i.version, i.source_id AS sourceId

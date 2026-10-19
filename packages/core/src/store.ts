@@ -34,7 +34,7 @@ export interface RecordScanSummary {
  */
 export function recordScan(db: Db, machineId: string, result: ScanResult, now: string): RecordScanSummary {
   const summary: RecordScanSummary = { added: 0, updated: 0, removed: 0 };
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare("INSERT OR IGNORE INTO sources (machine_id, kind, location) VALUES (?, ?, ?)").run(
       machineId,

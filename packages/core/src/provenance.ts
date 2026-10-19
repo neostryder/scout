@@ -198,7 +198,7 @@ export async function refreshProjectGit(db: Db, projects: readonly Project[], gi
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (machine_id, root) DO UPDATE SET remote_url = excluded.remote_url, remote_host = excluded.remote_host, remote_owner = excluded.remote_owner,
       remote_repo = excluded.remote_repo, author_email = excluded.author_email, last_commit_at = excluded.last_commit_at, read_at = excluded.read_at`);
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     for (const row of rows) upsert.run(row.machineId, row.root, row.remoteUrl, row.remoteHost, row.remoteOwner, row.remoteRepo, row.authorEmail, row.lastCommitAt, row.readAt);
     const keep = new Set(rows.map((row) => `${row.machineId}\u0000${row.root}`));

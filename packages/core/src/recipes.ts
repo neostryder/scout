@@ -91,7 +91,7 @@ export function scanRecipes(db: Db, projects: readonly Project[], at = new Date(
   const detected = projects.flatMap(detectRecipes);
   const seen = new Set<number>();
   const events: RecipeEvent[] = [];
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     for (const recipe of detected) {
       const old = db.prepare(`${SELECT} WHERE machine_id = ? AND root = ? AND source = ? AND name = ?`).get(recipe.machineId, recipe.root, recipe.source, recipe.name) as StoredRecipe | undefined;

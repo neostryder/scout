@@ -103,7 +103,7 @@ function withKnownOwner(fact: ListenerFact, previous: Listener[]): ListenerFact 
 export function recordListeners(db: Db, machineId: string, result: ListenerResult, now: string): { listeners: number; gone: number } {
   const summary = { listeners: 0, gone: 0 };
   if (result.status === "failed" || result.status === "skipped") return summary;
-  db.exec("BEGIN");
+  db.exec("BEGIN IMMEDIATE");
   try {
     const previous = listListeners(db, { machine: machineId });
     const baselineKey = `listeners_observed:${machineId}`;
