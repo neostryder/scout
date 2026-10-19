@@ -308,9 +308,9 @@ function named(db: Db, machineId: string, processes: MeterProcess[]): ResourcePr
 }
 
 export function resourcesResponse(db: Db, now = new Date().toISOString()): { machines: ResourceMachine[] } {
-  const names = new Map((db.prepare("SELECT id, name, os FROM machines").all() as { id: string; name: string; os: string }[]).map((row) => [row.id, row]));
+  const names = new Map((db.prepare("SELECT id, name, os FROM machines WHERE state <> 'paused'").all() as { id: string; name: string; os: string }[]).map((row) => [row.id, row]));
   const since = new Date(Date.parse(now) - SERIES_MINUTES * 60_000).toISOString();
-  const machines = latestMeters(db).map((sample): ResourceMachine => {
+  const machines = latestMeters(db).filter((sample) => names.has(sample.machineId)).map((sample): ResourceMachine => {
     const info = names.get(sample.machineId);
     const processes = sample.processes;
     return {

@@ -206,7 +206,7 @@ export class HubWatch {
     if (last !== undefined && nowMs - last < this.intervalMs - 15_000) return [];
     this.lastServiceAt.set(machineId, nowMs);
     const config = this.readConfig();
-    if (isPaused(config, at)) return [];
+    if (isPaused(config, at) || !this.options.machines().some((machine) => machine.id === machineId) && machineId !== hubMachineId()) return [];
     const observations = await this.confirmReachable(machineId, serviceObservations(this.db, machineId, config, at));
     const changes = [...settleUnwatched(this.db, { kind: "service", machineId }, watchedKeys(observations), at), ...recordObservations(this.db, observations)];
     if (changes.length) {

@@ -341,7 +341,7 @@ function liveFields(live: LiveSchedule | undefined, id: string): Omit<LiveMachin
 }
 
 function overviewResponse(db: Db, live: LiveSchedule | undefined): unknown {
-  const catalog = db.prepare("SELECT id, name, os FROM machines WHERE kind = 'host'").all() as unknown as { id: string; name: string; os: string }[];
+  const catalog = db.prepare("SELECT id, name, os, state FROM machines WHERE kind = 'host'").all() as unknown as { id: string; name: string; os: string; state?: string }[];
   const byId = new Map(catalog.map((row) => [row.id, row]));
   for (const machine of live?.machines() ?? []) if (!byId.has(machine.id)) byId.set(machine.id, machine);
   const machines = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -369,7 +369,7 @@ function overviewResponse(db: Db, live: LiveSchedule | undefined): unknown {
           lan: ownListeners.filter((row) => row.bind === "lan").length,
           all: ownListeners.filter((row) => row.bind === "all").length,
         },
-        live: liveFields(live, machine.id),
+        live: machine.state === "paused" ? { state: "paused", lastLiveAt: null, cadenceMs: SLOW_CADENCE_MS, error: null } : liveFields(live, machine.id),
       };
     }),
     generatedAt: new Date().toISOString(),

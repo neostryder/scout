@@ -4,12 +4,20 @@ import { planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } f
 import { findHubMachine, setHubMachine, downloadFileName, downloadHttps, type ConfirmedDownload, type DownloadPlan } from "@scout/core";
 import { dependencyRefusal, softConfirmation, updateBreaks, type SoftConfirmation, type UpdateBreaks } from "./guard.ts";
 
-export interface MachineConfig extends PlanMachine { id: string; arch?: "x64" | "arm64" }
+export interface MachineConfig extends PlanMachine { id: string; arch?: "x64" | "arm64"; paused?: boolean }
 export interface ResolvedDownload { preview: DownloadPlan; download: ConfirmedDownload | null; transport: Transport | null }
 export interface RunnerDeps { exec?: Exec; machines: MachineConfig[]; updateTimeoutMs?: number; checkTimeoutMs?: number; resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null> }
 export interface Preview { installId: number; machineId: string; name: string; ecosystem: string; from: string | null; to: string | null; command: string; disruptive: boolean; needsAdmin: boolean; running: boolean; warnings: string[]; allowed: boolean; refusal: string | null; breaks: UpdateBreaks; softConfirmation: SoftConfirmation | null }
 
 export function loadMachines(path: string): MachineConfig[] {
+  return loadAllMachines(path).filter((machine) => machine.paused !== true || machine.transport.type === "local");
+}
+
+export function pausedMachineIds(path: string): string[] {
+  return loadAllMachines(path).filter((machine) => machine.paused === true && machine.transport.type !== "local").map((machine) => machine.id);
+}
+
+export function loadAllMachines(path: string): MachineConfig[] {
   let text: string;
   try { text = readFileSync(path, "utf8"); } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`${path} not found: copy machines.example.json to machines.json and list your machines`);
@@ -244,6 +252,7 @@ export class Runner {
   }
   private async pump(machineId: string): Promise<void> {
     if (this.active.has(machineId)) return;
+    if (!this.deps.machines.some((machine) => machine.id === machineId)) return;
     const job = claimNext(this.db, machineId);
     if (!job) return;
     const controller = new AbortController();

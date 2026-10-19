@@ -9,7 +9,7 @@ const SLOW_MS = 120_000;
 const MAX_BACKOFF_MS = 300_000;
 const PROBE_TICK_MS = 2_000;
 
-export type LiveState = "fresh" | "stale" | "unreachable" | "never";
+export type LiveState = "fresh" | "stale" | "unreachable" | "never" | "paused";
 
 export interface LiveMachineConfig {
   id: string;
@@ -66,7 +66,7 @@ export interface LiveClock {
 export type LiveReader = (machine: LiveMachineConfig, options: { slow: boolean; onProbe?: (update: LiveProbeUpdate) => void }) => Promise<LiveReadResult>;
 
 export interface LiveScheduleOptions {
-  machines: LiveMachineConfig[];
+  machines: LiveMachineConfig[] | (() => LiveMachineConfig[]);
   reader?: LiveReader;
   clock?: LiveClock;
 }
@@ -108,6 +108,7 @@ export class LiveSchedule {
   private clock: LiveClock;
   private reader: LiveReader;
   private runtimes: Runtime[];
+  private machineList: () => LiveMachineConfig[];
   private listeners = new Set<(notice: LiveNotice) => void>();
   private storedListeners = new Set<(read: LiveStored) => void>();
   private watchers = 0;
@@ -117,7 +118,9 @@ export class LiveSchedule {
     this.db = db;
     this.clock = options.clock ?? CLOCK;
     this.reader = options.reader ?? ((machine, read) => readLive(db, machine, { slow: read.slow, ...(read.onProbe ? { onProbe: read.onProbe } : {}) }));
-    this.runtimes = options.machines.map((config) => ({
+    const machines = options.machines;
+    this.machineList = typeof machines === "function" ? machines : () => machines;
+    this.runtimes = this.machineList().map((config) => ({
       config, state: "never", lastLiveAt: null, error: null, failures: 0, running: false, startedAt: null, probe: null,
     }));
   }
@@ -138,6 +141,7 @@ export class LiveSchedule {
   }
 
   status(): LiveMachineState[] {
+    this.refreshConfigs();
     return this.runtimes.map((runtime) => ({
       id: runtime.config.id,
       state: runtime.state,
@@ -179,14 +183,16 @@ export class LiveSchedule {
   }
 
   refresh(machineId?: string, slow = false): { started: true; machines: string[] } | { started: false; reason: "running" } {
+    this.refreshConfigs();
     const targets: Runtime[] = [];
     if (machineId === undefined) targets.push(...this.runtimes);
     else {
       const found = this.runtimes.find((runtime) => runtime.config.id === machineId);
       if (!found) throw new Error("no such machine");
+      if (found.state === "paused") throw new Error("machine is paused");
       targets.push(found);
     }
-    const idle = targets.filter((runtime) => !runtime.running);
+    const idle = targets.filter((runtime) => !runtime.running && runtime.state !== "paused");
     if (idle.length === 0) return { started: false, reason: "running" };
     for (const runtime of idle) this.kick(runtime, slow);
     return { started: true, machines: idle.map((runtime) => runtime.config.id) };
@@ -235,10 +241,34 @@ export class LiveSchedule {
 
   private kick(runtime: Runtime, slow: boolean): void {
     if (runtime.running) return;
+    this.refreshConfigs();
+    if (runtime.state === "paused") {
+      if (this.started) this.arm(runtime, SLOW_MS);
+      return;
+    }
     runtime.running = true;
     runtime.startedAt = this.clock.now();
     this.clear(runtime, "timer");
     void this.execute(runtime, slow);
+  }
+
+  private refreshConfigs(): void {
+    const configs = this.machineList();
+    for (const config of configs) {
+      const runtime = this.runtimes.find((runtime) => runtime.config.id === config.id);
+      if (runtime) {
+        runtime.config = config;
+        if (runtime.state === "paused") this.transition(runtime, "never", null);
+      } else {
+        const added: Runtime = { config, state: "never", lastLiveAt: null, error: null, failures: 0, running: false, startedAt: null, probe: null };
+        this.runtimes.push(added);
+        if (this.started) this.arm(added, 0);
+      }
+    }
+    for (const runtime of this.runtimes) if (!configs.some((config) => config.id === runtime.config.id)) {
+      this.clear(runtime, "staleTimer");
+      this.transition(runtime, "paused", null);
+    }
   }
 
   private rearmAll(): void {

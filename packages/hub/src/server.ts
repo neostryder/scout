@@ -16,6 +16,7 @@ import type { CloudflareSchedule } from "./cloudflare.ts";
 import type { LiveSchedule } from "./live.ts";
 import { routesApi } from "./routes-api.ts";
 import type { ResearchSchedule } from "./schedule.ts";
+import type { ScanSchedule } from "./scan-schedule.ts";
 import { readJson, servicesApi } from "./services-api.ts";
 import type { DescriptionRun } from "./descriptions.ts";
 import { HubRecipes } from "./recipes.ts";
@@ -72,6 +73,7 @@ export interface HubOptions {
   trayPath?: string;
   downloads?: DownloadsOptions;
   research?: ResearchSchedule;
+  scans?: ScanSchedule;
   /** Live listener and service reads. Omit it and the stream still says hello, while refresh answers 404. */
   live?: LiveSchedule;
   /** Cloudflare route reader. Omit it and route reads report off, while route refresh answers 404. */
@@ -125,16 +127,18 @@ async function serveStatic(webRoot: string, pathname: string, res: ServerRespons
 
 const MAX_BODY = 4096;
 
-async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, runner: Runner | null, research: ResearchSchedule | undefined, changelog: HubOptions["changelog"], discoverModel: ModelRunner | undefined): Promise<void> {
+async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, runner: Runner | null, research: ResearchSchedule | undefined, changelog: HubOptions["changelog"], discoverModel: ModelRunner | undefined, scans: ScanSchedule | undefined): Promise<void> {
   const m = /^\/api\/proposals\/(\d+)$/.exec(url.pathname);
   const jobId = /^\/api\/jobs\/(\d+)\/stop$/.exec(url.pathname);
   const creating = url.pathname === "/api/jobs";
+  const scanning = url.pathname === "/api/scans/run";
   const refreshing = url.pathname === "/api/research/refresh";
   const refreshingChangelog = url.pathname === "/api/changelog/refresh";
   const discovering = url.pathname === "/api/dependencies/discover";
+  if (scanning && !scans) return json(res, 404, { error: "no such route" });
   if (refreshing && !research) return json(res, 404, { error: "no such route" });
   if (!runner && (creating || jobId)) return json(res, 404, { error: "no such route" });
-  if (!m && !(runner && (jobId || creating)) && !refreshing && !refreshingChangelog && !discovering) return json(res, 405, { error: "read only" });
+  if (!m && !(runner && (jobId || creating)) && !refreshing && !refreshingChangelog && !discovering && !scanning) return json(res, 405, { error: "read only" });
   const origin = req.headers.origin;
   if (origin !== undefined && !hostAllowed(URL.canParse(origin) ? new URL(origin).host : undefined)) return json(res, 403, { error: "cross-origin request refused" });
   if (!(req.headers["content-type"] ?? "").startsWith("application/json")) return json(res, 415, { error: "content type must be application/json" });
@@ -144,6 +148,14 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
     if (raw.length > MAX_BODY) return json(res, 413, { error: "body too large" });
   }
   try {
+    if (scanning && scans) {
+      const body: unknown = JSON.parse(raw || "{}");
+      if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("body must be an object");
+      const machineId = (body as { machineId?: unknown }).machineId;
+      if (machineId !== undefined && typeof machineId !== "string") throw new Error("machineId must be a string");
+      const result = scans.runNow(machineId);
+      return result.started ? json(res, 202, result.status) : json(res, 409, { error: result.reason });
+    }
     if (discovering) {
       const body: unknown = JSON.parse(raw);
       if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length) throw new Error("body must be {}");
@@ -200,12 +212,12 @@ export function createHub(options: HubOptions): Server {
   const unsubscribeAlertsLive = options.live?.subscribeStored((read) => alerts.evaluate(read.at, read.machineId));
   const unsubscribeAlertsEdge = options.cloudflare?.subscribe(() => alerts.evaluate(new Date().toISOString()));
   const unsubscribeAlertsReads = subscribeServiceReads(db, (machineId, at) => alerts.evaluate(at, machineId));
-  const deps = options.jobs ? { ...options.jobs } : null;
+  const deps = options.jobs ? { ...options.jobs, get machines() { return options.jobs!.machines; } } : null;
   if (deps && !deps.resolveDownload) deps.resolveDownload = createDownloadResolver(db, deps, options.downloads);
   const runner = deps ? new Runner(db, deps) : null;
   const protectedFile = protectedFileReader(options.control && options.control.protectedPath || options.protectedPath || ".scout-data/protected.json");
   let controlPort: number | undefined;
-  const controlRunner = options.control === false ? null : new ControlRunner(db, { machines: deps?.machines ?? [], ...(options.protectedPath ? { protectedPath: options.protectedPath } : {}), ...(options.tunnelHostsPath ? { tunnelHostsPath: options.tunnelHostsPath } : {}), ...options.control, stacksPath, context: { machineId: hubMachineId(), pid: process.pid, parentPid: process.ppid, ...(options.control ? options.control.context : {}) } });
+  const controlRunner = options.control === false ? null : new ControlRunner(db, { ...(options.protectedPath ? { protectedPath: options.protectedPath } : {}), ...(options.tunnelHostsPath ? { tunnelHostsPath: options.tunnelHostsPath } : {}), ...options.control, get machines() { return options.control ? options.control.machines : deps?.machines ?? []; }, stacksPath, context: { machineId: hubMachineId(), pid: process.pid, parentPid: process.ppid, ...(options.control ? options.control.context : {}) } });
   const control = { runner: controlRunner, protectedFile, context: () => controlRunner?.context() ?? { machineId: hubMachineId(), pid: process.pid, parentPid: process.ppid, ...(controlPort !== undefined ? { port: controlPort } : {}), config: protectedFile().config } };
   const downloadKinds = deps?.resolveDownload ? createDownloadKinds(db, deps.resolveDownload) : null;
   const hostAllowed = (host: string | undefined): boolean => (access ? host === access.config.host : isLoopbackHost(host));
@@ -242,7 +254,7 @@ export function createHub(options: HubOptions): Server {
     if (url.pathname === "/api/listeners" || url.pathname === "/api/services" || url.pathname.startsWith("/api/services/")) {
       return servicesApi(db, req, url, res, hostAllowed, json, options.live, options.streamHeartbeatMs ?? 15_000, options.cloudflare, options.descriptions, control, alerts, recipes, health, registries, options.watch, provenance);
     }
-    if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel);
+    if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel, options.scans);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");
     try {
       if (url.pathname === "/api/changelog") {
@@ -252,6 +264,7 @@ export function createHub(options: HubOptions): Server {
         const summary = changelogSummaryFor(db, packageId, version);
         return summary ? json(res, 200, { summary: summary.summary, sourceUrl: summary.sourceUrl, model: summary.model, createdAt: summary.createdAt }) : json(res, 404, { error: "no changelog summary" });
       }
+      if (options.scans && url.pathname === "/api/scans") return json(res, 200, { machines: options.scans.status(), intervalSeconds: options.scans.intervalSeconds() });
       if (options.research && url.pathname === "/api/research/status") return json(res, 200, options.research.status());
       if (url.pathname === "/api/resources") { options.meters?.touch(); return json(res, 200, { ...resourcesResponse(db), intervalSeconds: options.meters?.intervalSeconds() ?? null }); }
       if (url.pathname === "/api/summary") return json(res, 200, summaryResponse(db));
@@ -310,6 +323,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { alerts.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { alerts.stop(); options.scans?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

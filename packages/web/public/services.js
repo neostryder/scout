@@ -182,7 +182,7 @@ export function createServicesView(root) {
   }
   function paintAtlas() { renderDiagram(atlas, state.machines, state.listeners, (machine, listener) => { change("machine", machine.id); listener ? openListener(listener) : openMachine(machine); }, state.routes, state.edge, openRoute, showDomains, state.edgeOverview.domains); }
   function paintLive() {
-    const problems = state.machines.filter((machine) => machine.live.state !== "fresh");
+    const problems = state.machines.filter((machine) => machine.live.state !== "fresh" && machine.live.state !== "paused");
     const cadences = [...new Set(state.machines.map((machine) => `${machine.hub ? machine.name : "Remote machines"} ${elapsedTime(machine.live.cadenceMs)}`))].join(", ");
     status.className = `live-pill ${problems.some((machine) => machine.live.state === "unreachable") ? "unreachable" : state.livePaused || problems.length ? "stale" : "fresh"}`;
     status.replaceChildren(h("span", { class: `state-dot ${state.livePaused ? "stale" : "fresh"}` }), `${state.livePaused ? "live updates paused" : `live: ${cadences || "connecting"}`}${problems.length ? ` - ${problems.map((machine) => `${machine.name} ${stateLabel(machine.live.state).toLowerCase()}`).join(", ")}` : ""}`);

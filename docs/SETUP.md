@@ -37,6 +37,18 @@ pnpm install --frozen-lockfile
 
 Run `pnpm test` if you want to confirm the install. The tests use recorded fixtures and never touch your machines.
 
+## Catalog scan schedule and machine pause
+
+A hub started with `--production` or `--schedule` scans your machines into the catalog every 6 hours, so you no longer need to run `node packages/cli/src/scan.ts` yourself. The first scans start 3 minutes after the hub starts. From then on, each enabled host is scanned once its last scan is older than the interval, one host at a time and at below-normal priority, so a slow scan does not hold up the hub. Hosts that have never been scanned go first. Running guests such as colima are scanned along with their host. Restarting the hub does not rescan a host that was scanned recently, because the schedule reads the last scan time from the catalog.
+
+To change the interval, start the hub with `--scan-interval HOURS`, using a whole number from 1 to 168. To turn off automatic scans and keep the rest of the scheduled work, add `--no-scan-schedule`. `--no-schedule` turns off all scheduled work, scans included.
+
+A scan counts as failed if it does not exit cleanly or if the host's `last_scan` in the catalog did not move past the scan's start time. An unreachable host fails this way, since its scan finishes without updating `last_scan`. A failed scan is retried after 1 hour, or after the interval if you set it shorter than that. A scan that runs for 45 minutes is stopped.
+
+To see where things stand, call `GET /api/scans`. It returns `intervalSeconds` and, for each machine in `machines`, its `machineId`, `lastScanAt`, `lastRunAt`, `lastOk`, `lastError`, `nextDueAt`, and `running`. To scan right away, send `POST /api/scans/run` with `{}` for every enabled host or `{ "machineId": "mac-mini" }` for one. It answers 202 with the status list, 409 if a scan is already running, and 400 if the machine is unknown or paused. Manual scans work even with automatic scans turned off. The request needs a JSON body and must come from the same origin, and in production it also has to pass Cloudflare Access.
+
+To stop Scout from contacting a remote machine, add `"paused": true` to its entry in `machines.json`. Scout then makes no connection to it at all: no scans, live reads, meters, outage checks, jobs, or control actions. The machine keeps its catalog rows and history. The Services page shows it as Paused, and the Resources page hides its saved meter card. To resume it, remove the flag or set it to false. Its state shows as `unknown` until the next probe. You do not need to restart the hub. Scans pick up the change within a minute, live reads on their next cycle, and jobs and control actions on the next request. Anything already running when you pause a machine can finish. The flag has no effect on the machine that runs the hub.
+
 ## Describe your machines
 
 Copy the example and edit it:

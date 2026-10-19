@@ -82,7 +82,8 @@ export function buildHealthTargets(db: Db, tunnelHosts: Record<string, string> =
     const key = `listener:${hubMachineId()}:${row.port}`;
     targets.set(key, { key, kind: "listener", label: `${row.processName ?? row.containerName ?? "listener"}:${row.port}`, machineId: hubMachineId(), port: row.port, url: `http://127.0.0.1:${row.port}/` });
   }
-  return [...targets.values()];
+  const paused = new Set((db.prepare("SELECT id FROM machines WHERE state = 'paused'").all() as { id: string }[]).map((row) => row.id));
+  return [...targets.values()].filter((target) => target.machineId === null || !paused.has(target.machineId));
 }
 
 export function syncHealthTargets(db: Db, now: string, tunnelHosts: Record<string, string> = {}): HealthIdentity[] {

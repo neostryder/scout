@@ -245,7 +245,7 @@ export function exposureLabel(value) {
 }
 
 export function stateLabel(value) {
-  return ({ running: "Running", stopped: "Stopped", disabled: "Disabled", other: "Other", fresh: "Live", stale: "Stale", unreachable: "Unreachable", never: "Never read" })[value] || "Unknown";
+  return ({ running: "Running", stopped: "Stopped", disabled: "Disabled", other: "Other", fresh: "Live", stale: "Stale", unreachable: "Unreachable", never: "Never read", paused: "Paused" })[value] || "Unknown";
 }
 
 export function serviceRow(row) {

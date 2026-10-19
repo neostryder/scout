@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS machines (
   parent_id   TEXT REFERENCES machines(id),     -- host of a guest
   guest_type  TEXT,                             -- colima | wsl | sbx | docker
   address     TEXT,
-  state       TEXT NOT NULL DEFAULT 'unknown',  -- reachable | unreachable | stopped | unknown
+  state       TEXT NOT NULL DEFAULT 'unknown',  -- reachable | unreachable | stopped | unknown | paused
   last_seen   TEXT,
   last_scan   TEXT
 );
