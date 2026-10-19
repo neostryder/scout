@@ -254,9 +254,12 @@ export function watchContext(db: Db, services: Service[]): WatchContext {
   return { services, routeListeners, routePorts };
 }
 
-/** A service meant to run all the time: a Windows service that starts automatically or a launchd job that launchd keeps alive. Scheduled tasks and on-demand services run and stop by design. */
+// An updater registered for automatic start checks for a new version and exits, so a stopped one is how it normally rests.
+const UPDATER = /updat(?:e|er)/i;
+
+/** A service meant to run all the time: a Windows service that starts automatically or a launchd job that launchd keeps alive. Scheduled tasks, on-demand services, and updaters run and stop by design. */
 function staysUpService(row: Service): boolean {
-  if (row.kind === "windows-service") return row.startMode === "auto" || row.startMode === "boot";
+  if (row.kind === "windows-service") return (row.startMode === "auto" || row.startMode === "boot") && !UPDATER.test(`${row.name} ${row.displayName ?? ""}`);
   if (row.kind === "launchd") return row.keepAlive === true;
   if (row.kind === "systemd") return row.startMode === "auto" && row.keepAlive === true;
   return false;
@@ -306,9 +309,12 @@ export function serviceObservations(db: Db, machineId: string, config: WatchConf
     if (!forced(serviceWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
     add(serviceWatchKey(row), `${row.displayName ?? row.name} on ${row.machineName}`, row.goneAt === null && row.state === "running", row.goneAt ? "The service is gone." : `The service state is ${row.state}.`);
   }
-  for (const row of listListeners(db, { machine: machineId }, descriptions)) {
+  const listeners = listListeners(db, { machine: machineId }, descriptions);
+  // The watch key includes the owner's name, and Windows reports an owner as process 0 ("Idle") now and then, so a row can end while its port keeps listening under another name. Only a port with no live row has gone down.
+  const listening = new Set(listeners.filter((row) => row.goneAt === null).map((row) => `${row.port}/${row.protocol}`));
+  for (const row of listeners) {
     if (!forced(listenerWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
-    add(listenerWatchKey(row), `Port ${row.port} (${row.processName ?? row.containerName ?? "unknown"}) on ${row.machineName}`, row.goneAt === null, "Nothing is listening on the port.", listenerEndpoint(row));
+    add(listenerWatchKey(row), `Port ${row.port} (${row.processName ?? row.containerName ?? "unknown"}) on ${row.machineName}`, row.goneAt === null || listening.has(`${row.port}/${row.protocol}`), "Nothing is listening on the port.", listenerEndpoint(row));
   }
   return out;
 }

@@ -229,7 +229,7 @@ test("scans and live reads outside the cadence publish alerts through the hub", 
 test("evaluations requested together run once with every machine named", async () => {
   const { HubAlerts } = await import("../src/alerts.ts");
   const calls: { now: string; machineId?: string; machineIds?: string[] }[] = [];
-  const alerts = new HubAlerts(openCatalog(":memory:"), { coalesceMs: 20, evaluate: (_db, now, options) => { calls.push({ now, ...(options.machineId ? { machineId: options.machineId } : {}), ...(options.machineIds ? { machineIds: options.machineIds } : {}) }); return []; }, alertsPath: "fixtures/alerts/missing.json" });
+  const alerts = new HubAlerts(openCatalog(":memory:"), { coalesceMs: 20, evaluate: (_db, now, options) => { calls.push({ now, ...(options?.machineId ? { machineId: options.machineId } : {}), ...(options?.machineIds ? { machineIds: options.machineIds } : {}) }); return []; }, alertsPath: "fixtures/alerts/missing.json" });
   alerts.evaluate(T, "eru");
   alerts.evaluate(T2, "bilbo");
   alerts.evaluate(T2);

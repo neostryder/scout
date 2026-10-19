@@ -239,6 +239,28 @@ test("only items meant to stay up are watched: automatic services, launchd keep-
   assert.ok(serviceObservations(db, "gm", forced, stamp(1)).some((obs) => obs.label === "Port 8004 (helper) on Server"));
 });
 
+test("an automatic updater service is not watched because it stops on its own", (t) => {
+  const db = seed(t);
+  const updater: ServiceFact = { ...service, name: "GoogleUpdaterService157.0.8089.0", displayName: "Google Updater Service (GoogleUpdaterService157.0.8089.0)", program: "C:/Updater/updater.exe", pid: 55 };
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [service, updater] }, stamp(0));
+  assert.deepEqual(serviceObservations(db, "gm", defaultWatchConfig(), stamp(1)).map((obs) => obs.label), ["Worker on Server"]);
+  const forced = parseWatchConfig({ items: { [serviceWatchKey({ machineId: "gm", kind: "windows-service", domain: "system", name: updater.name } as never)]: true } });
+  assert.equal(serviceObservations(db, "gm", forced, stamp(1)).length, 2);
+});
+
+test("a port that keeps listening under another owner name is not an outage for the row that ended", (t) => {
+  const db = seed(t);
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [service] }, stamp(0));
+  const fact = (processName: string) => ({ port: 8001, protocol: "tcp" as const, address: "0.0.0.0", bind: "all" as const, pid: 42, processName, processPath: "C:/Tools/worker.exe", container: null });
+  recordListeners(db, "gm", { origin: "listeners", status: "ok", facts: [fact("Idle")] }, stamp(0));
+  recordListeners(db, "gm", { origin: "listeners", status: "ok", facts: [fact("worker")] }, stamp(1));
+  const live = (): Observation[] => serviceObservations(db, "gm", parseWatchConfig({ items: { "listener:gm:8001:worker": true, "listener:gm:8001:Idle": true } }), stamp(2)).filter((obs) => obs.label.startsWith("Port 8001"));
+  assert.equal(live().length, 2);
+  assert.ok(live().every((obs) => obs.ok), "the port is still listening, so no row reports down");
+  recordListeners(db, "gm", { origin: "listeners", status: "ok", facts: [] }, stamp(3));
+  assert.ok(live().every((obs) => !obs.ok), "with nothing listening, both rows report down");
+});
+
 test("a hostname that never answered a probe is not watched, and one that answered once is", (t) => {
   const db = seed(t);
   const put = db.prepare("INSERT INTO health_targets (key, kind, label, machine_id, port, url, state, failures, last_ok_at, last_probe_at, last_status, last_error) VALUES (?, 'domain', ?, NULL, NULL, ?, 'failing', 1, ?, ?, 530, 'HTTP 530')");
