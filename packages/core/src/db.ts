@@ -3,9 +3,10 @@ import { SCHEMA_SQL, SCHEMA_VERSION, V2_PACKAGE_COLUMNS, JOB_COLUMNS, SERVICE_CO
 
 export type Db = DatabaseSync;
 
-/** Open (creating if needed) the catalog. Pass ":memory:" for tests. */
-export function openCatalog(path: string): Db {
+/** Open (creating if needed) the catalog. Pass ":memory:" for tests. A writer waits up to `busyTimeoutMs` for another connection's write lock instead of failing at once (the hub and a scan child share the file). */
+export function openCatalog(path: string, options: { busyTimeoutMs?: number } = {}): Db {
   const db = new DatabaseSync(path);
+  db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.trunc(options.busyTimeoutMs ?? 5000))}`);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   migrateToV2(db);

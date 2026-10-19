@@ -33,7 +33,8 @@ const wanted = args.filter((a, i) => !a.startsWith("--") && !(args[i - 1] ?? "")
 
 const config = { machines: configureHubMachine(`${root}/machines.json`) as unknown as MachineConfig[] };
 mkdirSync(dirname(dbPath), { recursive: true });
-const db = openCatalog(dbPath);
+// The hub writes to the same file while a scheduled scan runs; this child can afford to wait out its locks.
+const db = openCatalog(dbPath, { busyTimeoutMs: 120_000 });
 const alerts = { loadMutes: alertsFileReader(resolve(root, ".scout-data/alerts.json")), tunnelHosts: loadTunnelHosts(resolve(root, ".scout-data/tunnel-hosts.json")) };
 
 async function homebrewPrefixes(m: MachineConfig): Promise<string[]> {
