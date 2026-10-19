@@ -29,6 +29,7 @@ export interface Researched {
   /** ok: the source knows the package (answers may still be empty); notfound: it does not; failed: the answer was unusable. */
   status: "ok" | "notfound" | "failed";
   answers: Answer[];
+  intel?: Record<string, unknown>;
   message?: string;
 }
 
@@ -41,6 +42,8 @@ export interface Researcher {
   /** The request for this package, or null when this source cannot be asked about it (a third-party tap, an odd name). */
   url(target: ResearchTarget): string | null;
   parse(status: number, body: string, target: ResearchTarget, headers?: ResponseHeaders): Researched;
+  followups?(target: ResearchTarget, body: string): Record<string, string>;
+  combine?(result: Researched, responses: Record<string, { status: number; body: string }>, target: ResearchTarget): Researched;
   extra?(target: ResearchTarget, status: number, body: string): SupportWindow[];
 }
 

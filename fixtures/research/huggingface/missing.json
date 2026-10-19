@@ -1,0 +1,5 @@
+{
+  "url": "https://huggingface.co/api/models/Qwen/Qwen2.5-0.5B-Instruct/revision/scout-fixture-no-such-revision",
+  "status": 404,
+  "body": "{\"error\":\"Invalid rev id: scout-fixture-no-such-revision\"}"
+}

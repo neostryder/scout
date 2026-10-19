@@ -2,6 +2,12 @@
 
 Scout is a pnpm workspace of TypeScript packages that Node 24 runs directly, with no build step. `pnpm test` runs `node --test` in every package and `pnpm typecheck` runs `tsc` over the workspace. Code rules are in [CONVENTIONS.md](../CONVENTIONS.md).
 
+## Cogitator models
+
+`adapters/cogitator-models` inventories engine paths and media folders from Cogitator's standard data directory on each host. The probes emit selected config fields, optional lock and catalog records, sidecars, and file metadata. They omit peer settings and key paths, never read secret files, never hash weights, and read only the GGUF header from a model file. Traversal stops at depth 4, 2000 files, or 20 seconds; incomplete output becomes a partial scan.
+
+The Hugging Face researcher stores revision assertions and source intel with a 24-hour cache. It queries repository metadata, quantizations, fine-tunes, and the publisher's family matches in sequence, at least 250 ms apart. Successor candidates include the rule that identified them and remain possible successors. Scout never downloads or changes model weights.
+
 ## Packages
 
 | Package | Holds |

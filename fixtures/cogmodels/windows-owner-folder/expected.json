@@ -1,0 +1,35 @@
+{
+  "sourceKind": "cogmodels",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "model",
+      "kind": "model",
+      "key": "hf:handy-computer/Qwen3-ASR-1.7B-gguf:Q8_0",
+      "name": "Qwen3-ASR-1.7B-gguf Q8_0",
+      "version": null,
+      "location": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/owner-folder/Cogitator/data/models/handy-computer__Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf",
+      "details": {
+        "quant": "Q8_0",
+        "format": "gguf",
+        "family": "speech",
+        "sizeBytes": 8,
+        "modifiedAt": "2026-10-01T00:00:00.000Z",
+        "source": "hf:handy-computer/Qwen3-ASR-1.7B-gguf",
+        "sourceFrom": "path",
+        "revision": null,
+        "sha256": null,
+        "engineIds": [
+          "qwen3-asr-1.7b"
+        ],
+        "roles": [
+          "transcribe"
+        ],
+        "companions": []
+      },
+      "publisher": "handy-computer",
+      "homepage": "https://huggingface.co/handy-computer/Qwen3-ASR-1.7B-gguf"
+    }
+  ]
+}

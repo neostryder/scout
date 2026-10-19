@@ -1,0 +1,81 @@
+{
+  "sourceKind": "cogmodels",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "model",
+      "kind": "model",
+      "key": "hf:example/image-checkpoint",
+      "name": "image-checkpoint",
+      "version": "bbbbbbbbbbbb",
+      "location": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/media/Stability Matrix/Data/Models/Checkpoints/example.safetensors",
+      "details": {
+        "quant": null,
+        "format": "safetensors",
+        "family": "image",
+        "sizeBytes": 4,
+        "modifiedAt": "2026-10-01T00:00:00.000Z",
+        "source": "hf:example/image-checkpoint",
+        "sourceFrom": "sidecar",
+        "revision": null,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "engineIds": [],
+        "roles": [],
+        "companions": []
+      },
+      "publisher": "example",
+      "homepage": "https://huggingface.co/example/image-checkpoint"
+    },
+    {
+      "ecosystem": "model",
+      "kind": "model",
+      "key": "local:custom",
+      "name": "custom",
+      "version": null,
+      "location": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/media/Stability Matrix/Data/Models/LoRA/custom.bin",
+      "details": {
+        "quant": null,
+        "format": "other",
+        "family": "image",
+        "sizeBytes": 4,
+        "modifiedAt": "2026-10-01T00:00:00.000Z",
+        "source": null,
+        "sourceFrom": "none",
+        "revision": null,
+        "sha256": null,
+        "engineIds": [],
+        "roles": [],
+        "companions": []
+      }
+    },
+    {
+      "ecosystem": "model",
+      "kind": "model",
+      "key": "local:MLX",
+      "name": "MLX",
+      "version": null,
+      "location": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/media/Stability Matrix/Data/Models/MLX",
+      "details": {
+        "quant": null,
+        "format": "mlx",
+        "family": "other",
+        "sizeBytes": 4,
+        "modifiedAt": "2026-10-19T06:44:43.970Z",
+        "source": null,
+        "sourceFrom": "none",
+        "revision": null,
+        "sha256": null,
+        "engineIds": [],
+        "roles": [],
+        "companions": [
+          {
+            "path": "C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/media/Stability Matrix/Data/Models/MLX/model.safetensors",
+            "sizeBytes": 4,
+            "modifiedAt": "2026-10-01T00:00:00.000Z"
+          }
+        ]
+      }
+    }
+  ]
+}

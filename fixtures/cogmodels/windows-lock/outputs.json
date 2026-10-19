@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-CONFIG---\r\n[[engines]]\r\nid = \"gemma-4-e4b-it-qat\"\r\nargs = [\"-m\", \"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf\", \"--mmproj\", \"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/mmproj-BF16.gguf\"]\r\n[[roles]]\r\nname = \"describe\"\r\nchain = [\"gemma-4-e4b-it-qat\"]\r\n---SCOUT-META C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/lock.json---\r\n{\"models\":[{\"name\":\"gemma\",\"source\":\"hf:unsloth/gemma-4-E4B-it-qat-GGUF\",\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"size\":8,\"trust\":\"pinned\",\"path\":\"C:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf\",\"catalog\":\"gemma-4-e4b-it-qat\"}]}\r\n---SCOUT-END---\r\n---SCOUT-FILE---\nC:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf\t8\t2026-10-01T00:00:00.0000000Z\r\n---SCOUT-FILE---\nC:/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/windows/lock/Cogitator/models/mmproj-BF16.gguf\t13\t2026-10-01T00:00:00.0000000Z\r\n---SCOUT-DONE---\r\n",
+    "stderr": ""
+  }
+}

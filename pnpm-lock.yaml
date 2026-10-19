@@ -128,6 +128,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  adapters/cogitator-models:
+    dependencies:
+      '@scout/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   adapters/deps:
     dependencies:
       '@scout/core':
@@ -289,6 +295,9 @@ importers:
       '@scout/adapter-aiuse':
         specifier: workspace:*
         version: link:../../adapters/aiuse
+      '@scout/adapter-cogitator-models':
+        specifier: workspace:*
+        version: link:../../adapters/cogitator-models
       '@scout/adapter-deps':
         specifier: workspace:*
         version: link:../../adapters/deps

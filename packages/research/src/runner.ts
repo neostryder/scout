@@ -1,4 +1,4 @@
-import { packagesDue, recordResearch, recordSupportWindows, type Db, type SupportWindow } from "@scout/core";
+import { packagesDue, putIntel, recordResearch, recordSupportWindows, type Db, type SupportWindow } from "@scout/core";
 import { githubRateLimit } from "./github.ts";
 import { fetchPublicPage } from "./fetch.ts";
 import { vendorEvidence, vendorVersion } from "./vendor.ts";
@@ -49,6 +49,15 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
      WHERE p.id = ? AND i.removed_at IS NULL ORDER BY i.last_seen DESC, i.id DESC LIMIT 1`,
   );
   let githubStopped = false;
+  let huggingfaceStopped = false;
+  let huggingfaceLastRequest = 0;
+  const pacedFetch: Fetcher = async (url, init) => {
+    while (Date.now() - huggingfaceLastRequest < 250) {
+      await new Promise((resolve) => setTimeout(resolve, 250 - (Date.now() - huggingfaceLastRequest)));
+    }
+    huggingfaceLastRequest = Date.now();
+    return doFetch(url, init);
+  };
   for (const r of researchers) {
     const s: SourceSummary = { source: r.source, asked: 0, ok: 0, notfound: 0, failed: 0, skipped: 0, answers: 0 };
     summaries.push(s);
@@ -68,6 +77,10 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
           s.skipped++;
           continue;
         }
+        if (r.source === "huggingface" && huggingfaceStopped) {
+          s.skipped++;
+          continue;
+        }
         const url = r.url(t);
         if (url === null) {
           s.skipped++;
@@ -84,10 +97,16 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
             const token = (options.env ?? process.env)["SCOUT_GITHUB_TOKEN"];
             if (token) headers["authorization"] = `Bearer ${token}`;
           }
+          if (r.source === "huggingface") {
+            const env = options.env ?? process.env;
+            const token = env["HF_TOKEN"] || env["HUGGINGFACE_HUB_TOKEN"];
+            if (token) headers["authorization"] = `Bearer ${token}`;
+          }
+          const request = r.source === "huggingface" ? pacedFetch : doFetch;
           const page = r.source === "vendor" ? await fetchPublicPage(doFetch, url, timeoutMs, { accept: "text/html" }) : null;
-          const res = page ? { status: page.status, text: async () => page.body, headers: undefined } : await doFetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+          const res = page ? { status: page.status, text: async () => page.body, headers: undefined } : await request(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
           const responseHeaders: ResponseHeaders = {};
-          for (const name of ["x-ratelimit-remaining", "x-ratelimit-reset"]) {
+          for (const name of ["x-ratelimit-remaining", "x-ratelimit-reset", "retry-after"]) {
             const value = res.headers?.get(name);
             if (value !== undefined && value !== null) responseHeaders[name] = value;
           }
@@ -98,7 +117,20 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
           } else {
             const body = await res.text();
             result = r.parse(res.status, body, t, responseHeaders);
+            if (r.source === "huggingface" && res.status === 429) huggingfaceStopped = true;
             if (result.status === "ok") {
+              if (r.followups && r.combine) {
+                const responses: Record<string, { status: number; body: string }> = {};
+                for (const [name, nextUrl] of Object.entries(r.followups(t, body))) {
+                  if (r.source === "huggingface" && huggingfaceStopped) break;
+                  try {
+                    const next = await request(nextUrl, { headers, signal: AbortSignal.timeout(timeoutMs) });
+                    responses[name] = { status: next.status, body: await next.text() };
+                    if (r.source === "huggingface" && next.status === 429) huggingfaceStopped = true;
+                  } catch { responses[name] = { status: 0, body: "" }; }
+                }
+                result = r.combine(result, responses, t);
+              }
               windows = r.extra?.(t, res.status, body);
               if (r.source === "vendor" && options.extractVersion && !result.answers.length) {
                 const evidence = vendorEvidence(body);
@@ -113,13 +145,14 @@ export async function runResearch(db: Db, researchers: Researcher[], options: Ru
           result = { status: "failed" as const, answers: [], message: "request failed" };
         }
         recordResearch(db, t.id, r.source, result.status, result.answers, result.message ?? null, now.toISOString());
+        if ("intel" in result && result.intel) putIntel(db, t.id, r.source, result.intel, now.toISOString());
         if (result.status === "ok" && windows) recordSupportWindows(db, t.id, windows, now.toISOString());
         s[result.status]++;
         s.answers += result.answers.length;
         options.onProgress?.(`${r.source} ${t.key}: ${result.status}${result.answers[0] ? ` ${result.answers[0].version}` : ""}`);
       }
     };
-    await Promise.all(Array.from({ length: r.source === "github" || r.source === "vendor" ? 1 : concurrency }, work));
+    await Promise.all(Array.from({ length: r.source === "github" || r.source === "vendor" || r.source === "huggingface" ? 1 : concurrency }, work));
   }
   return summaries;
 }

@@ -1,0 +1,33 @@
+{
+  "sourceKind": "cogmodels",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "model",
+      "kind": "model",
+      "key": "hf:mradermacher/Gemma-4-12B-uncensored-bf16-GGUF:Q5_K_M",
+      "name": "Gemma-4-12B-uncensored-bf16-GGUF Q5_K_M",
+      "version": null,
+      "location": "/c/Repositories/_worktrees/scout-models/.scout-data/cogmodels-fixtures/linux/lmstudio/.lmstudio/models/mradermacher/Gemma-4-12B-uncensored-bf16-GGUF/Gemma-4-12B-uncensored-bf16.Q5_K_M.gguf",
+      "details": {
+        "quant": "Q5_K_M",
+        "format": "gguf",
+        "family": "llm",
+        "sizeBytes": 8,
+        "modifiedAt": "2026-10-01T00:00:00.000Z",
+        "source": "hf:mradermacher/Gemma-4-12B-uncensored-bf16-GGUF",
+        "sourceFrom": "path",
+        "revision": null,
+        "sha256": null,
+        "engineIds": [
+          "gemma-4-12b"
+        ],
+        "roles": [],
+        "companions": []
+      },
+      "publisher": "mradermacher",
+      "homepage": "https://huggingface.co/mradermacher/Gemma-4-12B-uncensored-bf16-GGUF"
+    }
+  ]
+}
