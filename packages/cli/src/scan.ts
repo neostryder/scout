@@ -21,6 +21,7 @@ interface MachineConfig {
   projectRoots?: string[];
   /** Git clone folders. Absent means the home defaults plus each project root. */
   cloneRoots?: string[];
+  extraCloneRoots?: string[];
 }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");

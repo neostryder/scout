@@ -17,6 +17,18 @@ test("an explicit cloneRoots list replaces the defaults", () => {
   assert.deepEqual(cloneRootsFor({ cloneRoots: ["~/_resources"] }), ["~/_resources"]);
 });
 
+test("extraCloneRoots adds folders to the defaults or to an explicit list, without duplicates", () => {
+  assert.deepEqual(cloneRootsFor({ extraCloneRoots: ["~/_resources", "~/src"] }), [...defaults, "~/_resources"]);
+  assert.deepEqual(cloneRootsFor({ cloneRoots: ["~/work"], extraCloneRoots: ["~/_resources"] }), ["~/work", "~/_resources"]);
+  assert.deepEqual(cloneRootsFor({ cloneRoots: [], extraCloneRoots: [] }), []);
+});
+
+test("extraCloneRoots must be an array of strings", () => {
+  assert.doesNotThrow(() => assertCloneRoots({ extraCloneRoots: ["~/_resources"] }));
+  assert.throws(() => assertCloneRoots({ extraCloneRoots: "~/_resources" }), /extraCloneRoots must be an array of strings/);
+  assert.throws(() => assertCloneRoots({ extraCloneRoots: [2] }), /extraCloneRoots must be an array of strings/);
+});
+
 test("cloneRoots must be an array of strings", () => {
   assert.doesNotThrow(() => assertCloneRoots({}));
   assert.doesNotThrow(() => assertCloneRoots({ cloneRoots: ["~/src"] }));

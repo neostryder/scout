@@ -10,6 +10,8 @@ export interface MachineConfig extends PlanMachine {
   paused?: boolean;
   /** Git clone folders. Absent means the home defaults plus each project root. */
   cloneRoots?: string[];
+  /** Folders added to the clone roots, whether they are the defaults or an explicit cloneRoots list. */
+  extraCloneRoots?: string[];
 }
 export interface ResolvedDownload { preview: DownloadPlan; download: ConfirmedDownload | null; transport: Transport | null }
 export interface RunnerDeps { exec?: Exec; machines: MachineConfig[]; updateTimeoutMs?: number; checkTimeoutMs?: number; resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null> }
@@ -37,23 +39,27 @@ export function loadAllMachines(path: string): MachineConfig[] {
 const DEFAULT_CLONE_ROOTS = ["Repositories", "repos", "src", "code", "git", "Projects", "projects", "dev"];
 
 // An empty list is a choice to scan nothing, so a present key must not fall through to the defaults.
-export function cloneRootsFor(machine: { cloneRoots?: string[]; projectRoots?: string[] }): string[] {
-  if (machine.cloneRoots !== undefined) return machine.cloneRoots.slice();
-  const roots = DEFAULT_CLONE_ROOTS.map((name) => `~/${name}`);
+export function cloneRootsFor(machine: { cloneRoots?: string[]; extraCloneRoots?: string[]; projectRoots?: string[] }): string[] {
+  const roots = machine.cloneRoots !== undefined ? machine.cloneRoots.slice() : DEFAULT_CLONE_ROOTS.map((name) => `~/${name}`);
   const seen = new Set(roots);
-  for (const entry of machine.projectRoots ?? []) {
-    const base = entry.endsWith("/*") ? entry.slice(0, -2) : entry;
-    if (base.length === 0 || seen.has(base)) continue;
+  const add = (base: string): void => {
+    if (base.length === 0 || seen.has(base)) return;
     seen.add(base);
     roots.push(base);
+  };
+  if (machine.cloneRoots === undefined) {
+    for (const entry of machine.projectRoots ?? []) add(entry.endsWith("/*") ? entry.slice(0, -2) : entry);
   }
+  for (const entry of machine.extraCloneRoots ?? []) add(entry);
   return roots;
 }
 
-export function assertCloneRoots(machine: { cloneRoots?: unknown }): void {
-  const roots = machine.cloneRoots;
-  if (roots === undefined) return;
-  if (!Array.isArray(roots) || roots.some((entry) => typeof entry !== "string")) throw new Error("cloneRoots must be an array of strings");
+export function assertCloneRoots(machine: { cloneRoots?: unknown; extraCloneRoots?: unknown }): void {
+  for (const key of ["cloneRoots", "extraCloneRoots"] as const) {
+    const roots = machine[key];
+    if (roots === undefined) continue;
+    if (!Array.isArray(roots) || roots.some((entry) => typeof entry !== "string")) throw new Error(`${key} must be an array of strings`);
+  }
 }
 
 /** Reads machines.json and makes its local machine the hub, so every module agrees on which machine runs Scout. */
