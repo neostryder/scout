@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { SCHEMA_SQL, SCHEMA_VERSION, V2_PACKAGE_COLUMNS, JOB_COLUMNS, SERVICE_COLUMNS } from "./schema.ts";
+import { SCHEMA_SQL, SCHEMA_VERSION, V2_PACKAGE_COLUMNS, JOB_COLUMNS, SERVICE_COLUMNS, COMPETITOR_ADD_COLUMNS, COMPETITOR_RUN_ADD_COLUMNS } from "./schema.ts";
 
 export type Db = DatabaseSync;
 
@@ -34,6 +34,7 @@ export function openCatalog(path: string, options: { busyTimeoutMs?: number } = 
   }
   const hadFts = db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'packages_fts'").get() !== undefined;
   db.exec(SCHEMA_SQL);
+  migrateCompetitors(db);
   const descriptionColumns = db.prepare("PRAGMA table_info(descriptions)").all() as { name: string }[];
   if (!descriptionColumns.some((column) => column.name === "input_hash")) db.exec("ALTER TABLE descriptions ADD COLUMN input_hash TEXT");
   // An existing catalog gains the index here; index its rows once.
@@ -105,6 +106,21 @@ function migrateJobs(db: Db): void {
   const have = new Set((db.prepare("PRAGMA table_info(jobs)").all() as { name: string }[]).map((c) => c.name));
   for (const def of JOB_COLUMNS) {
     if (!have.has(def.split(" ")[0] as string)) db.exec(`ALTER TABLE jobs ADD COLUMN ${def}`);
+  }
+}
+
+/** Catalogs created before mirror sync have no sync, pending, or trigger columns. SQLite adds a column in place. */
+function migrateCompetitors(db: Db): void {
+  addMissingColumns(db, "competitors", COMPETITOR_ADD_COLUMNS);
+  addMissingColumns(db, "competitor_runs", COMPETITOR_RUN_ADD_COLUMNS);
+}
+
+function addMissingColumns(db: Db, table: string, defs: readonly string[]): void {
+  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)) return;
+  const have = new Set((db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((column) => column.name));
+  for (const def of defs) {
+    const name = def.split(" ")[0] as string;
+    if (!have.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${def}`);
   }
 }
 

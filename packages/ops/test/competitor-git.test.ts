@@ -4,8 +4,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listCompetitorRuns, openCatalog, startPullingRun, syncCompetitors } from "@scout/core";
-import { checkRemote, pullMirror, readRemoteRefs, runCompetitorUpdate, selectLatestTags, spawnGit, supportedRemote, type GitRunner } from "../src/index.ts";
+import { listCompetitorRuns, listCompetitors, openCatalog, startPullingRun, syncCompetitors } from "@scout/core";
+import { checkRemote, pullMirror, readRemoteRefs, runCompetitorUpdate, selectLatestTags, spawnGit, supportedRemote, syncCompetitorMirror, type GitRunner } from "../src/index.ts";
 
 const NOW = "2026-05-20T00:00:00.000Z";
 const FORBIDDEN = /^(reset|clean|checkout|stash|rebase|push|gc)$/;
@@ -207,6 +207,111 @@ test("a fast-forward update advances the mirror and queues the commits, files, a
     assert.match(request.notes, /second/);
     assert.deepEqual(request.pricingFiles, ["plans.md"]);
     assert.equal(request.competitor.remoteUrl.includes("secret"), false);
+    assert.equal(queued[0]?.trigger, "manual");
+    const analysis = queued[0]?.request?.["analysis"] as { changelog: { releaseNotesFound: boolean }; manifestDiff: { path: string; version: { from: string | null; to: string | null } | null }[] };
+    assert.equal(analysis.changelog.releaseNotesFound, true);
+    const manifest = analysis.manifestDiff.find((file) => file.path === "package.json");
+    assert.equal(manifest?.version?.from, "1.0.0");
+    assert.equal(manifest?.version?.to, "1.1.0");
+    const synced = listCompetitors(db, NOW).find((item) => item.id === "acme-tools");
+    assert.equal(synced?.sync.at, NOW);
+    assert.equal(synced?.sync.head, head(mirror));
+    assert.equal(synced?.sync.error, null);
+    assert.equal(synced?.pending, null);
+    db.close();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("sync fast-forwards a clean mirror and records a refusal without moving it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "scout-comp-sync-"));
+  const mirrors = join(root, "mirrors");
+  try {
+    mkdirSync(mirrors);
+    const remote = join(root, "remote.git");
+    const upstream = join(root, "upstream");
+    const mirror = join(mirrors, "acme-tools");
+    git(root, ["-c", "init.defaultBranch=main", "init", "--bare", remote]);
+    git(root, ["clone", remote, upstream]);
+    configure(upstream);
+    writeFileSync(join(upstream, "README.md"), "one\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "first"]);
+    git(upstream, ["push", "-u", "origin", "HEAD"]);
+    git(root, ["clone", remote, mirror]);
+    configure(mirror);
+    writeFileSync(join(upstream, "README.md"), "two\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "second"]);
+    git(upstream, ["push", "origin", "HEAD"]);
+    const orphan = join(mirrors, "orphan");
+    git(root, ["-c", "init.defaultBranch=main", "init", orphan]);
+    configure(orphan);
+    writeFileSync(join(orphan, "README.md"), "one\n");
+    git(orphan, ["add", "."]);
+    git(orphan, ["commit", "-m", "first"]);
+    const db = openCatalog(":memory:");
+    const blank = { org: null, remoteUrl: null, packageUrl: null, dossierDir: null, dossierReviewed: null, flags: [], baseline: null };
+    syncCompetitors(db, [
+      { id: "acme-tools", name: "Acme Tools", org: "Acme", remoteUrl: "https://user:secret@github.com/example/acme-tools", mirrorPath: mirror, packageUrl: null, dossierDir: null, dossierReviewed: null, flags: [], baseline: { version: "1.0.0", commit: "aaa111", at: NOW, source: "mirror" } },
+      { id: "orphan-tool", name: "Orphan Tool", mirrorPath: orphan, ...blank },
+      { id: "plain-tool", name: "Plain Tool", mirrorPath: null, ...blank },
+      { id: "outside-tool", name: "Outside Tool", mirrorPath: upstream, ...blank },
+    ]);
+    db.prepare("UPDATE competitors SET sync_error = ? WHERE id = ?").run("old failure", "acme-tools");
+    const calls: string[][] = [];
+    const ran = recording(calls);
+    const synced = await syncCompetitorMirror(db, "acme-tools", { mirrorRoot: mirrors, now: NOW, git: ran });
+    safeCalls(calls);
+    assert.equal(synced.ok, true);
+    if (synced.ok) assert.equal(synced.head, head(upstream));
+    assert.equal(head(mirror), head(upstream));
+    const row = listCompetitors(db, NOW).find((item) => item.id === "acme-tools");
+    assert.equal(row?.sync.at, NOW);
+    assert.equal(row?.sync.head, head(upstream));
+    assert.equal(row?.sync.error, null);
+    assert.equal(calls.some((args) => args[0] === "fetch" && args.includes("--tags") && args.includes("origin")), true);
+    assert.equal(calls.some((args) => args[0] === "merge" && args.includes("--ff-only")), true);
+    const syncedHead = head(mirror);
+    writeFileSync(join(mirror, "LOCAL.md"), "local\n");
+    git(mirror, ["add", "."]);
+    git(mirror, ["commit", "-m", "local"]);
+    const localHead = head(mirror);
+    writeFileSync(join(upstream, "README.md"), "three\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "third"]);
+    git(upstream, ["push", "origin", "HEAD"]);
+    const diverged = await syncCompetitorMirror(db, "acme-tools", { mirrorRoot: mirrors, now: NOW, git: ran });
+    assert.equal(diverged.ok, false);
+    if (!diverged.ok) assert.equal(diverged.error, "the mirror has local commits; fetched only");
+    assert.equal(head(mirror), localHead);
+    const kept = listCompetitors(db, NOW).find((item) => item.id === "acme-tools");
+    assert.equal(kept?.sync.head, syncedHead);
+    assert.equal(kept?.sync.at, NOW);
+    assert.equal(kept?.sync.error, "the mirror has local commits; fetched only");
+    writeFileSync(join(mirror, "README.md"), "dirty\n");
+    const dirty = await syncCompetitorMirror(db, "acme-tools", { mirrorRoot: mirrors, now: NOW, git: ran });
+    assert.equal(dirty.ok, false);
+    if (!dirty.ok) assert.equal(dirty.error, "mirror has uncommitted changes");
+    assert.equal(head(mirror), localHead);
+    assert.equal(listCompetitors(db, NOW).find((item) => item.id === "acme-tools")?.sync.head, syncedHead);
+    const noOrigin = await syncCompetitorMirror(db, "orphan-tool", { mirrorRoot: mirrors, now: NOW, git: ran });
+    assert.equal(noOrigin.ok, false);
+    if (!noOrigin.ok) assert.equal(noOrigin.error, "mirror has no origin");
+    assert.equal(listCompetitors(db, NOW).find((item) => item.id === "orphan-tool")?.sync.error, "mirror has no origin");
+    const outside = await syncCompetitorMirror(db, "outside-tool", { mirrorRoot: mirrors, now: NOW, git: ran });
+    assert.equal(outside.ok, false);
+    if (!outside.ok) assert.match(outside.error, /mirror root/);
+    const missing = await syncCompetitorMirror(db, "plain-tool", { mirrorRoot: mirrors, now: NOW, git: ran });
+    assert.equal(missing.ok, false);
+    if (!missing.ok) assert.equal(missing.error, "competitor has no mirror");
+    assert.equal(listCompetitors(db, NOW).find((item) => item.id === "plain-tool")?.sync.error, "competitor has no mirror");
+    const unknown = await syncCompetitorMirror(db, "missing", { mirrorRoot: mirrors, now: NOW, git: ran });
+    assert.equal(unknown.ok, false);
+    if (!unknown.ok) assert.equal(unknown.error, "unknown competitor");
+    safeCalls(calls);
+    assert.equal(JSON.stringify(listCompetitors(db, NOW)).includes("secret"), false);
     db.close();
   } finally {
     rmSync(root, { recursive: true, force: true });

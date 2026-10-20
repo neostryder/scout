@@ -500,7 +500,7 @@ To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui
 
 The Competitors view sits in the top navigation. On a phone it is in the More sheet, with the same count. The count is how many competitors have a new version. Each row shows the organization, any flags, the last analyzed version and date, the latest version, and the research state in ordinary words. A prerelease that is newer than the stable version shows in quieter text. Search matches the name and the organization. New only starts on when any row is new, and you can turn it off.
 
-Update is there when that competitor has a local mirror and no research run is still going. It asks you to confirm, then pulls the mirror and queues a research request. Nothing is installed, and the research waits until a person picks it up. A row with no mirror shows Update disabled, with the reason beside the button. Check now starts a check of the remotes. The time of the last check is under the title.
+Update is there when that competitor has a local mirror and no research run is still going. It asks you to confirm, then pulls the mirror and queues a research request immediately, ignoring the usual wait. Nothing is installed, and the research waits until a person picks it up. A row with no mirror shows Update disabled, with the reason beside the button. Each row says when the mirror was last synced, or the sync error in plain words. A change the gate is holding says how many commits are waiting. The research state says Auto-queued or Manual. Check now starts a check of the remotes. The time of the last check is under the title.
 
 When competitor watch is not set up, the page says to run the seed command:
 
@@ -510,7 +510,7 @@ node packages/cli/src/competitors.ts seed --dossiers <dir> --mirrors <dir>
 
 The command writes `.scout-data/competitors.json`, which git ignores. Add `--out <path>` to write somewhere else. Flags on an entry are words such as forge, vault, tome, scroll, quill, atlas, herald, rules, secret, orchestrator, and worlds.
 
-An agent reads the list with `scout_competitors` (at most 200 rows, and an optional status of new, current, or unknown) and the research queue with `scout_competitor_queue` (queued by default, or claimed). `scout_competitor_claim`, `scout_competitor_complete`, and `scout_competitor_fail` record a claim, a finished analysis, or a failure. Those three change the run's state and leave files, repositories, and machines alone.
+An agent reads the list with `scout_competitors` (at most 200 rows, and an optional status of new, current, or unknown) and the research queue with `scout_competitor_queue` (queued by default, or claimed). The queue fills itself. A queued request includes the analysis the hub already computed. `scout_competitor_claim`, `scout_competitor_complete`, and `scout_competitor_fail` record a claim, a finished analysis, or a failure. Those three change the run's state and leave files, repositories, and machines alone.
 
 ## Agents and the command line
 
@@ -601,6 +601,10 @@ node packages/cli/src/competitors.ts seed --dossiers <dir> --mirrors <dir>
 }
 ```
 
+An optional top-level `gate` object, and an optional `gate` on an entry, change when research is queued. The defaults are 5 commits or 3 changed source files, a new stable tag queues on its own, the last commit must be at least 24 hours old, docs-only and dependency-bump-only changes are skipped, and at most 5 runs may be queued or claimed. An entry replaces only the fields it sets. A competitor with no baseline commit is never queued by the gate.
+
+When scheduled work is on, the hub also fast-forwards each local mirror every 12 hours, one mirror at a time, with 2 seconds between mirrors and 120 seconds for each one. It syncs a mirror whose latest commit differs from the last synced commit, and once a week it syncs every mirror that has a path. After a sync, and after a check whose commit the mirror already has, the gate may queue research. The request includes an analysis of commit types, file categories, a 0 to 100 change score, manifest changes, new hosts, new settings, and pricing lines. The score is a log of the changed lines, and docs, lockfiles, assets, and generated files count for little. Update still pulls that one mirror and queues research immediately.
+
 A dossier folder is a direct child of the dossier root that contains numbered markdown files such as `01_Notes.md`. Seed reads `Repo`, `Package`, `Last reviewed`, `Organization / creator`, the `#` title, and a `Flags:` or `tags:` line. The known flags are `forge`, `vault`, `tome`, `scroll`, `quill`, `atlas`, `herald`, `rules`, `secret`, `orchestrator`, and `worlds`. Other words are dropped. A mirror is a direct child of the mirror root that has a `.git` entry. Seed matches a mirror to a dossier by the remote, ignoring scheme, a trailing `.git`, and any credentials.
 
 When scheduled work is on, the hub checks those remotes every 6 hours, starting 5 minutes after startup. `--no-competitor-watch` turns that schedule off. `GET /api/competitors` lists them. `POST /api/competitors/check` checks now. `POST /api/competitors/<id>/update` fetches that mirror and queues a research request. `GET /api/competitors/runs?state=queued,claimed` lists queued work. Claim, complete, and fail are `POST /api/competitors/runs/<id>/claim`, `/complete`, and `/fail`.
@@ -612,7 +616,7 @@ Everything Scout writes lives in `.scout-data/`:
 | File | Contents |
 | --- | --- |
 | `catalog.db` | The SQLite catalog. |
-| `competitors.json` | Competitor watch registry: dossier root, mirror root, and one entry per competitor with its first baseline. The seed command writes it. |
+| `competitors.json` | Competitor watch registry: dossier root, mirror root, an optional gate, and one entry per competitor with its first baseline. The seed command writes it. |
 | `protected.json` | Optional. Turns off the remote access, DNS and network, or containers protection groups (`"disable": [...]`), and adds your own protected entries (`"names": [{ "machine", "match", "reason" }]`). |
 | `ports.json` | Optional port registry: named `ranges` and `reserved` ports. Port-clash alerts come from it. |
 | `stacks.json` | Optional stacks: ordered lists of recipes and services with wait-for-port steps. |

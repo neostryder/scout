@@ -592,7 +592,11 @@ CREATE TABLE IF NOT EXISTS competitors (
   latest_commit TEXT,
   latest_checked_at TEXT,
   latest_error TEXT,
-  notified_version TEXT
+  notified_version TEXT,
+  synced_at TEXT,
+  sync_error TEXT,
+  sync_head TEXT,
+  pending_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS competitor_runs (
@@ -609,7 +613,8 @@ CREATE TABLE IF NOT EXISTS competitor_runs (
   result_path TEXT,
   summary TEXT,
   error TEXT,
-  request_json TEXT
+  request_json TEXT,
+  trigger TEXT
 );
 CREATE INDEX IF NOT EXISTS competitor_runs_competitor_state ON competitor_runs(competitor_id, state);
 `;
@@ -626,5 +631,7 @@ export const V2_PACKAGE_COLUMNS = [
   "description_at TEXT",
 ];
 
+export const COMPETITOR_ADD_COLUMNS = ["synced_at TEXT", "sync_error TEXT", "sync_head TEXT", "pending_json TEXT"];
+export const COMPETITOR_RUN_ADD_COLUMNS = ["trigger TEXT"];
 export const JOB_COLUMNS = ["batch_id TEXT NOT NULL DEFAULT ''", "started_at TEXT", "from_version TEXT", "message TEXT"];
 export const SERVICE_COLUMNS = ["uid INTEGER", "keep_alive INTEGER", "plist TEXT", "expected_down INTEGER NOT NULL DEFAULT 0"];

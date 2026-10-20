@@ -12,7 +12,7 @@ import { backupHealthSettingsReader, failCompetitorRun, meterAlertsFileReader, o
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, runCompetitorUpdate, watchMachines } from "@scout/ops";
+import { checkRemote, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, researchForGate, runCompetitorUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
@@ -50,16 +50,25 @@ const dbPath = resolve(opt("--db") ?? `${root}/.scout-data/catalog.db`);
 const db = openCatalog(dbPath);
 const scans = new ScanSchedule(db, { machinesPath: resolve(root, "machines.json"), dbPath, root, intervalMs: scanIntervalMs, log: (line) => console.error(line) });
 const competitorConfig = resolve(root, ".scout-data/competitors.json");
+const readMirrorRoot = (): string => parseCompetitorsFile(readFileSync(competitorConfig, "utf8")).mirrorRoot;
 const competitors = new CompetitorSchedule(db, {
   configPath: competitorConfig,
   check: (remote) => checkRemote(remote),
   pull: async (catalog, runId, now) => {
     let mirrorRoot = "";
-    try { mirrorRoot = parseCompetitorsFile(readFileSync(competitorConfig, "utf8")).mirrorRoot; } catch (error) {
+    try { mirrorRoot = readMirrorRoot(); } catch (error) {
       failCompetitorRun(catalog, runId, error instanceof Error ? error.message : "competitors file is not readable", now);
       return;
     }
     await runCompetitorUpdate(catalog, runId, { mirrorRoot, now });
+  },
+  sync: async (catalog, id, now, timeoutMs) => {
+    try { return await syncCompetitorMirror(catalog, id, { mirrorRoot: readMirrorRoot(), now, timeoutMs }); }
+    catch (error) { return { ok: false, error: error instanceof Error ? error.message : "competitors file is not readable" }; }
+  },
+  research: async (catalog, id, now) => {
+    try { return await researchForGate(catalog, id, { mirrorRoot: readMirrorRoot(), now }); }
+    catch (error) { return { error: error instanceof Error ? error.message : "competitors file is not readable" }; }
   },
   notifier: new Notifier(),
   log: (line) => console.error(line),

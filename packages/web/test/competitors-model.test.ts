@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -80,6 +80,25 @@ test("Update is ready, hidden while a run is active, or disabled with the reason
 
 test("the setup sentence and the update confirmation stay the words the page shows", () => {
   assert.equal(NOT_CONFIGURED, "Competitor watch is not set up. Run the seed command described in the setup guide.");
-  assert.equal(UPDATE_CONFIRM, "Pull the local mirror and queue a research request. Nothing is installed and no research runs until a Claude session picks it up.");
+  assert.equal(UPDATE_CONFIRM, "Pull the mirror and queue research now, ignoring the usual wait. Nothing is installed and no research runs until a Claude session picks it up.");
   assert.equal(NO_MIRROR, "No local mirror");
+});
+
+test("mirror sync, waiting, and trigger stay in words", () => {
+  const now = "2026-05-20T12:00:00.000Z";
+  assert.equal(syncedText(null, now), "Mirror not synced yet");
+  assert.equal(syncedText({ at: null, error: null }, now), "Mirror not synced yet");
+  assert.equal(syncedText({ at: "2026-05-20T11:59:40.000Z", error: null }, now), "Mirror synced just now");
+  assert.equal(syncedText({ at: "2026-05-20T11:58:00.000Z", error: null }, now), "Mirror synced 2 minutes ago");
+  assert.equal(syncedText({ at: "2026-05-20T11:00:00.000Z", error: null }, now), "Mirror synced 1 hour ago");
+  assert.equal(syncedText({ at: "2026-05-20T09:00:00.000Z", error: null }, now), "Mirror synced 3 hours ago");
+  assert.equal(syncedText({ at: "2026-05-17T12:00:00.000Z", error: null }, now), "Mirror synced 3 days ago");
+  assert.equal(syncedText({ at: "2026-05-20T11:00:00.000Z", error: "mirror has uncommitted changes" }, now), "Mirror synced 1 hour ago. mirror has uncommitted changes");
+  assert.equal(syncedText({ at: null, error: "mirror has no origin" }, now), "Mirror sync failed. mirror has no origin");
+  assert.equal(pendingText(null), "");
+  assert.equal(pendingText({ commits: 3, sourceFilesChanged: 1, reason: "3 commits, below the threshold of 5" }), "Waiting: 3 commits below the threshold");
+  assert.equal(triggerText(null), "");
+  assert.equal(triggerText({ trigger: "auto" }), "Auto-queued");
+  assert.equal(triggerText({ trigger: "manual" }), "Manual");
+  assert.equal(triggerText({ state: "queued" }), "");
 });

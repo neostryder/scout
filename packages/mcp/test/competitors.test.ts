@@ -15,7 +15,10 @@ function row(over: Partial<CompetitorRow> = {}): CompetitorRow {
     flags: ["forge"], mirrorPresent: true, dossierReviewed: null,
     baseline: { version: "1.0.0", commit: "abc", at: "2026-01-01", source: "mirror" },
     latest: { version: "1.1.0", prerelease: null, commit: "def", checkedAt: NOW, error: null },
-    status: "new", newBasis: "version", run: null, ...over,
+    status: "new", newBasis: "version",
+    sync: { at: NOW, head: "def", error: null },
+    pending: { commits: 3, sourceFilesChanged: 1, reason: "3 commits, below the threshold of 5" },
+    run: null, ...over,
   };
 }
 
@@ -23,7 +26,8 @@ function queued(over: Partial<CompetitorRun> = {}): CompetitorRun {
   return {
     id: 4, competitorId: "acme-tools", state: "queued", fromVersion: "1.0.0", toVersion: "1.1.0",
     requestedAt: NOW, updatedAt: NOW, claimedBy: null, resultPath: null, summary: null, error: null, stale: false,
-    request: { competitor: { id: "acme-tools", name: "Acme Tools" } }, ...over,
+    request: { competitor: { id: "acme-tools", name: "Acme Tools" }, analysis: { flags: { reaReason: "source score 40" } } },
+    trigger: "auto", ...over,
   };
 }
 
@@ -58,6 +62,9 @@ test("scout_competitors filters by status and caps the rows at 200", async (t) =
   const current = await tool("scout_competitors").run({ status: "current" }) as { total: number; competitors: CompetitorRow[] };
   assert.equal(current.total, 1);
   assert.equal(current.competitors[0]?.id, "c0");
+  assert.equal(current.competitors[0]?.pending?.commits, 3);
+  assert.equal(current.competitors[0]?.sync.head, "def");
+  assert.match(String(tool("scout_competitors").description), /fills itself/);
   await assert.rejects(Promise.resolve().then(() => tool("scout_competitors").run({ status: "gone" })), /status/);
   assert.equal(seen.length, 2);
 });
@@ -68,6 +75,9 @@ test("the queue defaults to queued and returns each run's request", async (t) =>
   const out = await tool("scout_competitor_queue").run({}) as { runs: CompetitorRun[] };
   assert.deepEqual(seen[0], ["queued"]);
   assert.equal(out.runs[0]?.request && (out.runs[0].request as { competitor: { id: string } }).competitor.id, "acme-tools");
+  assert.equal(out.runs[0]?.trigger, "auto");
+  assert.equal((out.runs[0]?.request as { analysis: { flags: { reaReason: string } } }).analysis.flags.reaReason, "source score 40");
+  assert.match(String(tool("scout_competitor_queue").description), /procedural analysis/);
   await tool("scout_competitor_queue").run({ states: ["claimed", "queued"] });
   assert.deepEqual(seen[1], ["claimed", "queued"]);
   await assert.rejects(Promise.resolve().then(() => tool("scout_competitor_queue").run({ states: ["pulling"] })), /states/);

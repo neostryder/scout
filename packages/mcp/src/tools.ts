@@ -145,14 +145,14 @@ export function createTools(context: ToolContext): Tool[] {
         return { started: done?.state === "done", result: brief(done ?? actionById(db, started.actionId)) };
       } finally { control.close(); }
     }) },
-    { name: "scout_competitors", readOnly: true, description: "Lists the competitors Scout watches, with status, the last analyzed version, the latest version, and any research run. Pass status to keep only new, current, or unknown. At most 200 rows come back.", inputSchema: object({ status: { type: "string", enum: [...COMPETITOR_STATUS], description: "Keep only competitors in this status." } }), run: (args) => {
+    { name: "scout_competitors", readOnly: true, description: "Lists the competitors Scout watches, with status, the last analyzed version, the latest version, mirror sync, any pending gate, and any research run. The research queue fills itself when a change is large enough. Pass status to keep only new, current, or unknown. At most 200 rows come back.", inputSchema: object({ status: { type: "string", enum: [...COMPETITOR_STATUS], description: "Keep only competitors in this status." } }), run: (args) => {
       const status = args.status === undefined ? undefined : choice(args, "status", COMPETITOR_STATUS);
       return withDb((db) => {
         const rows = competitors.listCompetitors(db, now()).filter((row) => status === undefined || row.status === status);
         return { total: rows.length, competitors: rows.slice(0, COMPETITOR_CAP) };
       });
     } },
-    { name: "scout_competitor_queue", readOnly: true, description: "Lists research runs in the given states, newest first, including each run's request. The default is queued.", inputSchema: object({ states: { type: "array", items: { type: "string", enum: [...QUEUE_STATES] }, description: "queued, claimed, or both. The default is queued." } }), run: (args) => {
+    { name: "scout_competitor_queue", readOnly: true, description: "Lists research runs in the given states, newest first, including each run's request. The queue fills itself. The request includes a procedural analysis that is already computed. The default is queued.", inputSchema: object({ states: { type: "array", items: { type: "string", enum: [...QUEUE_STATES] }, description: "queued, claimed, or both. The default is queued." } }), run: (args) => {
       const states = queueStates(args);
       return withDb((db) => ({ runs: competitors.listCompetitorRuns(db, states, now()) }));
     } },

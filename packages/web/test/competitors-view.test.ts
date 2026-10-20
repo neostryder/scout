@@ -87,7 +87,7 @@ async function open(t: TestContext, answer: () => any) {
       return body && body.status ? body : { ok: true, status: 200, json: async () => body };
     },
     document: { hidden: false, getElementById: (id: string) => (id === "competitors-count" ? badge : null), addEventListener() {} },
-    AbortController, setTimeout, clearTimeout, encodeURIComponent, URL, Error,
+    AbortController, setTimeout, clearTimeout, encodeURIComponent, URL, Date, Error,
   });
   runInContext(source, context);
   const view = (context as { createCompetitorsView: (root: El) => { show: () => Promise<void>; hide: () => void } }).createCompetitorsView(root);
@@ -142,7 +142,7 @@ test("Update confirms with the set sentence, then posts JSON, and a missing mirr
   click(update!);
   const dialog = walk(page.root).find((el) => el.tag === "dialog");
   assert.equal(dialog?.open, true);
-  assert.match(allText(dialog), /Pull the local mirror and queue a research request\. Nothing is installed and no research runs until a Claude session picks it up\./);
+  assert.match(allText(dialog), /Pull the mirror and queue research now, ignoring the usual wait\. Nothing is installed and no research runs until a Claude session picks it up\./);
   const confirm = walk(dialog!).find((el) => el.tag === "button" && el.className.includes("primary"));
   competitors = [row({ run: { id: 9, state: "pulling", stale: false, claimedBy: null, error: null } })];
   await click(confirm!);
@@ -179,4 +179,20 @@ test("Check now posts JSON and shows a refusal once", async (t) => {
   assert.equal(post?.method, "POST");
   assert.equal(post?.body, "{}");
   assert.equal(post?.headers?.["content-type"], "application/json");
+});
+
+test("a row shows the mirror line, the waiting line, and whether research was queued by hand", async (t) => {
+  const page = await open(t, () => ok([row({
+    status: "current",
+    newBasis: null,
+    sync: { at: "2026-10-01T00:00:00.000Z", head: "abc", error: "mirror has uncommitted changes" },
+    pending: { commits: 3, sourceFilesChanged: 1, reason: "3 commits, below the threshold of 5" },
+    run: { id: 3, state: "done", stale: false, claimedBy: null, error: null, trigger: "manual" },
+  })]));
+  const text = allText(page.root);
+  assert.match(text, /Mirror synced /);
+  assert.match(text, /mirror has uncommitted changes/);
+  assert.match(text, /Waiting: 3 commits below the threshold/);
+  assert.match(text, /Manual/);
+  assert.match(text, /Done/);
 });

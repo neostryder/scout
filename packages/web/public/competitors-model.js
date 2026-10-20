@@ -1,7 +1,7 @@
 // Pure helpers for the Competitors view: order, filters, and the words for each status and run state.
 
 export const NOT_CONFIGURED = "Competitor watch is not set up. Run the seed command described in the setup guide.";
-export const UPDATE_CONFIRM = "Pull the local mirror and queue a research request. Nothing is installed and no research runs until a Claude session picks it up.";
+export const UPDATE_CONFIRM = "Pull the mirror and queue research now, ignoring the usual wait. Nothing is installed and no research runs until a Claude session picks it up.";
 export const NO_MIRROR = "No local mirror";
 
 const STATUS_RANK = { new: 0, current: 1, unknown: 2 };
@@ -72,6 +72,41 @@ export function checkedText(checkedAt) {
   if (!checkedAt) return "No check yet";
   const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(String(checkedAt));
   return match ? `Last check ${match[1]} ${match[2]}` : `Last check ${checkedAt}`;
+}
+
+function relativeTime(at, now) {
+  const age = Date.parse(now) - Date.parse(at);
+  if (!Number.isFinite(age) || age < 45_000) return "just now";
+  if (age < 3_600_000) {
+    const minutes = Math.max(1, Math.floor(age / 60_000));
+    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  }
+  if (age < 48 * 3_600_000) {
+    const hours = Math.floor(age / 3_600_000);
+    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  }
+  const days = Math.max(1, Math.floor(age / 86_400_000));
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}
+
+/** The sync line is words, including the error, so the row does not rely on color. */
+export function syncedText(sync, now) {
+  const at = sync && sync.at ? String(sync.at) : "";
+  const error = sync && sync.error ? String(sync.error) : "";
+  if (!at && !error) return "Mirror not synced yet";
+  const line = at ? `Mirror synced ${relativeTime(at, now)}` : "Mirror sync failed";
+  return error ? `${line}. ${error}` : line;
+}
+
+export function pendingText(pending) {
+  if (!pending) return "";
+  return `Waiting: ${pending.commits} commits below the threshold`;
+}
+
+export function triggerText(run) {
+  if (run && run.trigger === "auto") return "Auto-queued";
+  if (run && run.trigger === "manual") return "Manual";
+  return "";
 }
 
 /** Hidden while a run is still active. Disabled, with a reason, when there is no mirror. */

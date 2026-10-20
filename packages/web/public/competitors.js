@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, latestParts, NOT_CONFIGURED, runText, sortCompetitors, statusText, updateAction, UPDATE_CONFIRM } from "./competitors-model.js";
+import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, latestParts, NOT_CONFIGURED, pendingText, runText, sortCompetitors, statusText, syncedText, triggerText, updateAction, UPDATE_CONFIRM } from "./competitors-model.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
 
@@ -72,13 +72,16 @@ export function createCompetitorsView(root) {
   function rowView(row) {
     const latest = latestParts(row.latest);
     const commits = commitsText(row);
+    const waiting = pendingText(row.pending);
+    const trigger = triggerText(row.run);
     const flags = Array.isArray(row.flags) ? row.flags : [];
+    const now = new Date().toISOString();
     return h("tr", {},
-      h("td", { class: "name", "data-label": "Competitor" }, h("div", { class: "t" }, row.name), row.org ? h("div", { class: "org" }, row.org) : [], flags.length ? h("div", { class: "flags" }, flags.map((flag) => h("span", { class: "tag" }, flag))) : [], h("div", { class: "links" }, links(row))),
+      h("td", { class: "name", "data-label": "Competitor" }, h("div", { class: "t" }, row.name), row.org ? h("div", { class: "org" }, row.org) : [], flags.length ? h("div", { class: "flags" }, flags.map((flag) => h("span", { class: "tag" }, flag))) : [], h("div", { class: "commits" }, syncedText(row.sync, now)), h("div", { class: "links" }, links(row))),
       h("td", { "data-label": "Last analyzed", title: baselineSource(row.baseline) }, analyzedText(row.baseline)),
       h("td", { "data-label": "Latest" }, latest.version || (latest.error ? "" : "None"), latest.prerelease ? h("div", { class: "muted" }, latest.prerelease) : [], latest.error ? h("div", { class: "muted" }, latest.error) : []),
-      h("td", { "data-label": "Status" }, h("span", { class: statusClass(row) }, statusText(row)), commits ? h("div", { class: "commits" }, commits) : []),
-      h("td", { "data-label": "Research" }, runText(row.run)),
+      h("td", { "data-label": "Status" }, h("span", { class: statusClass(row) }, statusText(row)), commits ? h("div", { class: "commits" }, commits) : [], waiting ? h("div", { class: "commits" }, waiting) : []),
+      h("td", { "data-label": "Research" }, runText(row.run), trigger ? h("div", { class: "commits" }, trigger) : []),
       updateCell(row),
     );
   }

@@ -25,6 +25,7 @@ export interface CompetitorRun {
   error: string | null;
   stale: boolean;
   request: Record<string, unknown> | null;
+  trigger: "auto" | "manual" | null;
 }
 
 export interface CompetitorRow {
@@ -40,7 +41,9 @@ export interface CompetitorRow {
   latest: { version: string | null; prerelease: string | null; commit: string | null; checkedAt: string | null; error: string | null };
   status: CompetitorStatus;
   newBasis: "version" | "commits" | null;
-  run: Pick<CompetitorRun, "id" | "state" | "toVersion" | "updatedAt" | "claimedBy" | "error" | "stale"> | null;
+  sync: { at: string | null; head: string | null; error: string | null };
+  pending: { commits: number; sourceFilesChanged: number; reason: string } | null;
+  run: Pick<CompetitorRun, "id" | "state" | "toVersion" | "updatedAt" | "claimedBy" | "error" | "stale" | "trigger"> | null;
 }
 
 export interface CompetitorBaseline {
@@ -61,12 +64,53 @@ export interface CompetitorIdentity {
   dossierReviewed: string | null;
   flags: string[];
   baseline: CompetitorBaseline | null;
+  gate?: Partial<ResearchGateConfig>;
 }
 
 export interface CompetitorsFile {
   dossierRoot: string;
   mirrorRoot: string;
+  gate?: Partial<ResearchGateConfig>;
   entries: CompetitorIdentity[];
+}
+
+/** Defaults for the procedural research gate. An entry's `gate` replaces single fields. `queuedRuns` is counted at decision time and is not stored in the file. */
+export const DEFAULT_RESEARCH_GATE = {
+  minCommits: 5,
+  minSourceFilesChanged: 3,
+  onNewTag: true,
+  quietHours: 24,
+  ignoreDocsOnly: true,
+  ignoreDependencyBumpOnly: true,
+  maxQueued: 5,
+  enabled: true,
+} as const;
+
+export interface ResearchGateConfig {
+  minCommits: number;
+  minSourceFilesChanged: number;
+  onNewTag: boolean;
+  quietHours: number;
+  ignoreDocsOnly: boolean;
+  ignoreDependencyBumpOnly: boolean;
+  maxQueued: number;
+  enabled: boolean;
+  queuedRuns?: number;
+}
+
+export interface ResearchDelta {
+  commits: number;
+  sourceFilesChanged: number;
+  newStableTag: boolean;
+  docsOnly: boolean;
+  dependencyBumpOnly: boolean;
+  lastCommitAt: string | null;
+}
+
+export interface ResearchGateDecision {
+  decision: "queue" | "wait" | "skip";
+  reason: string;
+  pending: { commits: number; sourceFilesChanged: number };
 }
 
 export interface StatusInput {
@@ -98,6 +142,10 @@ interface StoredCompetitor {
   latestCheckedAt: string | null;
   latestError: string | null;
   notifiedVersion: string | null;
+  syncedAt: string | null;
+  syncError: string | null;
+  syncHead: string | null;
+  pendingJson: string | null;
 }
 
 interface StoredRun {
@@ -115,17 +163,19 @@ interface StoredRun {
   summary: string | null;
   error: string | null;
   requestJson: string | null;
+  trigger: string | null;
 }
 
 const COMPETITOR_COLUMNS = `id, name, org, remote_url AS remoteUrl, mirror_path AS mirrorPath, package_url AS packageUrl,
   dossier_dir AS dossierDir, dossier_reviewed AS dossierReviewed, flags_json AS flagsJson,
   baseline_version AS baselineVersion, baseline_commit AS baselineCommit, baseline_at AS baselineAt, baseline_source AS baselineSource,
   latest_version AS latestVersion, latest_prerelease AS latestPrerelease, latest_commit AS latestCommit,
-  latest_checked_at AS latestCheckedAt, latest_error AS latestError, notified_version AS notifiedVersion`;
+  latest_checked_at AS latestCheckedAt, latest_error AS latestError, notified_version AS notifiedVersion,
+  synced_at AS syncedAt, sync_error AS syncError, sync_head AS syncHead, pending_json AS pendingJson`;
 
 const RUN_COLUMNS = `id, competitor_id AS competitorId, state, from_version AS fromVersion, from_commit AS fromCommit,
   to_version AS toVersion, to_commit AS toCommit, requested_at AS requestedAt, updated_at AS updatedAt,
-  claimed_by AS claimedBy, result_path AS resultPath, summary, error, request_json AS requestJson`;
+  claimed_by AS claimedBy, result_path AS resultPath, summary, error, request_json AS requestJson, trigger`;
 
 function iso(now?: string): string {
   return now ?? new Date().toISOString();
@@ -170,6 +220,73 @@ function requestFromJson(text: string | null): Record<string, unknown> | null {
   }
 }
 
+function pendingFromJson(text: string | null): CompetitorRow["pending"] {
+  if (!text) return null;
+  try {
+    const value = JSON.parse(text) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const row = value as Record<string, unknown>;
+    if (typeof row["commits"] !== "number" || typeof row["sourceFilesChanged"] !== "number" || typeof row["reason"] !== "string") return null;
+    return { commits: row["commits"], sourceFilesChanged: row["sourceFilesChanged"], reason: row["reason"] };
+  } catch {
+    return null;
+  }
+}
+
+function triggerOf(value: string | null): CompetitorRun["trigger"] {
+  return value === "auto" || value === "manual" ? value : null;
+}
+
+const GATE_NUMBERS = ["minCommits", "minSourceFilesChanged", "quietHours", "maxQueued"] as const;
+const GATE_FLAGS = ["onNewTag", "ignoreDocsOnly", "ignoreDependencyBumpOnly", "enabled"] as const;
+
+function gateOverrides(value: unknown): Partial<ResearchGateConfig> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const row = value as Record<string, unknown>;
+  const out: Partial<ResearchGateConfig> = {};
+  for (const key of GATE_NUMBERS) {
+    const number = row[key];
+    if (typeof number === "number" && Number.isInteger(number) && number >= 0) out[key] = number;
+  }
+  for (const key of GATE_FLAGS) {
+    if (typeof row[key] === "boolean") out[key] = row[key];
+  }
+  return out;
+}
+
+/** File defaults, then the entry's own fields, then the live count of queued and claimed runs. */
+export function resolveResearchGate(fileGate: Partial<ResearchGateConfig> | undefined, entryGate: Partial<ResearchGateConfig> | undefined, queuedRuns: number): ResearchGateConfig {
+  return { ...DEFAULT_RESEARCH_GATE, ...gateOverrides(fileGate), ...gateOverrides(entryGate), queuedRuns };
+}
+
+/** Pure. A new stable tag skips the size, docs, dependency, and quiet-hour checks. It still waits when the queue is full, and a competitor with no baseline commit never queues. */
+export function evaluateResearchGate(row: { baseline: { commit: string | null } }, delta: ResearchDelta, config: ResearchGateConfig, now: string): ResearchGateDecision {
+  const pending = { commits: delta.commits, sourceFilesChanged: delta.sourceFilesChanged };
+  const queuedRuns = config.queuedRuns ?? 0;
+  if (!config.enabled) return { decision: "skip", reason: "gate is off", pending };
+  if (!row.baseline.commit) return { decision: "skip", reason: "no baseline", pending };
+  const tag = config.onNewTag && delta.newStableTag;
+  if (tag) {
+    if (queuedRuns >= config.maxQueued) return { decision: "wait", reason: "the research queue is full", pending };
+    return { decision: "queue", reason: "new stable tag", pending };
+  }
+  if (config.ignoreDocsOnly && delta.docsOnly) return { decision: "skip", reason: "docs only", pending };
+  if (config.ignoreDependencyBumpOnly && delta.dependencyBumpOnly) return { decision: "skip", reason: "dependency bump only", pending };
+  if (delta.commits === 0 && delta.sourceFilesChanged === 0) return { decision: "skip", reason: "nothing new", pending };
+  const enough = delta.commits >= config.minCommits || delta.sourceFilesChanged >= config.minSourceFilesChanged;
+  if (!enough) return { decision: "wait", reason: `${delta.commits} commits, below the threshold of ${config.minCommits}`, pending };
+  if (config.quietHours > 0) {
+    const last = delta.lastCommitAt ? Date.parse(delta.lastCommitAt) : Number.NaN;
+    const age = Date.parse(now) - last;
+    if (!Number.isFinite(age) || age < config.quietHours * 3_600_000) {
+      return { decision: "wait", reason: `the last commit is under ${config.quietHours} hours old`, pending };
+    }
+  }
+  if (queuedRuns >= config.maxQueued) return { decision: "wait", reason: "the research queue is full", pending };
+  if (delta.commits >= config.minCommits) return { decision: "queue", reason: `${delta.commits} commits`, pending };
+  return { decision: "queue", reason: `${delta.sourceFilesChanged} source files changed`, pending };
+}
+
 export function deriveCompetitorStatus(input: StatusInput): { status: CompetitorStatus; newBasis: "version" | "commits" | null } {
   const hasBaseline = input.baselineVersion !== null || input.baselineCommit !== null;
   const kept = input.latestVersion !== null || input.latestCommit !== null;
@@ -208,6 +325,7 @@ function mapRun(row: StoredRun, now: string): CompetitorRun {
     error: row.error,
     stale: stale(row.state, row.updatedAt, now),
     request: requestFromJson(row.requestJson),
+    trigger: triggerOf(row.trigger),
   };
 }
 
@@ -245,7 +363,9 @@ function mapRow(row: StoredCompetitor, run: StoredRun | undefined, now: string):
     latest: { version: row.latestVersion, prerelease: row.latestPrerelease, commit: row.latestCommit, checkedAt: row.latestCheckedAt, error: row.latestError },
     status: derived.status,
     newBasis: derived.newBasis,
-    run: mapped ? { id: mapped.id, state: mapped.state, toVersion: mapped.toVersion, updatedAt: mapped.updatedAt, claimedBy: mapped.claimedBy, error: mapped.error, stale: mapped.stale } : null,
+    sync: { at: row.syncedAt, head: row.syncHead, error: row.syncError },
+    pending: pendingFromJson(row.pendingJson),
+    run: mapped ? { id: mapped.id, state: mapped.state, toVersion: mapped.toVersion, updatedAt: mapped.updatedAt, claimedBy: mapped.claimedBy, error: mapped.error, stale: mapped.stale, trigger: mapped.trigger } : null,
   };
 }
 
@@ -293,9 +413,10 @@ export function parseCompetitorsFile(text: string): CompetitorsFile {
       dossierReviewed: textOrNull(row["dossierReviewed"]),
       flags,
       baseline: baselineOf(row["baseline"]),
+      gate: gateOverrides(row["gate"]),
     });
   }
-  return { dossierRoot: file["dossierRoot"], mirrorRoot: file["mirrorRoot"], entries };
+  return { dossierRoot: file["dossierRoot"], mirrorRoot: file["mirrorRoot"], gate: gateOverrides(file["gate"]), entries };
 }
 
 export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
@@ -385,7 +506,8 @@ export function startPullingRun(db: Db, competitorId: string, now: string): Comp
     if (!row) throw new Error("unknown competitor");
     if (!row.mirrorPath) throw new Error("competitor has no mirror");
     if (db.prepare(`SELECT 1 FROM competitor_runs WHERE competitor_id = ? AND state IN ${ACTIVE}`).get(competitorId)) throw new Error("a run is already active");
-    const inserted = db.prepare("INSERT INTO competitor_runs (competitor_id, state, from_version, from_commit, requested_at, updated_at) VALUES (?, 'pulling', ?, ?, ?, ?)").run(competitorId, row.baselineVersion, row.baselineCommit, now, now);
+    const inserted = db.prepare("INSERT INTO competitor_runs (competitor_id, state, from_version, from_commit, requested_at, updated_at, trigger) VALUES (?, 'pulling', ?, ?, ?, ?, 'manual')").run(competitorId, row.baselineVersion, row.baselineCommit, now, now);
+    db.prepare("UPDATE competitors SET pending_json = NULL WHERE id = ?").run(competitorId);
     return runById(db, Number(inserted.lastInsertRowid), now);
   });
 }
@@ -396,7 +518,37 @@ export function queueCompetitorRun(db: Db, runId: number, input: { toVersion: st
     if (!row) throw new Error("no such run");
     if (row.state !== "pulling") throw new Error("run is not pulling");
     db.prepare("UPDATE competitor_runs SET state = 'queued', to_version = ?, to_commit = ?, request_json = ?, updated_at = ? WHERE id = ?").run(input.toVersion, input.toCommit, JSON.stringify(input.request), now, runId);
+    db.prepare("UPDATE competitors SET pending_json = NULL WHERE id = ?").run(row.competitorId);
     return runById(db, runId, now);
+  });
+}
+
+export function countOpenResearch(db: Db): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM competitor_runs WHERE state IN ('queued','claimed')").get() as { n: number };
+  return Number(row.n) || 0;
+}
+
+export function setCompetitorPending(db: Db, id: string, pending: { commits: number; sourceFilesChanged: number; reason: string } | null): void {
+  db.prepare("UPDATE competitors SET pending_json = ? WHERE id = ?").run(pending ? JSON.stringify(pending) : null, id);
+}
+
+/** A refusal records the error only. A success replaces the error with the mirror HEAD. */
+export function recordMirrorSync(db: Db, id: string, outcome: { at: string; head: string } | { error: string }): void {
+  if ("error" in outcome) {
+    db.prepare("UPDATE competitors SET sync_error = ? WHERE id = ?").run(redactUrlSecrets(outcome.error).replace(/\s+/g, " ").trim().slice(0, 300), id);
+    return;
+  }
+  db.prepare("UPDATE competitors SET synced_at = ?, sync_head = ?, sync_error = NULL WHERE id = ?").run(outcome.at, outcome.head, id);
+}
+
+export function enqueueAutoRun(db: Db, competitorId: string, input: { toVersion: string | null; toCommit: string | null; request: Record<string, unknown> }, now: string): CompetitorRun {
+  return immediate(db, () => {
+    const row = db.prepare("SELECT baseline_version AS baselineVersion, baseline_commit AS baselineCommit FROM competitors WHERE id = ?").get(competitorId) as { baselineVersion: string | null; baselineCommit: string | null } | undefined;
+    if (!row) throw new Error("unknown competitor");
+    if (db.prepare(`SELECT 1 FROM competitor_runs WHERE competitor_id = ? AND state IN ${ACTIVE}`).get(competitorId)) throw new Error("a run is already active");
+    const inserted = db.prepare("INSERT INTO competitor_runs (competitor_id, state, from_version, from_commit, to_version, to_commit, requested_at, updated_at, request_json, trigger) VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?, 'auto')").run(competitorId, row.baselineVersion, row.baselineCommit, input.toVersion, input.toCommit, now, now, JSON.stringify(input.request));
+    db.prepare("UPDATE competitors SET pending_json = NULL WHERE id = ?").run(competitorId);
+    return runById(db, Number(inserted.lastInsertRowid), now);
   });
 }
 
@@ -429,10 +581,10 @@ export function markCompetitorNotified(db: Db, id: string, version: string): voi
 }
 
 /** Absolute paths stay in the catalog for the update. The runs payload reads them from the request, not from this row. */
-export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null } | null {
+export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null; baselineVersion: string | null; baselineCommit: string | null } | null {
   const row = db.prepare(`SELECT ${COMPETITOR_COLUMNS} FROM competitors WHERE id = ?`).get(id) as StoredCompetitor | undefined;
   if (!row) return null;
-  return { mirrorPath: row.mirrorPath, dossierDir: row.dossierDir, remoteUrl: row.remoteUrl, packageUrl: row.packageUrl, name: row.name, org: row.org, flags: flagsFromJson(row.flagsJson), latestVersion: row.latestVersion };
+  return { mirrorPath: row.mirrorPath, dossierDir: row.dossierDir, remoteUrl: row.remoteUrl, packageUrl: row.packageUrl, name: row.name, org: row.org, flags: flagsFromJson(row.flagsJson), latestVersion: row.latestVersion, baselineVersion: row.baselineVersion, baselineCommit: row.baselineCommit };
 }
 
 export function competitorRunRecord(db: Db, id: number, now?: string): (CompetitorRun & { fromCommit: string | null; toCommit: string | null }) | null {

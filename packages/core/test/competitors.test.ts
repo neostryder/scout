@@ -160,6 +160,7 @@ test("competitor source does not hard-code a home-directory mirror path", () => 
   const files = [
     "packages/core/src/competitors.ts",
     "packages/ops/src/competitor-git.ts",
+    "packages/ops/src/competitor-analysis.ts",
     "packages/cli/src/competitors.ts",
     "packages/hub/src/competitor-schedule.ts",
     "packages/hub/src/competitors-api.ts",

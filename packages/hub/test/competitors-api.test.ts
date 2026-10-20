@@ -76,13 +76,19 @@ test("competitor routes list, check, update, claim, complete, and fail", async (
     pull: async (catalog, runId, now) => {
       await pullGate;
       const record = competitorRunRecord(catalog, runId, now);
-      queueCompetitorRun(catalog, runId, { toVersion: "1.2.0", toCommit: "bbb222", request: { mirrorPath: mirror, dossierDir: join(dir, "dossiers", "Acme"), from: { version: record?.fromVersion ?? null, commit: record?.fromCommit ?? null }, notes: "notes" } }, now);
+      queueCompetitorRun(catalog, runId, { toVersion: "1.2.0", toCommit: "bbb222", request: { mirrorPath: mirror, dossierDir: join(dir, "dossiers", "Acme"), from: { version: record?.fromVersion ?? null, commit: record?.fromCommit ?? null }, notes: "notes", analysis: { flags: { reaReason: "source score 40" } } } }, now);
     },
     log: () => {},
   });
   const { call, port } = await hub(t, db, schedule);
+  db.prepare("UPDATE competitors SET pending_json = ?, sync_error = ? WHERE id = 'acme-tools'").run(JSON.stringify({ commits: 3, sourceFilesChanged: 1, reason: "3 commits, below the threshold of 5" }), "mirror has uncommitted changes");
   const listed = await call("/api/competitors");
   assert.equal(listed.status, 200);
+  const listedAcme = listed.body.competitors.find((row: { id: string }) => row.id === "acme-tools");
+  assert.equal(listedAcme.pending.commits, 3);
+  assert.equal(listedAcme.pending.reason, "3 commits, below the threshold of 5");
+  assert.deepEqual(listedAcme.sync, { at: null, head: null, error: "mirror has uncommitted changes" });
+  assert.equal(listedAcme.run, null);
   assert.equal(listed.body.configured, true);
   assert.equal(listed.body.intervalSeconds, 21600);
   assert.deepEqual(listed.body.competitors.map((row: { name: string }) => row.name), ["Acme Tools", "Solo Tool"]);
@@ -117,6 +123,11 @@ test("competitor routes list, check, update, claim, complete, and fail", async (
   const runs = await call("/api/competitors/runs?state=queued,claimed");
   assert.equal(runs.status, 200);
   assert.equal(runs.body[0].request.mirrorPath, mirror);
+  assert.equal(runs.body[0].trigger, "manual");
+  assert.equal(runs.body[0].request.analysis.flags.reaReason, "source score 40");
+  const queuedRow = (await call("/api/competitors")).body.competitors.find((row: { id: string }) => row.id === "acme-tools");
+  assert.equal(queuedRow.run.trigger, "manual");
+  assert.equal(queuedRow.pending, null);
   assert.equal((await call("/api/competitors/runs")).status, 400);
   assert.equal((await call("/api/competitors/runs?state=nope")).status, 400);
   assert.equal((await call("/api/competitors/runs/1/claim", "POST", "{\"by\":\"\"}")).status, 400);
