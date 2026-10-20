@@ -1,6 +1,6 @@
 import type { CatalogFilter, Db, FacetDimension } from "@scout/core";
 import { emptyProvenance, installFlags, type Flag, type ProvenanceContext } from "@scout/core";
-import { changelogSummaryFor, countInstalls, decideProposal, dependentsOf, facetCounts, needsOf, openProposals, queryInstalls, queryUpdates, supportWindowsOf, updatesView, type UpdateBump, type UpdateSort, type UpdateStatus } from "@scout/core";
+import { changelogSummaryFor, countInstalls, decideProposal, dependentsOf, facetCounts, listIntel, needsOf, openProposals, queryInstalls, queryUpdates, supportWindowsOf, updatesView, type UpdateBump, type UpdateSort, type UpdateStatus } from "@scout/core";
 import { confirmDependencyProposal, rejectDependencyProposal, type DependencyProposalSubject } from "@scout/core";
 
 // The read API. Every route reads the catalog and never scans. Filters arrive as query parameters and become the
@@ -136,6 +136,17 @@ export function coverageResponse(db: Db): unknown {
     .all();
 }
 
+const INTEL_BYTES = 64 * 1024;
+
+// One stored document can be a long file list. The detail response leaves that document out rather than sending it.
+function intelFor(db: Db, packageId: number): { source: string; fetchedAt: string; data?: Record<string, unknown>; truncated?: true }[] {
+  return listIntel(db, packageId).map((row) => {
+    const serialized = JSON.stringify(row.data);
+    if (Buffer.byteLength(serialized, "utf8") > INTEL_BYTES) return { source: row.source, fetchedAt: row.fetchedAt, truncated: true };
+    return { source: row.source, fetchedAt: row.fetchedAt, data: row.data };
+  });
+}
+
 export function installDetail(db: Db, id: number, context: ProvenanceContext = emptyProvenance()): unknown | null {
   const row = db
     .prepare(
@@ -177,7 +188,7 @@ export function installDetail(db: Db, id: number, context: ProvenanceContext = e
   const changelog = summary ? { summary: summary.summary, sourceUrl: summary.sourceUrl, model: summary.model, createdAt: summary.createdAt } : null;
   const details = JSON.parse(row.details) as unknown;
   const flags = flagsOf(row as unknown as Parameters<typeof flagsOf>[0], details, context);
-  return { ...row, details, flags, usage, constraints, relations, sameSoftware, dependencies: { needs: needsOf(db, id), neededBy: dependentsOf(db, id) }, supportWindows: supportWindowsOf(db, row.packageId), changelog };
+  return { ...row, details, flags, usage, constraints, relations, sameSoftware, dependencies: { needs: needsOf(db, id), neededBy: dependentsOf(db, id) }, supportWindows: supportWindowsOf(db, row.packageId), changelog, intel: intelFor(db, row.packageId) };
 }
 
 /** Review evidence includes the live installs because identities can have several copies. */

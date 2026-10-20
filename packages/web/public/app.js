@@ -1,6 +1,7 @@
 import { $, h, flagRow, marked, safeUrl, defaultDir, riskBadge, updateDialogModel, updatePlanQuery } from "./lib.js";
 import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
+import { upstreamSections } from "./intel-detail.js";
 
 let servicesView;
 let resourcesView;
@@ -182,6 +183,7 @@ async function openDetail(id) {
     sections.push(h("h3", {}, "Release notes"), h("p", { class: "release-summary" }, d.changelog.summary), source ? h("p", {}, h("a", { href: source, target: "_blank", rel: "noopener noreferrer" }, "Source")) : [], h("small", { class: "muted" }, d.changelog.model));
   }
   if (d.flags?.length) sections.push(h("h3", {}, "Provenance"), h("ul", {}, d.flags.map((flag) => h("li", {}, `${flag.label}: ${flag.evidence}`))));
+  sections.push(...upstreamSections(d));
   const rawHeading = panel.children[panel.children.length - 2];
   for (const section of sections.flat(Infinity)) panel.insertBefore(section, rawHeading);
   panel.hidden = false; panel.scrollTop = 0;

@@ -54,6 +54,8 @@ The gitclone adapter lists clones under the machine's clone roots. The probe wal
 
 The gitclone researcher asks the GitHub API only when the key starts with `github.com/`. It stores the default branch, the branch head, and the latest release in `source_intel`, plus a map from clone commit to how far that commit is behind the default branch. The map keeps at most 20 commits. Other forges stay in the catalog and are not looked up. When a release exists, Scout records it as a stable assertion with `installable` false.
 
+Click an install that has upstream facts and the pane adds an Upstream section. The hub attaches those facts to the install detail, and skips one when its JSON is over 64 KB. The pane then says that record is too large to show. Clone facts name the default branch, the date of the branch head, and the latest release. They also say how many commits this checkout is behind, plus a line when a newer release exists and a line when the upstream repository is archived. Model facts name the latest Hugging Face revision, twelve characters, and the date it changed. They say whether this copy is that revision, list the quantizations the repository offers, and list at most eight related models with download counts. Possible successors appear with the reason Scout stored. A repository Hugging Face does not list, or one that asks you to sign in, is that one sentence. A source the pane has no layout for is collapsed JSON, cut after 4 KB.
+
 ## The catalog
 
 ```mermaid

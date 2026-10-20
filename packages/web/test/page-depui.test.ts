@@ -29,7 +29,8 @@ function page(fetcher: (...args: any[]) => Promise<any>) {
   for (const id of ["confirm", "confirm-title", "confirm-submit", "confirm-body", "detail", "filters", "chips"]) elements.set(id, new Element());
   const byId = (id: string) => elements.get(id);
   const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/^import .*\n/gm, "").split('\ndocument.querySelectorAll("[data-view]").forEach')[0]!;
-  const context = createContext({ ...helpers, $: byId, h: (tag: string, attrs: Record<string, any>, ...children: any[]) => { const element = new Element(tag, attrs, children); if (attrs.id) elements.set(attrs.id, element); return element; }, marked: (value: string) => value, location: { search: "", pathname: "/" }, URLSearchParams, document: { addEventListener: () => {} }, localStorage: { getItem: () => null }, fetch: fetcher });
+  // Imports are removed before eval, so the detail helper has to be provided in this context.
+  const context = createContext({ ...helpers, upstreamSections: () => [], $: byId, h: (tag: string, attrs: Record<string, any>, ...children: any[]) => { const element = new Element(tag, attrs, children); if (attrs.id) elements.set(attrs.id, element); return element; }, marked: (value: string) => value, location: { search: "", pathname: "/" }, URLSearchParams, document: { addEventListener: () => {} }, localStorage: { getItem: () => null }, fetch: fetcher });
   runInContext(source, context);
   runInContext("pollJobs = async () => {}; load = async () => {}; renderTable = () => {};", context);
   return { context, byId: (id: string) => byId(id)!, run: (code: string) => runInContext(code, context) };
