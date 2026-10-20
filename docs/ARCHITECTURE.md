@@ -167,6 +167,8 @@ flowchart TD
   OPEN -->|"no"| T30["Poll every 30 seconds"]
 ```
 
+![What the Scout hub runs on a timer, dark-skin view](img/scout-hub-schedules.png)
+
 *Source of truth: `packages/hub/src/main.ts` and the watcher modules beside it. Live reads back off after failures.*
 
 The hub serves the page and a JSON API on 127.0.0.1, port 4870 by default, and pushes changes to the page over server-sent events. With `--live` or `--production`, it re-reads listeners and service state every 3 seconds for Windows machines and every 20 seconds for others while a Services page is open, every 2 minutes otherwise, and runs the Cloudflare reader when a token exists. The research schedule refreshes each version source when its cache lapses, and health probes run every 2 minutes.
