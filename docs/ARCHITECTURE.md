@@ -10,6 +10,26 @@ The Hugging Face researcher stores revision assertions and source intel with a 2
 
 ## Packages
 
+```mermaid
+flowchart TD
+  AD["adapters/*<br/>probes and parse"] -->|"Depends only on"| CORE["packages/core<br/>schema, store, transports and identity"]
+  RESEARCH["packages/research<br/>version lookup"] --> CORE
+  OPS["packages/ops<br/>updates, control, health and meters"] --> CORE
+  HUB["packages/hub<br/>HTTP, schedules and SSE<br/>127.0.0.1 port 4870"] --> CORE
+  HUB --> OPS
+  HUB --> RESEARCH
+  CLI["packages/cli"] --> CORE
+  CLI --> OPS
+  CLI --> RESEARCH
+  MCP["packages/mcp"] --> CORE
+  MCP --> OPS
+  CORE --> DB["SQLite catalog"]
+  WEB["packages/web<br/>static page files"] -->|"JSON API and SSE"| HUB
+  TRAY["packages/tray<br/>Tauri shell"] -->|"Only tray and service action routes"| HUB
+```
+
+*Source of truth: `docs/ARCHITECTURE.md` and each package's `package.json`. The tray restricts its requests in `packages/tray/src-tauri/src/hub.rs`.*
+
 | Package | Holds |
 | --- | --- |
 | `packages/core` | Catalog schema and SQLite store (`node:sqlite`), the adapter contract, transports, identity rules, and the query layers the CLI and hub share. |
@@ -36,9 +56,116 @@ The gitclone researcher asks the GitHub API only when the key starts with `githu
 
 ## The catalog
 
+```mermaid
+erDiagram
+  machines ||--o{ sources : "machine_id"
+  machines ||--o{ installs : "machine_id"
+  sources ||--o{ installs : "source_id"
+  packages ||--o{ installs : "package_id"
+  packages ||--o| item_links : "package_id"
+  items ||--o{ item_links : "item_id"
+  packages ||--o{ assertions : "package_id"
+  packages ||--o{ source_intel : "package_id"
+  machines ||--o{ jobs : "machine_id"
+  installs |o--o{ jobs : "install_id"
+  jobs ||--o{ job_steps : "job_id"
+  machines ||--o{ launch_recipes : "machine_id"
+  machines ||--o{ actions : "machine_id"
+  machines ||--o{ project_git : "machine_id"
+  packages {
+    integer id PK
+    text ecosystem
+    text key
+  }
+  installs {
+    integer id PK
+    integer package_id FK
+    integer source_id FK
+    text machine_id FK
+    text removed_at
+  }
+  item_links {
+    integer package_id PK, FK
+    integer item_id FK
+    text basis
+  }
+  actions {
+    integer id PK
+    text action
+    text state
+  }
+```
+
+*Source of truth: `packages/core/src/schema.ts` (a subset of schema version 3). Flags like Mine are computed at read time.*
+
+```mermaid
+erDiagram
+  machines ||--o{ listeners : "machine_id"
+  machines ||--o{ services : "machine_id"
+  machines ||..o{ meter_samples : "machine_id"
+  machines |o..o{ alerts : "machine_id"
+  machines |o..o{ outages : "machine_id"
+  machines |o..o{ watch_state : "machine_id"
+  alerts }o..o| alert_mutes : "key"
+  cf_zones ||..o{ cf_dns : "name to zone"
+  cf_zones ||..o{ cf_worker_routes : "name to zone"
+  cf_tunnels ||..o{ cf_ingress : "tunnel_id"
+  alerts {
+    integer id PK
+    text key
+    text machine_id
+    text state
+  }
+  watch_state {
+    text key PK
+    text machine_id
+    integer failures
+  }
+  cf_access_apps {
+    text id PK
+    text domain
+    integer policies
+  }
+  cf_zones {
+    text id PK
+    text name
+  }
+  cf_tunnels {
+    text id PK
+    text status
+  }
+```
+
+*Source of truth: `packages/core/src/schema.ts` and `packages/ops/src/cloudflare.ts`. Dotted edges are column associations with no declared foreign key.*
+
 Scans write into `.scout-data/catalog.db`, diffing each result against the last so rows are added, updated, or marked removed. Core then links installs across ecosystems by fixed rules (a winget id to its registry key, a cask to its app bundle), queues merges it cannot prove for the Review page, records version pins found in your projects as advisory constraints, and applies category rules. The schema upgrades in place on open.
 
 ## The hub and its schedules
+
+```mermaid
+flowchart TD
+  LIVE["--live or --production<br/>without --no-live"] --> READ["LiveSchedule<br/>listeners and services"]
+  READ --> WATCHERS{"Services page watching"}
+  WATCHERS -->|"yes"| FAST["Windows every 3 seconds<br/>other systems every 20 seconds"]
+  WATCHERS -->|"no"| SLOW["Every 2 minutes"]
+  LIVE --> WATCH["HubWatch<br/>every 2 minutes unless --no-watch"]
+  WATCH --> SSH["SSH connection and greeting<br/>8-second limits<br/>up, hung or down"]
+  WATCH --> OBS["Health targets and watched services<br/>outage after 2 consecutive failures"]
+  WATCH --> HEART["heartbeat.json<br/>every 30 seconds"]
+  HEART --> DOG["watchdog.ts<br/>check every 60 seconds<br/>stale after 180 seconds"]
+  LIVE --> METERS["MeterSchedule<br/>unless --no-meters"]
+  METERS --> RESOURCE{"Resources page active"}
+  RESOURCE -->|"yes"| M10["Every 10 seconds"]
+  RESOURCE -->|"no"| M60["Every 60 seconds"]
+  LIVE --> BACKUP["HubBackupWatch<br/>Galadriel health file every minute"]
+  SCHEDULE["--production or --schedule<br/>without --no-schedule"] --> SCAN["ScanSchedule<br/>unless --no-scan-schedule"]
+  SCHEDULE --> RESEARCH["Research schedule"]
+  TRAY["Tray panel"] --> OPEN{"Panel open"}
+  OPEN -->|"yes"| T5["Poll every 5 seconds"]
+  OPEN -->|"no"| T30["Poll every 30 seconds"]
+```
+
+*Source of truth: `packages/hub/src/main.ts` and the watcher modules beside it. Live reads back off after failures.*
 
 The hub serves the page and a JSON API on 127.0.0.1, port 4870 by default, and pushes changes to the page over server-sent events. With `--live` or `--production`, it re-reads listeners and service state every 3 seconds for Windows machines and every 20 seconds for others while a Services page is open, every 2 minutes otherwise, and runs the Cloudflare reader when a token exists. The research schedule refreshes each version source when its cache lapses, and health probes run every 2 minutes.
 
@@ -47,6 +174,32 @@ When a language runtime owns a port, the listener reader names the program runni
 A normal session cannot inspect processes that run as administrator, as the system, or under another account, so each platform probe names their listeners from a source that needs no special rights. On Windows, the probe reads the socket owner table (GetExtendedTcpTable with owner-module information), which gives a service name or executable path per listening socket. It also reads the service table: the only process of a service takes that service's display name, a process started by a single-service host such as shawl takes the service name plus " service", and a few system owners such as File sharing (SMB) and Service Control Manager (RPC) get fixed names. Shared svchost hosts never name a row, since one process hosts many services. The owner table supplies the rows because Get-NetTCPConnection drops loopback listeners or reports owner process 0 on some builds, and Get-NetTCPConnection only fills gaps. On macOS, a netstat -anv -p tcp section lists every listening socket with name:pid for all accounts, and the adapter adds each one lsof missed, keyed by port, pid, and bind address. On Linux, the adapter runs `ss -ltnpe` through `sudo -n` first, falls back to the plain command, and takes the process name and PID from the `users:` field. When the account cannot see the owning process, the row is named after the systemd service in the socket's `cgroup:` field and the PID stays blank. For a socket shared by several processes, the leader is the master process, so an nginx master is shown instead of its workers. The result is stored in the nullable `owner` column on the listeners table (added on first start), names the row when no better name exists, and is searchable. The Listeners table on the Services page shows each listener's PID next to its name and port. The systemd adapter runs a single probe whose output has two sections split by a marker line. One section comes from `systemctl show` and covers loaded service units. The other comes from `systemctl list-unit-files` and covers units that are installed but not loaded. If the probe exits with code 127 or prints nothing, systemd is not the running init, and the adapter reports itself as skipped. Every systemd row belongs to the systemd-state origin, so no other reader can retire those rows.
 
 ## Scheduled catalog scans and paused machines
+
+```mermaid
+flowchart TD
+  CONFIG["machines.json<br/>local hub and remote hosts"] --> LOAD["loadMachines<br/>skip paused remote hosts"]
+  LOAD --> SCHED["ScanSchedule<br/>default every 6 hours"]
+  SCHED --> CHILD["One scan.ts child at a time<br/>one due host and its running guests"]
+  CHILD --> PROBE["Adapter.probes<br/>fixed command arrays"]
+  PROBE --> RUN["Transport<br/>local, ssh or running guest"]
+  RUN --> PARSE["Adapter.parse<br/>ScanResult"]
+  PARSE --> OK{"status"}
+  OK -->|"ok or partial"| UPSERT["recordScan<br/>upsert by ecosystem and key"]
+  UPSERT --> COMPLETE{"status is ok"}
+  COMPLETE -->|"yes"| RETIRE["Mark unseen installs removed"]
+  COMPLETE -->|"no"| COVER["Record coverage"]
+  RETIRE --> COVER
+  OK -->|"failed or skipped"| COVER
+  COVER --> DB[".scout-data/catalog.db"]
+  DB --> ID["linkIdentity and proposeMerges"]
+  ID --> PINS["deriveConstraints<br/>record project version pins"]
+  PINS --> SCANASSERT["deriveScanAssertions<br/>winget and Store upgrade answers"]
+  RESEARCH["packages/research<br/>Homebrew, npm, PyPI, GitHub<br/>Go proxy, crates.io and Sparkle"] --> ASSERT["assertions and source_intel"]
+  DB --> RESEARCH
+  SCANASSERT --> ASSERT
+```
+
+*Source of truth: `packages/hub/src/scan-schedule.ts`, `packages/cli/src/scan.ts`, and `packages/core/src/store.ts`. Only a fully ok scan retires missing installs.*
 
 The hub keeps the catalog current on its own schedule, so nobody has to run `node packages/cli/src/scan.ts` by hand. The schedule is `ScanSchedule` in `packages/hub/src/scan-schedule.ts`, and it runs whenever the hub runs scheduled work (`--production` or `--schedule`, unless `--no-schedule` is set). `--no-scan-schedule` turns off only the scans. `--scan-interval HOURS` sets the interval as an integer from 1 to 168, and the default is 6.
 
@@ -63,6 +216,51 @@ A remote entry in `machines.json` with `"paused": true` gets no connection of an
 `planUpdate` turns an install and its newer version into an exact winget, Store, brew, cask, npm, pipx, or uv command. The dependency guard refuses an update that would break a runtime requirement or a library other programs use, and asks for an extra confirmation on softer risks. A confirmed batch runs preflight, update, and verify one job at a time per machine and stops at the first failure.
 
 ## Control: plan, token, audit
+
+```mermaid
+sequenceDiagram
+  actor Operator
+  participant Ops as packages/ops
+  participant Catalog as SQLite catalog
+  participant Machine as Target transport
+  alt Update an install
+    Operator->>Ops: Preview update
+    Ops->>Ops: planUpdate and dependency guard
+    alt Hard dependency break
+      Ops-->>Operator: Refuse update
+    else Allowed or soft risk
+      Ops-->>Operator: Exact command and extra confirmation for soft risk
+      Operator->>Ops: Confirm batch
+      Ops->>Catalog: Queue jobs
+      loop One job at a time per machine
+        Ops->>Machine: Preflight, update, verify
+        Machine-->>Ops: Exit status and installed version
+        Ops->>Catalog: Record job and job_steps
+        opt Job fails
+          Ops->>Catalog: Stop queued jobs in this batch
+        end
+      end
+    end
+  else Control a service or listener
+    Operator->>Ops: Plan start, stop, restart, disable or enable
+    Ops->>Ops: Check target support and protection
+    alt Forbidden action
+      Ops-->>Operator: Refuse with reason
+    else Allowed plan
+      Ops-->>Operator: Exact command and one-time token valid for 2 minutes
+      Operator->>Ops: Confirm and run token
+      Ops->>Ops: Consume token and recheck live target fingerprint
+      Ops->>Catalog: Insert actions audit row
+      Ops->>Machine: Execute command
+      Ops->>Machine: Read state until confirmation or timeout
+      Ops->>Catalog: Finish actions audit row
+    end
+  end
+  Note over Operator,Ops: scout_start_service uses ControlRunner, MCP offers no stop or restart runner
+  Note over Operator,Ops: Uninstall returns instructions only
+```
+
+*Source of truth: `packages/ops/src/control.ts`, `packages/ops/src/runner.ts`, and `packages/core/src/jobs.ts`. Protection blocks stop, restart, and disable; start and enable skip that check.*
 
 Start, stop, and restart for Windows services, scheduled tasks, launchd jobs, and listening processes go through `packages/ops/src/control.ts`. A plan names the exact action, or refuses it when the row is in a protected group (essential, Scout itself, cloudflared, ssh, the local AI gateway, remote access, DNS and network, containers). An allowed plan carries a random one-time token that expires after two minutes. Running it re-checks the target against the plan, writes an audit row, and records the result there. Uninstall produces text instructions only.
 
