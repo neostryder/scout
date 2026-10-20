@@ -61,6 +61,7 @@ test("only https and ssh forges are accepted, and version tags ignore a prerelea
   assert.deepEqual(selectLatestTags(["v1.2.0", "v1.2.0-rc.1"]), { version: "1.2.0", prerelease: null });
   assert.deepEqual(selectLatestTags(["v2.0.0-beta.1"]), { version: null, prerelease: "2.0.0-beta.1" });
   assert.deepEqual(selectLatestTags([]), { version: null, prerelease: null });
+  assert.deepEqual(selectLatestTags(["1.3.13", "14-latest", "latest", "v2-stable"]), { version: "1.3.13", prerelease: null });
 });
 
 test("the ref check reads tags from a throwaway repository and rejects an unsupported remote without running git", async () => {

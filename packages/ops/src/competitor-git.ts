@@ -54,9 +54,12 @@ export function supportedRemote(remote: string): boolean {
   return Boolean(scp?.[1]?.includes(".") && HOSTS.has(scp[1].toLowerCase()));
 }
 
+// A moving alias such as "latest" or "14-latest" names a channel, not a release.
+const ALIAS_TAG = /(^|[^a-z])(latest|stable|current|head|main|master)([^a-z]|$)/i;
+
 export function versionFromTag(tag: string): string | null {
   const stripped = tag.trim().replace(/^v(?=\d)/i, "");
-  if (!/^\d/.test(stripped) || compareVersions(stripped, "0") === null) return null;
+  if (!/^\d/.test(stripped) || ALIAS_TAG.test(stripped) || compareVersions(stripped, "0") === null) return null;
   return stripped;
 }
 

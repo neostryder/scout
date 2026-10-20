@@ -89,6 +89,8 @@ export class CompetitorSchedule {
   intervalSeconds(): number { return this.intervalMs / 1000; }
 
   status(): CompetitorWatchStatus {
+    // A registry written after the hub started (the seed command) shows up without a restart.
+    if (!this.configured) this.loadConfig();
     return { configured: this.configured, intervalSeconds: this.intervalSeconds(), checkedAt: this.checkedAt, running: this.active };
   }
 
