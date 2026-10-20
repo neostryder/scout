@@ -318,3 +318,38 @@ test("sync fast-forwards a clean mirror and records a refusal without moving it"
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("sync survives an upstream that moves a tag it already published", async () => {
+  const root = mkdtempSync(join(tmpdir(), "scout-comp-tag-"));
+  const mirrors = join(root, "mirrors");
+  try {
+    mkdirSync(mirrors);
+    const remote = join(root, "remote.git");
+    const upstream = join(root, "upstream");
+    const mirror = join(mirrors, "acme-tools");
+    git(root, ["-c", "init.defaultBranch=main", "init", "--bare", remote]);
+    git(root, ["clone", remote, upstream]);
+    configure(upstream);
+    writeFileSync(join(upstream, "README.md"), "one\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "first"]);
+    git(upstream, ["tag", "latest"]);
+    git(upstream, ["push", "-u", "origin", "HEAD", "--tags"]);
+    git(root, ["clone", remote, mirror]);
+    configure(mirror);
+    git(mirror, ["fetch", "--tags", "origin"]);
+    writeFileSync(join(upstream, "README.md"), "two\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "second"]);
+    git(upstream, ["tag", "-f", "latest"]);
+    git(upstream, ["push", "origin", "HEAD"]);
+    git(upstream, ["push", "--force", "origin", "latest"]);
+    const db = openCatalog(":memory:");
+    syncCompetitors(db, [{ id: "acme-tools", name: "Acme Tools", org: null, remoteUrl: null, mirrorPath: mirror, packageUrl: null, dossierDir: null, dossierReviewed: null, flags: [], baseline: null }]);
+    const synced = await syncCompetitorMirror(db, "acme-tools", { mirrorRoot: mirrors, now: NOW });
+    assert.equal(synced.ok, true, synced.ok ? "" : synced.error);
+    assert.equal(head(mirror), head(upstream));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

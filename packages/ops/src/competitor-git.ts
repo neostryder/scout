@@ -96,7 +96,9 @@ export function parseHeadSha(stdout: string): string | null {
 
 function clip(result: GitResult, fallback: string): string {
   if (result.timedOut) return "timed out";
-  const text = redactUrlSecrets(result.stderr || result.stdout || fallback).replace(/\s+/g, " ").trim();
+  // A failed fetch prints a progress listing first; the lines that explain the failure come after it.
+  const failures = result.stderr.split(/\r?\n/).filter((line) => /^(fatal|error):|^ ! /.test(line));
+  const text = redactUrlSecrets(failures.length ? failures.join(" ") : result.stderr || result.stdout || fallback).replace(/\s+/g, " ").trim();
   return text.slice(0, 300) || fallback;
 }
 
@@ -165,7 +167,7 @@ export async function pullMirror(mirrorPath: string, mirrorRoot: string, run: Gi
     const located = await limited(["rev-parse", "--git-path", name], 30_000);
     if (located.code === 0 && existsSync(gitPath(cwd, located.stdout))) return { ok: false, error: "mirror is in the middle of a merge or rebase" };
   }
-  const fetched = await limited(["fetch", "--tags", "origin"], 120_000);
+  const fetched = await limited(["fetch", "--force", "--tags", "origin"], 120_000);
   if (fetched.timedOut || fetched.code !== 0) return { ok: false, error: clip(fetched, "git fetch failed") };
   const branch = (await limited(["rev-parse", "--abbrev-ref", "HEAD"], 30_000)).stdout.trim();
   const upstream = await limited(["rev-parse", "--abbrev-ref", "@{upstream}"], 30_000);
