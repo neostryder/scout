@@ -166,6 +166,7 @@ Then open http://127.0.0.1:4870/. The page has Catalog, Updates, Review, Jobs, a
 | `--no-cloudflare` | Skip the Cloudflare reader. |
 | `--no-health` | Turn off health checks. `--health-interval N` sets their period in seconds (default 120, at least 30). |
 | `--no-watch` | Turn off the outage watch. |
+| `--no-competitor-watch` | Turn off the competitor watch schedule. Manual checks still work. |
 | `--watch-interval N` | Set the outage watch period in seconds (default 120, at least 30). |
 | `--db path` | Use another catalog file. |
 | `--access path` | Use another Access configuration file in production mode. |
@@ -552,6 +553,41 @@ Protected services never offer Stop, Restart, or Disable anywhere in Scout. They
 
 The MCP server has no sign-in. Anyone who can run it on the hub machine can read the catalog and start services, just as they could with the CLI, so connect it only to agents you would trust with the CLI.
 
+## Competitor watch
+
+The watch reads `.scout-data/competitors.json`. The seed command writes that file and does not change the dossier folders or the mirrors:
+
+```
+node packages/cli/src/competitors.ts seed --dossiers <dir> --mirrors <dir>
+```
+
+`--out <path>` writes a different file. The default is `.scout-data/competitors.json`. Running the command again adds new entries and keeps each existing baseline.
+
+```json
+{
+  "dossierRoot": "C:/path/to/dossiers",
+  "mirrorRoot": "C:/path/to/mirrors",
+  "entries": [
+    {
+      "id": "acme-tools",
+      "name": "Acme Tools",
+      "org": "Acme",
+      "remoteUrl": "https://github.com/example/acme-tools",
+      "mirrorPath": "C:/path/to/mirrors/acme-tools",
+      "packageUrl": "https://example.test/packages/acme",
+      "dossierDir": "C:/path/to/dossiers/Acme - Acme Tools",
+      "dossierReviewed": "2026-05-05",
+      "flags": ["forge", "vault"],
+      "baseline": { "version": "1.2.0", "commit": "abc123", "at": "2026-05-05", "source": "mirror" }
+    }
+  ]
+}
+```
+
+A dossier folder is a direct child of the dossier root that contains numbered markdown files such as `01_Notes.md`. Seed reads `Repo`, `Package`, `Last reviewed`, `Organization / creator`, the `#` title, and a `Flags:` or `tags:` line. The known flags are `forge`, `vault`, `tome`, `scroll`, `quill`, `atlas`, `herald`, `rules`, `secret`, `orchestrator`, and `worlds`. Other words are dropped. A mirror is a direct child of the mirror root that has a `.git` entry. Seed matches a mirror to a dossier by the remote, ignoring scheme, a trailing `.git`, and any credentials.
+
+When scheduled work is on, the hub checks those remotes every 6 hours, starting 5 minutes after startup. `--no-competitor-watch` turns that schedule off. `GET /api/competitors` lists them. `POST /api/competitors/check` checks now. `POST /api/competitors/<id>/update` fetches that mirror and queues a research request. `GET /api/competitors/runs?state=queued,claimed` lists queued work. Claim, complete, and fail are `POST /api/competitors/runs/<id>/claim`, `/complete`, and `/fail`.
+
 ## Local state
 
 Everything Scout writes lives in `.scout-data/`:
@@ -559,6 +595,7 @@ Everything Scout writes lives in `.scout-data/`:
 | File | Contents |
 | --- | --- |
 | `catalog.db` | The SQLite catalog. |
+| `competitors.json` | Competitor watch registry: dossier root, mirror root, and one entry per competitor with its first baseline. The seed command writes it. |
 | `protected.json` | Optional. Turns off the remote access, DNS and network, or containers protection groups (`"disable": [...]`), and adds your own protected entries (`"names": [{ "machine", "match", "reason" }]`). |
 | `ports.json` | Optional port registry: named `ranges` and `reserved` ports. Port-clash alerts come from it. |
 | `stacks.json` | Optional stacks: ordered lists of recipes and services with wait-for-port steps. |

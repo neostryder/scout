@@ -571,6 +571,47 @@ CREATE TABLE IF NOT EXISTS cf_reader (
   last_read_at TEXT,
   error        TEXT
 );
+
+-- Competitor watch. The gitignored registry file holds identity and the first baseline; these rows hold the live check and the research queue.
+CREATE TABLE IF NOT EXISTS competitors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  org TEXT,
+  remote_url TEXT,
+  mirror_path TEXT,
+  package_url TEXT,
+  dossier_dir TEXT,
+  dossier_reviewed TEXT,
+  flags_json TEXT NOT NULL DEFAULT '[]',
+  baseline_version TEXT,
+  baseline_commit TEXT,
+  baseline_at TEXT,
+  baseline_source TEXT,
+  latest_version TEXT,
+  latest_prerelease TEXT,
+  latest_commit TEXT,
+  latest_checked_at TEXT,
+  latest_error TEXT,
+  notified_version TEXT
+);
+
+CREATE TABLE IF NOT EXISTS competitor_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competitor_id TEXT NOT NULL REFERENCES competitors(id),
+  state TEXT NOT NULL CHECK (state IN ('pulling','queued','claimed','done','failed')),
+  from_version TEXT,
+  from_commit TEXT,
+  to_version TEXT,
+  to_commit TEXT,
+  requested_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  claimed_by TEXT,
+  result_path TEXT,
+  summary TEXT,
+  error TEXT,
+  request_json TEXT
+);
+CREATE INDEX IF NOT EXISTS competitor_runs_competitor_state ON competitor_runs(competitor_id, state);
 `;
 
 /** Columns added to `packages` in version 2, applied to a version 1 catalog. */

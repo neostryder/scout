@@ -17,6 +17,8 @@ import type { LiveSchedule } from "./live.ts";
 import { routesApi } from "./routes-api.ts";
 import type { ResearchSchedule } from "./schedule.ts";
 import type { ScanSchedule } from "./scan-schedule.ts";
+import { competitorsApi } from "./competitors-api.ts";
+import type { CompetitorSchedule } from "./competitor-schedule.ts";
 import { readJson, servicesApi } from "./services-api.ts";
 import type { DescriptionRun } from "./descriptions.ts";
 import { HubRecipes } from "./recipes.ts";
@@ -74,6 +76,8 @@ export interface HubOptions {
   downloads?: DownloadsOptions;
   research?: ResearchSchedule;
   scans?: ScanSchedule;
+  /** Competitor watch: the registry check and the mirror update. Off when omitted. */
+  competitors?: CompetitorSchedule;
   /** Live listener and service reads. Omit it and the stream still says hello, while refresh answers 404. */
   live?: LiveSchedule;
   /** Cloudflare route reader. Omit it and route reads report off, while route refresh answers 404. */
@@ -254,6 +258,9 @@ export function createHub(options: HubOptions): Server {
     if (url.pathname === "/api/listeners" || url.pathname === "/api/services" || url.pathname.startsWith("/api/services/")) {
       return servicesApi(db, req, url, res, hostAllowed, json, options.live, options.streamHeartbeatMs ?? 15_000, options.cloudflare, options.descriptions, control, alerts, recipes, health, registries, options.watch, provenance);
     }
+    if (url.pathname === "/api/competitors" || url.pathname.startsWith("/api/competitors/")) {
+      return competitorsApi(db, req, url, res, hostAllowed, json, options.competitors);
+    }
     if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel, options.scans);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");
     try {
@@ -323,6 +330,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { alerts.stop(); options.scans?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { alerts.stop(); options.scans?.stop(); options.competitors?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }
