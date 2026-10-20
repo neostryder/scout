@@ -1,4 +1,4 @@
-import { actionById, alertsFileReader, alertsResponse, hubMachineId, listActions, loadTunnelHosts, openCatalog, outagesResponse, portsFileReader, portsResponse, systemsMapMarkdown, watchFileReader, whoIs, type ActionRecord, type ControlAction, type ControlTarget, type Db } from "@scout/core";
+import { actionById, alertsFileReader, alertsResponse, claimCompetitorRun, completeCompetitorRun, failCompetitorRun, hubMachineId, listActions, listCompetitorRuns, listCompetitors, loadTunnelHosts, openCatalog, outagesResponse, portsFileReader, portsResponse, systemsMapMarkdown, watchFileReader, whoIs, type ActionRecord, type ControlAction, type ControlTarget, type Db } from "@scout/core";
 import { ControlRunner, loadMachines, localMapInput, localStatus, localTray, type ControlRunnerDeps, type LocalPaths } from "@scout/ops";
 import type { Tool } from "./server.ts";
 
@@ -6,11 +6,22 @@ export interface ToolContext {
   paths: LocalPaths;
   /** Overrides for the control runner, used by tests to stand in for the machine. */
   control?: Partial<ControlRunnerDeps>;
+  /** Overrides for the competitor catalog functions, used by tests before those functions exist. */
+  competitors?: {
+    listCompetitors?: typeof listCompetitors;
+    listCompetitorRuns?: typeof listCompetitorRuns;
+    claimCompetitorRun?: typeof claimCompetitorRun;
+    completeCompetitorRun?: typeof completeCompetitorRun;
+    failCompetitorRun?: typeof failCompetitorRun;
+  };
   now?: () => string;
 }
 
 const MAX_ROWS = 500;
+const COMPETITOR_CAP = 200;
 const STATES = ["up", "changed", "down", "stopped", "unknown"] as const;
+const COMPETITOR_STATUS = ["new", "current", "unknown"] as const;
+const QUEUE_STATES = ["queued", "claimed"] as const;
 
 const object = (properties: Record<string, unknown>, required: string[] = []): Record<string, unknown> => ({ type: "object", properties, required, additionalProperties: false });
 const text = (args: Record<string, unknown>, key: string, max = 200): string | undefined => {
@@ -30,6 +41,22 @@ const choice = <T extends string>(args: Record<string, unknown>, key: string, al
   if (typeof value !== "string" || !allowed.includes(value as T)) throw new Error(`${key} must be one of ${allowed.join(", ")}`);
   return value as T;
 };
+const queueStates = (args: Record<string, unknown>): Array<(typeof QUEUE_STATES)[number]> => {
+  const value = args.states;
+  if (value === undefined) return ["queued"];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !(QUEUE_STATES as readonly string[]).includes(item))) throw new Error("states must be a list of queued or claimed");
+  return value as Array<(typeof QUEUE_STATES)[number]>;
+};
+const requiredText = (args: Record<string, unknown>, key: string, max: number): string => {
+  const value = text(args, key, max);
+  if (value === undefined) throw new Error(`${key} is required`);
+  return value;
+};
+const runIdOf = (args: Record<string, unknown>): number => {
+  const id = integer(args, "runId", 1, Number.MAX_SAFE_INTEGER);
+  if (id === undefined) throw new Error("runId is required");
+  return id;
+};
 const filters = (args: Record<string, unknown>, keys: string[]): URLSearchParams => {
   const params = new URLSearchParams();
   for (const key of keys) { const value = text(args, key); if (value !== undefined) params.set(key, value); }
@@ -39,10 +66,17 @@ const filters = (args: Record<string, unknown>, keys: string[]): URLSearchParams
 const brief = (record: ActionRecord | null): unknown => record && { id: record.id, state: record.state, action: record.action, name: record.name, machineId: record.machineId, message: record.message, at: record.at, finishedAt: record.finishedAt };
 const withoutToken = <T extends { token?: unknown }>(plan: T): Omit<T, "token"> => { const { token: _token, ...rest } = plan; void _token; return rest; };
 
-/** The tools an agent gets. Reads are free; scout_start_service is the only one that changes anything, and it can only start. */
+/** The tools an agent gets. Reads are free. scout_start_service can only start a stopped service. scout_competitor_claim, scout_competitor_complete, and scout_competitor_fail move a research run's state and never touch files, repositories, or machines. */
 export function createTools(context: ToolContext): Tool[] {
   const { paths } = context;
   const now = (): string => context.now?.() ?? new Date().toISOString();
+  const competitors = {
+    listCompetitors: context.competitors?.listCompetitors ?? listCompetitors,
+    listCompetitorRuns: context.competitors?.listCompetitorRuns ?? listCompetitorRuns,
+    claimCompetitorRun: context.competitors?.claimCompetitorRun ?? claimCompetitorRun,
+    completeCompetitorRun: context.competitors?.completeCompetitorRun ?? completeCompetitorRun,
+    failCompetitorRun: context.competitors?.failCompetitorRun ?? failCompetitorRun,
+  };
   const withDb = async <T>(use: (db: Db) => T | Promise<T>): Promise<T> => {
     const db = openCatalog(paths.db);
     try { return await use(db); } finally { db.close(); }
@@ -111,5 +145,35 @@ export function createTools(context: ToolContext): Tool[] {
         return { started: done?.state === "done", result: brief(done ?? actionById(db, started.actionId)) };
       } finally { control.close(); }
     }) },
+    { name: "scout_competitors", readOnly: true, description: "Lists the competitors Scout watches, with status, the last analyzed version, the latest version, and any research run. Pass status to keep only new, current, or unknown. At most 200 rows come back.", inputSchema: object({ status: { type: "string", enum: [...COMPETITOR_STATUS], description: "Keep only competitors in this status." } }), run: (args) => {
+      const status = args.status === undefined ? undefined : choice(args, "status", COMPETITOR_STATUS);
+      return withDb((db) => {
+        const rows = competitors.listCompetitors(db, now()).filter((row) => status === undefined || row.status === status);
+        return { total: rows.length, competitors: rows.slice(0, COMPETITOR_CAP) };
+      });
+    } },
+    { name: "scout_competitor_queue", readOnly: true, description: "Lists research runs in the given states, newest first, including each run's request. The default is queued.", inputSchema: object({ states: { type: "array", items: { type: "string", enum: [...QUEUE_STATES] }, description: "queued, claimed, or both. The default is queued." } }), run: (args) => {
+      const states = queueStates(args);
+      return withDb((db) => ({ runs: competitors.listCompetitorRuns(db, states, now()) }));
+    } },
+    { name: "scout_competitor_claim", readOnly: false, description: "Claims a queued research run for the named person. It changes the run's state and does not touch files, repositories, or machines.", inputSchema: object({ runId: { type: "integer", minimum: 1 }, by: { type: "string", maxLength: 80, description: "Who is taking the run. At most 80 characters." } }, ["runId", "by"]), run: (args) => {
+      const runId = runIdOf(args);
+      const by = requiredText(args, "by", 80);
+      return withDb((db) => competitors.claimCompetitorRun(db, runId, by, now()));
+    } },
+    { name: "scout_competitor_complete", readOnly: false, description: "Marks a claimed research run done, records where the findings went, and sets the analyzed version when one is given. It changes the run's state and does not touch files, repositories, or machines.", inputSchema: object({ runId: { type: "integer", minimum: 1 }, resultPath: { type: "string", maxLength: 500 }, summary: { type: "string", maxLength: 2000 }, analyzedVersion: { type: "string", maxLength: 80 } }, ["runId", "resultPath", "summary"]), run: (args) => {
+      const runId = runIdOf(args);
+      const resultPath = requiredText(args, "resultPath", 500);
+      const summary = requiredText(args, "summary", 2000);
+      const analyzedVersion = text(args, "analyzedVersion", 80);
+      const input: { resultPath: string; summary: string; analyzedVersion?: string } = { resultPath, summary };
+      if (analyzedVersion !== undefined) input.analyzedVersion = analyzedVersion;
+      return withDb((db) => competitors.completeCompetitorRun(db, runId, input, now()));
+    } },
+    { name: "scout_competitor_fail", readOnly: false, description: "Marks a research run failed and stores the reason. It changes the run's state and does not touch files, repositories, or machines.", inputSchema: object({ runId: { type: "integer", minimum: 1 }, error: { type: "string", maxLength: 500 } }, ["runId", "error"]), run: (args) => {
+      const runId = runIdOf(args);
+      const error = requiredText(args, "error", 500);
+      return withDb((db) => competitors.failCompetitorRun(db, runId, error, now()));
+    } },
   ];
 }

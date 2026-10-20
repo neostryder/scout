@@ -4,6 +4,7 @@ import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 
 let servicesView;
 let resourcesView;
+let competitorsView;
 let traySettings;
 
 const PAGE = 100;
@@ -140,7 +141,7 @@ function updateRow(row) {
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
   const current = view();
-  if (current === "services" || current === "resources" || current === "settings") return;
+  if (current === "services" || current === "resources" || current === "settings" || current === "competitors") return;
   state.controller?.abort();
   const controller = new AbortController(); state.controller = controller;
   const sequence = ++state.sequence;
@@ -287,13 +288,14 @@ function showView(next, initial = false) {
   if (next === "settings") openSettings();
   if (next === "services") openServices(); else servicesView?.hide();
   if (next === "resources") openResources(); else resourcesView?.hide();
+  if (next === "competitors") openCompetitors(); else competitorsView?.hide();
   $("toggle-filters").hidden = !["updates", "catalog"].includes(next);
   for (const button of document.querySelectorAll("[data-view]")) button.setAttribute("aria-current", String(button.dataset.view === next));
   if (["updates", "catalog"].includes(next)) { $("search").value = value("q"); renderFilters(); renderSorts(); renderChips(); }
   savedFilters.refresh();
   load();
 }
-// The Services, Resources, and Settings pages are large, so each one's code is fetched the first time that page opens. If the page was left again while its code was loading, nothing is drawn.
+// The Services, Resources, Settings, and Competitors pages are large, so each one's code is fetched the first time that page opens. If the page was left again while its code was loading, nothing is drawn.
 async function openSettings() {
   const [{ createTraySettings }, { TEXT: TRAY_TEXT }] = await Promise.all([import("./tray-settings.js"), import("./tray-text.js")]);
   if (view() !== "settings") return;
@@ -312,6 +314,12 @@ async function openResources() {
   resourcesView ||= createResourcesView($("resources"));
   resourcesView.show();
 }
+async function openCompetitors() {
+  const { createCompetitorsView } = await import("./competitors.js");
+  if (view() !== "competitors") return;
+  competitorsView ||= createCompetitorsView($("competitors"));
+  competitorsView.show();
+}
 function renderSorts() { const names = view() === "updates" ? UPDATE_SORTS : CATALOG_SORTS; $("sort").replaceChildren(...names.map((name) => h("option", { value: name, selected: sortKey() === name }, title(name)))); $("dir").value = value("dir") || defaultDir(sortKey()); }
 
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
@@ -326,7 +334,7 @@ $("select-page").addEventListener("click", () => { for (const row of state.rows)
 $("clear-selection").addEventListener("click", () => { state.selected.clear(); renderTable(); });
 $("confirm-cancel").addEventListener("click", () => $("confirm").close());
 $("confirm-submit").addEventListener("click", submitPlans);
-const initial = ["updates", "catalog", "review", "jobs", "services", "resources", "settings"].includes(view()) ? view() : "updates";
+const initial = ["updates", "catalog", "review", "jobs", "services", "resources", "competitors", "settings"].includes(view()) ? view() : "updates";
 window.addEventListener("popstate", () => { state.params = new URLSearchParams(location.search); showView(view(), true); });
 const savedFilters = savedFilterControl($("saved-filters"), { view, query: () => state.params, apply: (spec) => {
   const current = view(); clearTimeout(state.timer);

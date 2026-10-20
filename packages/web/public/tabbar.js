@@ -7,6 +7,7 @@ const MAIN = [
 ];
 const MORE = [
   { label: "Updates", href: "/", view: "updates" },
+  { label: "Competitors", href: "/?view=competitors", view: "competitors", count: "competitors-count" },
   { label: "Catalog", href: "/?view=catalog", view: "catalog" },
   { label: "Review queue", href: "/?view=review", view: "review" },
   { label: "Jobs", href: "/?view=jobs", view: "jobs" },
@@ -71,6 +72,15 @@ function mount() {
     link.href = item.href;
     link.setAttribute("role", "menuitem");
     link.textContent = item.label;
+    if (item.count) {
+      const mark = document.createElement("span");
+      mark.className = "badge";
+      link.append(mark);
+      const source = document.getElementById(item.count);
+      const sync = () => { mark.textContent = source ? source.textContent : ""; };
+      if (source) new MutationObserver(sync).observe(source, { childList: true, characterData: true, subtree: true });
+      sync();
+    }
     link.addEventListener("click", (event) => { if (!plain(event)) return; event.preventDefault(); close(); go(item.href); });
     return { link, item };
   });

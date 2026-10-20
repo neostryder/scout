@@ -8,7 +8,7 @@
 td { padding-top: var(--row-y); padding-bottom: var(--row-y); }
 button, select, input[type="search"], input[type="text"], .tab { min-height: var(--tap); }
 .facet label, .toggles label { min-height: var(--tap); }
-:root[data-density="compact"] #services td, :root[data-density="compact"] #resources td { padding-top: 3px; padding-bottom: 3px; }
+:root[data-density="compact"] #services td, :root[data-density="compact"] #resources td, :root[data-density="compact"] #competitors td { padding-top: 3px; padding-bottom: 3px; }
 
 .tabbar, .tab-sheet { display: none; }
 

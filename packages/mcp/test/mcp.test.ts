@@ -42,6 +42,9 @@ test("the server answers initialize, ping and tools/list, and ignores notificati
   const list: any = await server.handle({ jsonrpc: "2.0", id: 4, method: "tools/list" });
   const names = list.result.tools.map((tool: { name: string }) => tool.name);
   assert.ok(names.includes("scout_status") && names.includes("scout_start_service") && names.includes("scout_plan_action"));
+  assert.ok(["scout_competitors", "scout_competitor_queue", "scout_competitor_claim", "scout_competitor_complete", "scout_competitor_fail"].every((name) => names.includes(name)));
+  assert.equal(list.result.tools.find((tool: { name: string }) => tool.name === "scout_competitors").annotations.readOnlyHint, true);
+  assert.equal(list.result.tools.find((tool: { name: string }) => tool.name === "scout_competitor_claim").annotations.readOnlyHint, false);
   assert.ok(!names.some((name: string) => /stop|restart/.test(name)), "no tool carries out a stop or restart");
   assert.equal(list.result.tools.find((tool: { name: string }) => tool.name === "scout_start_service").annotations.readOnlyHint, false);
   assert.equal(list.result.tools.find((tool: { name: string }) => tool.name === "scout_status").annotations.readOnlyHint, true);

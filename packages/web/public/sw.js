@@ -7,9 +7,9 @@ const DATA = "scout-data";
 const DATA_LIMIT = 200;
 const CACHED_AT = "x-scout-cached-at";
 const PRECACHE = [
-  "/", "/styles.css", "/services.css", "/resources.css", "/phone.css", "/app.js", "/lib.js", "/filters.js", "/saved-filters.js", "/theme.js", "/density.js", "/tabbar.js",
+  "/", "/styles.css", "/services.css", "/resources.css", "/competitors.css", "/phone.css", "/app.js", "/lib.js", "/filters.js", "/saved-filters.js", "/theme.js", "/density.js", "/tabbar.js",
   "/offline.js", "/palette.js", "/palette-model.js", "/pwa.js", "/review-reminder.js", "/alerts-badge.js", "/download-kinds.js", "/dependency-cards.js", "/services.js", "/services-model.js",
-  "/services-diagram.js", "/outages.js", "/outages-model.js", "/resources.js", "/resources-model.js", "/tray-settings.js", "/tray-model.js", "/tray-text.js",
+  "/services-diagram.js", "/outages.js", "/outages-model.js", "/resources.js", "/resources-model.js", "/competitors.js", "/competitors-model.js", "/tray-settings.js", "/tray-model.js", "/tray-text.js",
   "/icon.svg", "/icon-192.png", "/favicon-32.png", "/manifest.webmanifest",
 ];
 

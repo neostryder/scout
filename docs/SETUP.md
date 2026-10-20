@@ -495,6 +495,22 @@ To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui
 - The icon shows a grey cross: the panel is not connected yet, cannot reach the hub, or had its token refused by Cloudflare Access. The banner in the panel says which.
 - The panel says "Cloudflare Access turned down the service token": check the Client ID and secret on the connection screen, the Service Auth policy on the Access application, and `allowedServiceTokens` in `access.json` on the hub machine.
 
+## Competitor watch
+
+The Competitors view sits in the top navigation. On a phone it is in the More sheet, with the same count. The count is how many competitors have a new version. Each row shows the organization, any flags, the last analyzed version and date, the latest version, and the research state in ordinary words. A prerelease that is newer than the stable version shows in quieter text. Search matches the name and the organization. New only starts on when any row is new, and you can turn it off.
+
+Update is there when that competitor has a local mirror and no research run is still going. It asks you to confirm, then pulls the mirror and queues a research request. Nothing is installed, and the research waits until a person picks it up. A row with no mirror shows Update disabled, with the reason beside the button. Check now starts a check of the remotes. The time of the last check is under the title.
+
+When competitor watch is not set up, the page says to run the seed command:
+
+```
+node packages/cli/src/competitors.ts seed --dossiers <dir> --mirrors <dir>
+```
+
+The command writes `.scout-data/competitors.json`, which git ignores. Add `--out <path>` to write somewhere else. Flags on an entry are words such as forge, vault, tome, scroll, quill, atlas, herald, rules, secret, orchestrator, and worlds.
+
+An agent reads the list with `scout_competitors` (at most 200 rows, and an optional status of new, current, or unknown) and the research queue with `scout_competitor_queue` (queued by default, or claimed). `scout_competitor_claim`, `scout_competitor_complete`, and `scout_competitor_fail` record a claim, a finished analysis, or a failure. Those three change the run's state and leave files, repositories, and machines alone.
+
 ## Agents and the command line
 
 You can check on your machines from a terminal, or let an AI agent do it, without opening the Scout page. The commands and the MCP server below read the hub machine's catalog directly (`.scout-data/catalog.db`, or another file with `--db`), so they work even when the hub is stopped. Run them from the Scout install folder on the hub machine, or from the checkout when it holds the live data.
@@ -537,9 +553,9 @@ The agent starts the server on the hub machine and talks to it over standard inp
 
 ### What an agent can do
 
-An agent can read everything the commands above show. It can also list your services with their ids, ports, protection, and available actions, filtered by machine, state, or name, and it can read outages, alerts, the port registry, and the log of every start, stop, restart, disable, and enable. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, and `scout_action_log`.
+An agent can read everything the commands above show. It can also list your services with their ids, ports, protection, and available actions, filtered by machine, state, or name, and it can read outages, alerts, the port registry, and the log of every start, stop, restart, disable, and enable. It can read the competitor list and the research queue. The tools are `scout_status`, `scout_whois`, `scout_services`, `scout_outages`, `scout_alerts`, `scout_ports`, `scout_systems_map`, `scout_action_log`, `scout_competitors`, `scout_competitor_queue`, `scout_competitor_claim`, `scout_competitor_complete`, and `scout_competitor_fail`.
 
-The one thing an agent can change is starting a stopped service or listener, with `scout_start_service`. Scout plans the start, runs it if the plan allows it, and reports back, using the same checks, one-time token, and audit log as the Scout page and the tray panel. If the service is already running or is protected, Scout refuses and gives the reason. When the start needs admin rights, the agent gets back the sudo command to run, or a note to approve the prompt on that machine.
+An agent can start a stopped service or listener with `scout_start_service`. Scout plans the start, runs it if the plan allows it, and reports back, using the same checks, one-time token, and audit log as the Scout page and the tray panel. If the service is already running or is protected, Scout refuses and gives the reason. When the start needs admin rights, the agent gets back the sudo command to run, or a note to approve the prompt on that machine. An agent can also move a competitor research run with `scout_competitor_claim`, `scout_competitor_complete`, and `scout_competitor_fail`. Those three change the run's state in the catalog and leave files, repositories, and machines alone.
 
 An agent cannot stop, restart, disable, or enable anything. It can call `scout_plan_action` to learn what a start, stop, restart, disable, or enable would do, whether that action is allowed, and what it would break, but the agent never gets the token needed to run it. For those actions, use the Scout page, the tray panel, or the CLI:
 
