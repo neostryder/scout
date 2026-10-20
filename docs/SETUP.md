@@ -4,7 +4,7 @@ Scout runs on one computer, the hub machine, and reads every other machine over 
 
 ## Cogitator model inventory
 
-The `cogmodels` source runs on Windows, macOS, and Linux when the standard Cogitator data directory exists. It reads selected engine and media paths from `cogitator.toml`, optional model lock records and catalog entries, model sidecars, and directory metadata. It skips secret files, peer settings, and key paths. Model files are never hashed; GGUF files receive a header check only.
+The `cogmodels` source runs on Windows, macOS, and Linux when it finds a Cogitator folder containing `cogitator.toml`. On Windows the probe looks in `COGITATOR_HOME`, then `%LOCALAPPDATA%\Cogitator`, then a `Cogitator` folder at the root of each fixed drive, so an install moved to another drive is found. A top-level `data_dir` in `cogitator.toml` adds that folder's `models` directory to the scan. It reads selected engine and media paths from `cogitator.toml`, optional model lock records and catalog entries, model sidecars, and directory metadata. It skips secret files, peer settings, and key paths. Model files are never hashed; GGUF files receive a header check only.
 
 Hugging Face research works without a token for public repositories. An optional `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` grants the API access that token permits. Scout records revisions, variants, and possible successors; it never downloads or updates model weights.
 

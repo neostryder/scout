@@ -1,6 +1,14 @@
 $ErrorActionPreference = 'Stop'
-$data = Join-Path $env:LOCALAPPDATA 'Cogitator'
-if (-not (Test-Path -LiteralPath $data -PathType Container)) { exit 0 }
+# Cogitator's home: COGITATOR_HOME, then the per-user folder, then a Cogitator folder at the root of a fixed drive (a moved install).
+$data = ''
+$candidates = [Collections.Generic.List[string]]::new()
+if ($env:COGITATOR_HOME) { $candidates.Add($env:COGITATOR_HOME) }
+$candidates.Add((Join-Path $env:LOCALAPPDATA 'Cogitator'))
+foreach ($drive in [IO.DriveInfo]::GetDrives()) { if ($drive.DriveType -eq 'Fixed') { $candidates.Add((Join-Path $drive.Name 'Cogitator')) } }
+foreach ($candidate in $candidates) {
+    if ((Test-Path -LiteralPath $candidate -PathType Container) -and (Test-Path -LiteralPath (Join-Path $candidate 'cogitator.toml') -PathType Leaf)) { $data = $candidate; break }
+}
+if (-not $data) { exit 0 }
 $watch = [Diagnostics.Stopwatch]::StartNew()
 $script:count = 0
 $script:partial = $false
@@ -29,6 +37,11 @@ function Values([string]$value) {
     }
 }
 function Emit-Field([string]$section, [string]$key, [string]$value) {
+    if ($section -eq '' -and $key -eq 'data_dir') {
+        $items = @(Values $value)
+        if ($items.Count -gt 0 -and -not $items[0].Contains('${')) { $roots.Add((Join-Path $items[0] 'models')) }
+        return
+    }
     $allowed = ($section -eq '[[engines]]' -and $key -in 'id','args') -or ($section -eq '[[roles]]' -and $key -in 'name','chain') -or ($section -eq '[media]' -and $key -in 'model_dirs','store_dir')
     if (-not $allowed) { return }
     $items = @(Values $value)

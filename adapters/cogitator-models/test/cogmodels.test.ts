@@ -148,3 +148,17 @@ test("the Windows probe omits secret settings, validates magic and caps model fi
     assert.equal(probe(capped.stdout).installs.length, 2000);
   } finally { rmSync(temp, { recursive: true, force: true }); }
 });
+
+test("the Windows probe finds a moved install through COGITATOR_HOME and scans its data_dir", { skip: process.platform !== "win32" }, () => {
+  const scratch = join(root, ".scout-data"); mkdirSync(scratch, { recursive: true });
+  const temp = mkdtempSync(join(scratch, "cogmodels-home-"));
+  try {
+    const home = join(temp, "Moved"); const external = join(temp, "external-data"); mkdirSync(join(external, "models"), { recursive: true }); mkdirSync(home, { recursive: true });
+    writeFileSync(join(home, "cogitator.toml"), `data_dir = "${external.replaceAll("\\", "/")}"
+`);
+    writeFileSync(join(external, "models", "moved.bin"), "stub");
+    const run = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-File", join(root, "tools/probes/windows/cogmodels.ps1")], { encoding: "utf8", windowsHide: true, env: { ...process.env, LOCALAPPDATA: join(temp, "empty"), COGITATOR_HOME: home }, timeout: 25_000 });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(probe(run.stdout).installs.length, 1);
+  } finally { rmSync(temp, { recursive: true, force: true }); }
+});
