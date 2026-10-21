@@ -12,3 +12,4 @@ export * from "./local.ts";
 export * from "./meters.ts";
 export * from "./competitor-git.ts";
 export * from "./competitor-analysis.ts";
+export * from "./competitor-watch.ts";

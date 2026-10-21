@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -101,4 +101,36 @@ test("mirror sync, waiting, and trigger stay in words", () => {
   assert.equal(triggerText({ trigger: "auto" }), "Auto-queued");
   assert.equal(triggerText({ trigger: "manual" }), "Manual");
   assert.equal(triggerText({ state: "queued" }), "");
+});
+
+test("a watched row can be updated without a mirror, and its words name the page", () => {
+  const watch = { kind: "json", url: "https://example.test/v.json" };
+  assert.deepEqual(updateAction(row({ mirrorPresent: false, watch })), { kind: "ready" });
+  assert.equal(isWatched(row({ mirrorPresent: false, watch })), true);
+  assert.equal(isWatched(row({ mirrorPresent: true, watch })), false);
+  assert.equal(watchText({ kind: "hash", url: "https://example.test" }), "Watching: Page, any change");
+  assert.equal(watchText(null), "");
+  assert.equal(baselineSource({ source: "watch" }), "watch");
+  assert.equal(analyzedText({ version: null, at: "2026-10-01T00:00:00.000Z", source: "watch" }), "page seen 2026-10-01");
+  assert.equal(analyzedText({ version: null, at: null, source: "watch" }), "not analyzed");
+  assert.equal(pendingText({ commits: 0, sourceFilesChanged: 0, reason: "the watched page changed and shows no new version" }), "Waiting: the page changed and shows no new version");
+});
+
+test("rule edits send only what changed and refuse a bad number", () => {
+  const blank = Object.fromEntries(GATE_FIELDS.map((field: { key: string }) => [field.key, ""]));
+  assert.deepEqual(gateChange({}, blank), { set: {}, clear: [] });
+  assert.deepEqual(gateChange({ minCommits: 8 }, { ...blank, minCommits: "8" }), { set: {}, clear: [] });
+  assert.deepEqual(gateChange({ minCommits: 8 }, { ...blank, minCommits: "9", onNewTag: "false" }), { set: { minCommits: 9, onNewTag: false }, clear: [] });
+  assert.deepEqual(gateChange({ quietHours: 0, enabled: false }, blank), { set: {}, clear: ["enabled", "quietHours"] });
+  assert.throws(() => gateChange({}, { ...blank, minCommits: "many" }), /whole number/);
+  assert.throws(() => gateChange({}, { ...blank, maxQueued: "0" }), /1 or more/);
+});
+
+test("the watch form builds the stored object or says what is missing", () => {
+  assert.deepEqual(watchFromForm({ kind: "json", url: " https://example.test/v.json ", versionPath: "latest.version" }), { kind: "json", url: "https://example.test/v.json", versionPath: "latest.version" });
+  assert.deepEqual(watchFromForm({ kind: "page", url: "https://example.test/p", versionPattern: "v(\\d+)" }), { kind: "page", url: "https://example.test/p", versionPattern: "v(\\d+)" });
+  assert.deepEqual(watchFromForm({ kind: "hash", url: "https://example.test/p", versionPath: "ignored" }), { kind: "hash", url: "https://example.test/p" });
+  assert.throws(() => watchFromForm({ kind: "json", url: "https://example.test/v.json", versionPath: "" }), /path to the version/);
+  assert.throws(() => watchFromForm({ kind: "hash", url: "" }), /address/);
+  assert.throws(() => watchFromForm({ kind: "nope", url: "https://example.test" }), /Choose what to watch/);
 });

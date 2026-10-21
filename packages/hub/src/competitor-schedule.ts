@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { applyCompetitorCheck, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, recordMirrorSync, redactUrlSecrets, resolveResearchGate, setCompetitorPending, startPullingRun, syncCompetitors, type CompetitorRun, type CompetitorsFile, type Db, type ResearchDelta } from "@scout/core";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { applyCompetitorCheck, applyGateChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
 import type { Notifier } from "./notify.ts";
 import type { ScheduleClock } from "./schedule.ts";
 
@@ -23,6 +23,8 @@ export interface CompetitorScheduleOptions {
   startupDelayMs?: number;
   clock?: ScheduleClock;
   check?: (remoteUrl: string) => Promise<CompetitorCheckResult>;
+  /** Reads the version source of a competitor that has no repository. */
+  watch?: (watch: CompetitorWatch) => Promise<CompetitorCheckResult>;
   pull?: (db: Db, runId: number, now: string) => Promise<void>;
   syncIntervalMs?: number;
   syncStartupDelayMs?: number;
@@ -134,6 +136,30 @@ export class CompetitorSchedule {
       try { failCompetitorRun(this.db, run.id, message || "update failed", this.iso()); } catch { /* the pull already recorded the failure */ }
     });
     return { status: 202, run };
+  }
+
+  /** The gate as the registry file sets it, read fresh so an edit made elsewhere shows up. */
+  gateSettings(): GateSettings {
+    return readGateSettings(readFileSync(this.options.configPath, "utf8"));
+  }
+
+  updateGate(change: GateChange): GateSettings {
+    this.rewriteConfig((text) => applyGateChange(text, change));
+    return this.gateSettings();
+  }
+
+  /** Sets or removes one competitor's watch source. Pass null to remove it. */
+  updateWatch(id: string, watch: unknown): void {
+    this.rewriteConfig((text) => applyWatchChange(text, id, watch));
+  }
+
+  private rewriteConfig(change: (text: string) => string): void {
+    const text = change(readFileSync(this.options.configPath, "utf8"));
+    parseCompetitorsFile(text);
+    const temp = `${this.options.configPath}.tmp`;
+    writeFileSync(temp, text, "utf8");
+    renameSync(temp, this.options.configPath);
+    this.loadConfig();
   }
 
   private iso(): string { return new Date(this.clock.now()).toISOString(); }
@@ -317,12 +343,19 @@ export class CompetitorSchedule {
 
   private async checkAll(id?: string): Promise<void> {
     this.loadConfig();
-    const rows = this.db.prepare("SELECT id, remote_url AS remoteUrl, sync_head AS syncHead, baseline_commit AS baselineCommit, baseline_version AS baselineVersion FROM competitors").all() as { id: string; remoteUrl: string | null; syncHead: string | null; baselineCommit: string | null; baselineVersion: string | null }[];
+    const rows = this.db.prepare("SELECT id, remote_url AS remoteUrl, watch_json AS watchJson, sync_head AS syncHead, baseline_commit AS baselineCommit, baseline_version AS baselineVersion FROM competitors").all() as { id: string; remoteUrl: string | null; watchJson: string | null; syncHead: string | null; baselineCommit: string | null; baselineVersion: string | null }[];
     for (const row of rows) {
       if (id !== undefined && row.id !== id) continue;
       const now = this.iso();
       let result: CompetitorCheckResult;
-      if (!row.remoteUrl) result = { version: null, prerelease: null, commit: null, error: "no remote" };
+      const watched = row.remoteUrl ? null : watchFromJson(row.watchJson);
+      if (watched) {
+        try {
+          result = this.options.watch ? await this.options.watch(watched) : { version: null, prerelease: null, commit: null, error: "competitor watch source is not configured" };
+        } catch (error) {
+          result = { version: null, prerelease: null, commit: null, error: this.plain(error) };
+        }
+      } else if (!row.remoteUrl) result = { version: null, prerelease: null, commit: null, error: "no remote" };
       else {
         try {
           result = this.options.check ? await this.options.check(row.remoteUrl) : { version: null, prerelease: null, commit: null, error: "competitor check is not configured" };
@@ -331,9 +364,10 @@ export class CompetitorSchedule {
         }
       }
       const outcome = applyCompetitorCheck(this.db, row.id, result, now);
-      const caughtUp = result.error === null && result.commit !== null && row.syncHead !== null && result.commit === row.syncHead;
+      const seeded = watched !== null && result.error === null && seedWatchBaseline(this.db, row.id, result, now);
+      const caughtUp = watched ? result.error === null : result.error === null && result.commit !== null && row.syncHead !== null && result.commit === row.syncHead;
       const moved = result.commit !== row.baselineCommit || (result.version !== null && row.baselineVersion !== null && compareVersions(result.version, row.baselineVersion) === 1);
-      if (caughtUp && moved) await this.maybeQueue(row.id);
+      if (caughtUp && moved && !seeded) await this.maybeQueue(row.id);
       if (!outcome.notice || !outcome.notified) continue;
       try {
         if (this.options.notifier) await this.options.notifier.send({ title: "Competitor watch", body: outcome.notice, severity: "info" });

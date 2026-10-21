@@ -75,7 +75,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 function listed(root: El) { return walk(root).filter((el) => el.tag === "tr" && el.children.some((child) => child instanceof El && child.tag === "td")); }
 function button(root: El, label: string) { return walk(root).find((el) => el.tag === "button" && allText(el).includes(label)); }
 
-async function open(t: TestContext, answer: () => any) {
+async function open(t: TestContext, answer: (url: string) => any) {
   const calls: Array<{ url: string; method: string; body?: string; headers?: Record<string, string> }> = [];
   const badge = new El("span");
   const root = new El("main");
@@ -83,7 +83,7 @@ async function open(t: TestContext, answer: () => any) {
     ...model,
     h, safeUrl, fetch: async (url: string, options?: { method?: string; body?: string; headers?: Record<string, string> }) => {
       calls.push({ url: String(url), method: options?.method || "GET", body: options?.body, headers: options?.headers });
-      const body = answer();
+      const body = answer(String(url));
       return body && body.status ? body : { ok: true, status: 200, json: async () => body };
     },
     document: { hidden: false, getElementById: (id: string) => (id === "competitors-count" ? badge : null), addEventListener() {} },
@@ -195,4 +195,87 @@ test("a row shows the mirror line, the waiting line, and whether research was qu
   assert.match(text, /Waiting: 3 commits below the threshold/);
   assert.match(text, /Manual/);
   assert.match(text, /Done/);
+});
+
+const watched = (over: Record<string, unknown> = {}) => row({ id: "nofork", name: "No Fork", org: "Fork Co", remoteUrl: null, packageUrl: null, mirrorPresent: false, watch: { kind: "json", url: "https://example.test/v.json" }, status: "current", newBasis: null, baseline: { version: "2.0.0", at: "2026-10-01T00:00:00.000Z", source: "watch" }, latest: { version: "2.0.0", prerelease: null, error: null }, ...over });
+
+const SETTINGS = { defaults: { enabled: true, minCommits: 5, minSourceFilesChanged: 3, onNewTag: true, quietHours: 24, ignoreDocsOnly: true, ignoreDependencyBumpOnly: true, maxQueued: 5 }, global: { minCommits: 8 }, entries: [{ id: "acme-tools", name: "Acme Tools", gate: { quietHours: 0 } }] };
+
+test("a watched row names its source, keeps Update ready, and confirms with page wording", async (t) => {
+  const page = await open(t, () => ok([watched()]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  const text = allText(page.root);
+  assert.match(text, /Watching: JSON version feed/);
+  assert.equal(text.includes("Mirror not synced"), false);
+  assert.match(text, /Change source/);
+  const update = walk(page.root).find((el) => el.tag === "button" && el.attrs["data-id"] === "nofork");
+  assert.ok(update);
+  click(update!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog");
+  assert.match(allText(dialog), /Read the watched page now and queue research\./);
+});
+
+test("Watch a page posts the source, and a bad form shows its sentence without posting", async (t) => {
+  const page = await open(t, () => ok([watched({ watch: null, status: "unknown", baseline: { version: null, at: null, source: null }, latest: { version: null, error: null } })]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  await click(walk(page.root).find((el) => el.tag === "button" && el.attrs["data-watch"] === "nofork")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  const save = button(dialog, "Save source")!;
+  await click(save);
+  assert.match(allText(dialog), /Enter the address to watch\./);
+  assert.equal(page.calls.some((call) => call.method === "POST"), false);
+  const url = walk(dialog).find((el) => el.tag === "input" && el.attrs.type === "url")!;
+  const path = walk(dialog).find((el) => el.tag === "input" && el.attrs.placeholder === "latest.version")!;
+  (url as any).value = "https://example.test/v.json";
+  (path as any).value = "latest.version";
+  await click(save);
+  const post = page.calls.find((call) => call.method === "POST");
+  assert.equal(post?.url, "/api/competitors/nofork/watch");
+  assert.deepEqual(JSON.parse(post!.body!), { watch: { kind: "json", url: "https://example.test/v.json", versionPath: "latest.version" } });
+  assert.equal(dialog.open, false);
+});
+
+test("Remove clears the watch source", async (t) => {
+  const page = await open(t, () => ok([watched()]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  await click(walk(page.root).find((el) => el.tag === "button" && el.attrs["data-watch"] === "nofork")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  await click(button(dialog, "Remove")!);
+  const post = page.calls.find((call) => call.method === "POST");
+  assert.deepEqual(JSON.parse(post!.body!), { watch: null });
+});
+
+test("Update rules reads the rules, posts only what changed, and reports the save", async (t) => {
+  const page = await open(t, (url) => (url === "/api/competitors/gate" ? SETTINGS : ok([row()])));
+  await click(button(page.root, "Update rules")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  assert.equal(dialog.open, true);
+  const numbers = walk(dialog).filter((el) => el.tag === "input" && el.attrs.type === "number");
+  assert.equal((numbers[0] as any).value, "8");
+  assert.equal(numbers[0]?.attrs.placeholder, "Default (5)");
+  (numbers[0] as any).value = "12";
+  (numbers[1] as any).value = "4";
+  await click(button(dialog, "Save rules")!);
+  const post = page.calls.find((call) => call.url === "/api/competitors/gate" && call.method === "POST");
+  assert.deepEqual(JSON.parse(post!.body!), { set: { minCommits: 12, minSourceFilesChanged: 4 }, clear: [] });
+  assert.equal(dialog.open, false);
+  assert.match(allText(page.root), /Rules saved for all competitors\./);
+});
+
+test("one competitor's rules show its overrides and clear a field that is emptied", async (t) => {
+  const page = await open(t, (url) => (url === "/api/competitors/gate" ? SETTINGS : ok([row()])));
+  await click(button(page.root, "Update rules")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  const scope = walk(dialog).find((el) => el.tag === "select" && el.attrs["aria-label"] === "Rules apply to")!;
+  fire(scope, "change", { value: "acme-tools" });
+  const numbers = walk(dialog).filter((el) => el.tag === "input" && el.attrs.type === "number");
+  const quiet = numbers.find((el) => el.attrs.placeholder === "Default (24)")!;
+  assert.equal((quiet as any).value, "0");
+  (quiet as any).value = "";
+  await click(button(dialog, "Save rules")!);
+  const post = page.calls.find((call) => call.url === "/api/competitors/gate" && call.method === "POST");
+  assert.deepEqual(JSON.parse(post!.body!), { id: "acme-tools", set: {}, clear: ["quietHours"] });
 });

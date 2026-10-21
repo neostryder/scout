@@ -1,7 +1,8 @@
 import { h, safeUrl } from "./lib.js";
-import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, latestParts, NOT_CONFIGURED, pendingText, runText, sortCompetitors, statusText, syncedText, triggerText, updateAction, UPDATE_CONFIRM } from "./competitors-model.js";
+import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, pendingText, runText, sortCompetitors, statusText, syncedText, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
+const postJson = (value) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
 
 function failureText(cause) {
   return cause instanceof Error && cause.message ? cause.message : "The hub could not be reached.";
@@ -35,6 +36,7 @@ export function createCompetitorsView(root) {
 
   const checked = h("p", { class: "competitors-checked" });
   const check = h("button", { type: "button", class: "primary", onclick: () => checkNow() }, "Check now");
+  const settings = h("button", { type: "button", onclick: (event) => askGate(event.currentTarget) }, "Update rules");
   const status = h("p", { class: "competitors-status", role: "status", "aria-live": "polite" });
   const count = h("p", { class: "count" });
   const search = h("input", { type: "search", placeholder: "Name or organization", "aria-label": "Search competitors", autocomplete: "off", oninput: (event) => { query = event.target.value; paint(); } });
@@ -45,7 +47,7 @@ export function createCompetitorsView(root) {
 
   root.classList.add("competitors");
   root.replaceChildren(
-    h("header", { class: "competitors-head" }, h("div", {}, h("h1", {}, "Competitors"), checked), check),
+    h("header", { class: "competitors-head" }, h("div", {}, h("h1", {}, "Competitors"), checked), h("div", { class: "actions" }, settings, check)),
     toolbar, status, count, tableWrap, dialog,
   );
 
@@ -62,11 +64,16 @@ export function createCompetitorsView(root) {
     });
   }
 
+  function watchButton(row) {
+    if (row.remoteUrl) return [];
+    return [h("button", { type: "button", class: "link-button", "data-watch": row.id, "aria-label": `${row.watch ? "Change" : "Set"} watch source for ${row.name}`, onclick: (event) => askWatch(row, event.currentTarget) }, row.watch ? "Change source" : "Watch a page")];
+  }
+
   function updateCell(row) {
     const action = updateAction(row);
     if (action.kind === "hidden") return h("td", { "data-label": "Update" });
-    if (action.kind === "disabled") return h("td", { "data-label": "Update" }, h("button", { type: "button", disabled: true, "aria-label": `Update ${row.name}` }, "Update"), h("span", { class: "reason" }, action.reason));
-    return h("td", { "data-label": "Update" }, h("button", { type: "button", class: "primary", "data-id": row.id, "aria-label": `Update ${row.name}`, onclick: (event) => askUpdate(row, event.currentTarget) }, "Update"));
+    if (action.kind === "disabled") return h("td", { "data-label": "Update" }, h("button", { type: "button", disabled: true, "aria-label": `Update ${row.name}` }, "Update"), h("span", { class: "reason" }, action.reason), watchButton(row));
+    return h("td", { "data-label": "Update" }, h("button", { type: "button", class: "primary", "data-id": row.id, "aria-label": `Update ${row.name}`, onclick: (event) => askUpdate(row, event.currentTarget) }, "Update"), watchButton(row));
   }
 
   function rowView(row) {
@@ -77,7 +84,7 @@ export function createCompetitorsView(root) {
     const flags = Array.isArray(row.flags) ? row.flags : [];
     const now = new Date().toISOString();
     return h("tr", {},
-      h("td", { class: "name", "data-label": "Competitor" }, h("div", { class: "t" }, row.name), row.org ? h("div", { class: "org" }, row.org) : [], flags.length ? h("div", { class: "flags" }, flags.map((flag) => h("span", { class: "tag" }, flag))) : [], h("div", { class: "commits" }, syncedText(row.sync, now)), h("div", { class: "links" }, links(row))),
+      h("td", { class: "name", "data-label": "Competitor" }, h("div", { class: "t" }, row.name), row.org ? h("div", { class: "org" }, row.org) : [], flags.length ? h("div", { class: "flags" }, flags.map((flag) => h("span", { class: "tag" }, flag))) : [], h("div", { class: "commits" }, isWatched(row) ? watchText(row.watch) : syncedText(row.sync, now)), h("div", { class: "links" }, links(row))),
       h("td", { "data-label": "Last analyzed", title: baselineSource(row.baseline) }, analyzedText(row.baseline)),
       h("td", { "data-label": "Latest" }, latest.version || (latest.error ? "" : "None"), latest.prerelease ? h("div", { class: "muted" }, latest.prerelease) : [], latest.error ? h("div", { class: "muted" }, latest.error) : []),
       h("td", { "data-label": "Status" }, h("span", { class: statusClass(row) }, statusText(row)), commits ? h("div", { class: "commits" }, commits) : [], waiting ? h("div", { class: "commits" }, waiting) : []),
@@ -183,9 +190,125 @@ export function createCompetitorsView(root) {
     } }, "Update");
     dialog.replaceChildren(
       h("h2", { id: "competitor-confirm-title" }, "Confirm update"),
-      h("p", {}, UPDATE_CONFIRM),
+      h("p", {}, isWatched(row) ? WATCH_UPDATE_CONFIRM : UPDATE_CONFIRM),
       problem,
       h("div", { class: "actions" }, h("button", { type: "button", onclick: () => { dialog.close(); if (opener?.isConnected) opener.focus(); } }, "Cancel"), submit),
+    );
+    dialog.showModal();
+  }
+
+  function closeDialog(opener) { dialog.close(); if (opener?.isConnected) opener.focus(); }
+
+  function field(label, control, help) {
+    return h("label", { class: "field" }, h("span", { class: "field-label" }, label), control, help ? h("span", { class: "field-help" }, help) : []);
+  }
+
+  /** One dialog edits the file-wide rules or one competitor's own. An emptied field goes back to the default. */
+  async function askGate(opener) {
+    dialog.replaceChildren(h("h2", { id: "competitor-confirm-title" }, "Research rules"), h("p", {}, "Reading the rules."));
+    dialog.showModal();
+    let current;
+    try {
+      const response = await fetch("/api/competitors/gate");
+      const body = await readJson(response);
+      if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+      current = body;
+    } catch (cause) {
+      dialog.replaceChildren(h("h2", { id: "competitor-confirm-title" }, "Research rules"), h("p", { role: "alert" }, failureText(cause)), h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Close")));
+      return;
+    }
+    const problem = h("p", { role: "alert" });
+    let scope = "";
+    const scopeInput = h("select", { "aria-label": "Rules apply to", onchange: (event) => { scope = event.target.value; render(); } },
+      h("option", { value: "" }, "All competitors"), sortCompetitors(rows).map((row) => h("option", { value: row.id }, row.name)));
+    const inputs = {};
+    const form = h("div", { class: "form" });
+    const saved = () => (scope ? current.entries.find((entry) => entry.id === scope)?.gate : current.global) || {};
+    function render() {
+      problem.textContent = "";
+      const own = saved();
+      form.replaceChildren(...GATE_FIELDS.map((item) => {
+        const fallback = scope && Object.hasOwn(current.global, item.key) ? current.global[item.key] : current.defaults[item.key];
+        const shown = item.kind === "flag" ? (fallback ? "yes" : "no") : String(fallback);
+        const control = item.kind === "flag"
+          ? h("select", {}, h("option", { value: "" }, `Default (${shown})`), h("option", { value: "true" }, "Yes"), h("option", { value: "false" }, "No"))
+          : h("input", { type: "number", min: String(item.min), step: "1", placeholder: `Default (${shown})`, inputmode: "numeric" });
+        control.value = Object.hasOwn(own, item.key) ? String(own[item.key]) : "";
+        inputs[item.key] = control;
+        return field(item.label, control, item.help);
+      }));
+    }
+    render();
+    const submit = h("button", { type: "button", class: "primary", onclick: async () => {
+      submit.disabled = true;
+      problem.textContent = "";
+      try {
+        const entered = Object.fromEntries(GATE_FIELDS.map((item) => [item.key, inputs[item.key].value]));
+        const change = gateChange(saved(), entered);
+        if (!Object.keys(change.set).length && !change.clear.length) { closeDialog(opener); return; }
+        const response = await fetch("/api/competitors/gate", postJson({ ...(scope ? { id: scope } : {}), set: change.set, clear: change.clear }));
+        const body = await readJson(response);
+        if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+        notice = scope ? "Rules saved for this competitor." : "Rules saved for all competitors.";
+        error = "";
+        closeDialog(opener);
+        paint();
+      } catch (cause) {
+        problem.textContent = failureText(cause);
+        submit.disabled = false;
+      }
+    } }, "Save rules");
+    dialog.replaceChildren(
+      h("h2", { id: "competitor-confirm-title" }, "Research rules"),
+      h("p", {}, "These rules decide when new work on a competitor queues research on its own. Rules set for one competitor replace the rules for all competitors, field by field."),
+      field("Rules apply to", scopeInput),
+      form, problem,
+      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), submit),
+    );
+  }
+
+  /** For a competitor with no repository: where to read its version, checked on the same schedule as the others. */
+  function askWatch(row, opener) {
+    const problem = h("p", { role: "alert" });
+    const kind = h("select", { onchange: () => syncKind() }, WATCH_KINDS.map((item) => h("option", { value: item.value }, item.label)));
+    kind.value = row.watch?.kind || "json";
+    const url = h("input", { type: "url", placeholder: "https://", autocomplete: "off", inputmode: "url" });
+    url.value = row.watch?.url || "";
+    const path = h("input", { type: "text", placeholder: "latest.version", autocomplete: "off" });
+    const pattern = h("input", { type: "text", placeholder: "Optional, one capture group", autocomplete: "off" });
+    const help = h("p", { class: "field-help" });
+    const pathField = field("Path to the version", path);
+    const patternField = field("Version pattern", pattern);
+    function syncKind() {
+      help.textContent = WATCH_KINDS.find((item) => item.value === kind.value)?.help || "";
+      pathField.hidden = kind.value !== "json";
+      patternField.hidden = kind.value !== "page";
+    }
+    syncKind();
+    async function send(value, saved) {
+      const response = await fetch(`/api/competitors/${encodeURIComponent(row.id)}/watch`, postJson({ watch: value }));
+      const body = await readJson(response);
+      if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+      notice = saved;
+      error = "";
+      closeDialog(opener);
+      if (!visible) return;
+      await load();
+    }
+    const submit = h("button", { type: "button", class: "primary", onclick: async () => {
+      submit.disabled = true;
+      problem.textContent = "";
+      try { await send(watchFromForm({ kind: kind.value, url: url.value, versionPath: path.value, versionPattern: pattern.value }), "Watch source saved. It is read on the next check."); }
+      catch (cause) { problem.textContent = failureText(cause); submit.disabled = false; }
+    } }, "Save source");
+    const remove = row.watch ? [h("button", { type: "button", onclick: async () => {
+      try { await send(null, "Watch source removed."); } catch (cause) { problem.textContent = failureText(cause); }
+    } }, "Remove source")] : [];
+    dialog.replaceChildren(
+      h("h2", { id: "competitor-confirm-title" }, `Watch ${row.name}`),
+      h("p", {}, "This competitor has no public repository. Scout reads this address on every check and marks the competitor New when the version changes."),
+      field("What to watch for", kind), field("Address", url, "Only public https addresses can be watched."), pathField, patternField, help, problem,
+      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), remove, submit),
     );
     dialog.showModal();
   }

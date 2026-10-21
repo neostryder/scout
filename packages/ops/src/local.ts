@@ -13,6 +13,7 @@ export interface LocalPaths {
   watch: string;
   alerts: string;
   tunnelHosts: string;
+  competitors: string;
 }
 
 /** The repository root, found from this file, so a command works from any folder. */
@@ -21,7 +22,7 @@ export const scoutRoot = (): string => resolve(dirname(fileURLToPath(import.meta
 /** Where the hub machine keeps its catalog and registry files, relative to a Scout checkout. */
 export function localPaths(root: string = scoutRoot(), db?: string): LocalPaths {
   const data = (name: string): string => resolve(root, ".scout-data", name);
-  return { root, db: db === undefined ? data("catalog.db") : db === ":memory:" ? db : resolve(db), machines: resolve(root, "machines.json"), protectedFile: data("protected.json"), ports: data("ports.json"), stacks: data("stacks.json"), tray: data("tray.json"), watch: data("watch.json"), alerts: data("alerts.json"), tunnelHosts: data("tunnel-hosts.json") };
+  return { root, db: db === undefined ? data("catalog.db") : db === ":memory:" ? db : resolve(db), machines: resolve(root, "machines.json"), protectedFile: data("protected.json"), ports: data("ports.json"), stacks: data("stacks.json"), tray: data("tray.json"), watch: data("watch.json"), alerts: data("alerts.json"), tunnelHosts: data("tunnel-hosts.json"), competitors: data("competitors.json") };
 }
 
 /** The tray read model built straight from the catalog and the local rules, the same rows the panel lists. */

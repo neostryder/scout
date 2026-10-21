@@ -3,6 +3,24 @@
 export const NOT_CONFIGURED = "Competitor watch is not set up. Run the seed command described in the setup guide.";
 export const UPDATE_CONFIRM = "Pull the mirror and queue research now, ignoring the usual wait. Nothing is installed and no research runs until a Claude session picks it up.";
 export const NO_MIRROR = "No local mirror";
+export const WATCH_UPDATE_CONFIRM = "Read the watched page now and queue research. Nothing is installed and no research runs until a Claude session picks it up.";
+
+export const GATE_FIELDS = [
+  { key: "enabled", label: "Queue research automatically", kind: "flag", help: "When this is off, nothing is queued on its own. The Update button still queues research." },
+  { key: "minCommits", label: "Commits needed", kind: "number", min: 0, help: "New commits since the last analysis needed to queue research." },
+  { key: "minSourceFilesChanged", label: "Source files needed", kind: "number", min: 0, help: "Changed source files that queue research when there are fewer commits than needed." },
+  { key: "onNewTag", label: "Queue on a new release", kind: "flag", help: "A new stable tag or version queues research right away." },
+  { key: "quietHours", label: "Wait after the last commit", kind: "number", min: 0, help: "Hours since the newest commit before research queues, so a push still in progress is not researched." },
+  { key: "ignoreDocsOnly", label: "Ignore docs-only changes", kind: "flag", help: "Changes that touch only documentation never queue research." },
+  { key: "ignoreDependencyBumpOnly", label: "Ignore dependency bumps", kind: "flag", help: "Changes that only bump dependencies never queue research." },
+  { key: "maxQueued", label: "Queue limit", kind: "number", min: 1, help: "New research waits while this many runs are queued or in progress." },
+];
+
+export const WATCH_KINDS = [
+  { value: "json", label: "JSON version feed", help: "A URL that returns JSON. Give the dotted path to the version, such as latest.version." },
+  { value: "page", label: "Page with a version number", help: "A page that shows the current version. Give a pattern with one capture group, or leave it empty to read the highest version on the page." },
+  { value: "hash", label: "Page, any change", help: "The competitor is marked New when the page text changes. A page with dates, counters, or rotating banners reports changes that are not releases." },
+];
 
 const STATUS_RANK = { new: 0, current: 1, unknown: 2 };
 const ACTIVE = new Set(["pulling", "queued", "claimed"]);
@@ -54,12 +72,12 @@ export function runText(run) {
 }
 
 export function analyzedText(baseline) {
-  if (!baseline?.version) return "not analyzed";
+  if (!baseline?.version) return baseline?.source === "watch" && baseline.at ? `page seen ${String(baseline.at).slice(0, 10)}` : "not analyzed";
   return baseline.at ? `${baseline.version}, ${baseline.at}` : baseline.version;
 }
 
 export function baselineSource(baseline) {
-  return baseline?.source === "mirror" || baseline?.source === "analysis" ? baseline.source : "none";
+  return baseline?.source === "mirror" || baseline?.source === "analysis" || baseline?.source === "watch" ? baseline.source : "none";
 }
 
 export function latestParts(latest) {
@@ -100,6 +118,7 @@ export function syncedText(sync, now) {
 
 export function pendingText(pending) {
   if (!pending) return "";
+  if (/page changed/.test(String(pending.reason || ""))) return "Waiting: the page changed and shows no new version";
   return `Waiting: ${pending.commits} commits below the threshold`;
 }
 
@@ -112,6 +131,44 @@ export function triggerText(run) {
 /** Hidden while a run is still active. Disabled, with a reason, when there is no mirror. */
 export function updateAction(row) {
   if (row?.run && ACTIVE.has(row.run.state)) return { kind: "hidden" };
-  if (!row?.mirrorPresent) return { kind: "disabled", reason: NO_MIRROR };
+  if (!row?.mirrorPresent && !row?.watch) return { kind: "disabled", reason: NO_MIRROR };
   return { kind: "ready" };
+}
+
+/** A watched row has no repository, so the sync line and the confirmation talk about the page instead. */
+export function isWatched(row) { return Boolean(row?.watch) && !row?.mirrorPresent; }
+
+export function watchText(watch) {
+  const kind = WATCH_KINDS.find((item) => item.value === watch?.kind);
+  return kind ? `Watching: ${kind.label}` : "";
+}
+
+/** Only the fields the entered text differs on: a changed value is set, an emptied field returns to the default. */
+export function gateChange(current, entered) {
+  const set = {};
+  const clear = [];
+  for (const field of GATE_FIELDS) {
+    const text = entered[field.key];
+    const had = Object.hasOwn(current || {}, field.key);
+    if (text === "" || text === undefined || text === null) { if (had) clear.push(field.key); continue; }
+    const value = field.kind === "flag" ? text === "true" : Number(text);
+    if (field.kind === "number" && (!Number.isInteger(value) || value < field.min)) throw new Error(`${field.label} must be a whole number of ${field.min} or more.`);
+    if (!had || current[field.key] !== value) set[field.key] = value;
+  }
+  return { set, clear };
+}
+
+/** The object the hub stores for a watch, or an error sentence for the form. */
+export function watchFromForm({ kind, url, versionPath, versionPattern }) {
+  const address = String(url || "").trim();
+  if (!WATCH_KINDS.some((item) => item.value === kind)) throw new Error("Choose what to watch for.");
+  if (!address) throw new Error("Enter the address to watch.");
+  const watch = { kind, url: address };
+  if (kind === "json") {
+    const path = String(versionPath || "").trim();
+    if (!path) throw new Error("Enter the path to the version, such as latest.version.");
+    watch.versionPath = path;
+  }
+  if (kind === "page" && String(versionPattern || "").trim()) watch.versionPattern = String(versionPattern).trim();
+  return watch;
 }

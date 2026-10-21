@@ -8,11 +8,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { backupHealthSettingsReader, failCompetitorRun, meterAlertsFileReader, openCatalog, parseCompetitorsFile, readBackupHealthFile } from "@scout/core";
+import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAlertsFileReader, openCatalog, parseCompetitorsFile, readBackupHealthFile } from "@scout/core";
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, researchForGate, runCompetitorUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
+import { checkRemote, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
@@ -54,7 +54,14 @@ const readMirrorRoot = (): string => parseCompetitorsFile(readFileSync(competito
 const competitors = new CompetitorSchedule(db, {
   configPath: competitorConfig,
   check: (remote) => checkRemote(remote),
+  watch: (watch) => checkWatchForSchedule(watch),
   pull: async (catalog, runId, now) => {
+    const record = catalog.prepare("SELECT competitor_id AS id FROM competitor_runs WHERE id = ?").get(runId) as { id: string } | undefined;
+    const paths = record ? competitorPaths(catalog, record.id) : null;
+    if (paths && !paths.mirrorPath && paths.watch) {
+      await runWatchUpdate(catalog, runId, { now });
+      return;
+    }
     let mirrorRoot = "";
     try { mirrorRoot = readMirrorRoot(); } catch (error) {
       failCompetitorRun(catalog, runId, error instanceof Error ? error.message : "competitors file is not readable", now);
@@ -67,6 +74,8 @@ const competitors = new CompetitorSchedule(db, {
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "competitors file is not readable" }; }
   },
   research: async (catalog, id, now) => {
+    const paths = competitorPaths(catalog, id);
+    if (paths && !paths.mirrorPath && paths.watch) return researchForWatch(catalog, id, { now });
     try { return await researchForGate(catalog, id, { mirrorRoot: readMirrorRoot(), now }); }
     catch (error) { return { error: error instanceof Error ? error.message : "competitors file is not readable" }; }
   },

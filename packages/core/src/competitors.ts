@@ -28,6 +28,16 @@ export interface CompetitorRun {
   trigger: "auto" | "manual" | null;
 }
 
+/** Where a competitor with no public repository publishes its version. `json` reads a version out of a JSON document, `page` reads it out of a page's text, `hash` has no version and watches for the page to change. */
+export interface CompetitorWatch {
+  kind: "json" | "page" | "hash";
+  url: string;
+  /** Dotted path into the JSON document, with numbers for array positions, for example `versions.0.version`. */
+  versionPath?: string;
+  /** Regular expression with one capture group for the version, for `page`. */
+  versionPattern?: string;
+}
+
 export interface CompetitorRow {
   id: string;
   name: string;
@@ -43,6 +53,7 @@ export interface CompetitorRow {
   newBasis: "version" | "commits" | null;
   sync: { at: string | null; head: string | null; error: string | null };
   pending: { commits: number; sourceFilesChanged: number; reason: string } | null;
+  watch: { kind: CompetitorWatch["kind"]; url: string } | null;
   run: Pick<CompetitorRun, "id" | "state" | "toVersion" | "updatedAt" | "claimedBy" | "error" | "stale" | "trigger"> | null;
 }
 
@@ -67,6 +78,8 @@ export interface CompetitorIdentity {
   gate?: Partial<ResearchGateConfig>;
   /** The mirror follows an upstream that rewrites its published history; the sync keeps the old tip on a backup branch and moves to the new one. */
   followUpstream?: boolean;
+  /** A version source for an entry with no repository. */
+  watch?: CompetitorWatch | null;
 }
 
 export interface CompetitorsFile {
@@ -107,6 +120,8 @@ export interface ResearchDelta {
   docsOnly: boolean;
   dependencyBumpOnly: boolean;
   lastCommitAt: string | null;
+  /** A watched page with no version number changed. It waits for a person instead of queuing. */
+  pageChanged?: boolean;
 }
 
 export interface ResearchGateDecision {
@@ -126,6 +141,7 @@ export interface StatusInput {
 
 interface StoredCompetitor {
   followUpstream: number;
+  watchJson: string | null;
   id: string;
   name: string;
   org: string | null;
@@ -170,7 +186,7 @@ interface StoredRun {
 }
 
 const COMPETITOR_COLUMNS = `id, name, org, remote_url AS remoteUrl, mirror_path AS mirrorPath, package_url AS packageUrl,
-  dossier_dir AS dossierDir, dossier_reviewed AS dossierReviewed, flags_json AS flagsJson, follow_upstream AS followUpstream,
+  dossier_dir AS dossierDir, dossier_reviewed AS dossierReviewed, flags_json AS flagsJson, follow_upstream AS followUpstream, watch_json AS watchJson,
   baseline_version AS baselineVersion, baseline_commit AS baselineCommit, baseline_at AS baselineAt, baseline_source AS baselineSource,
   latest_version AS latestVersion, latest_prerelease AS latestPrerelease, latest_commit AS latestCommit,
   latest_checked_at AS latestCheckedAt, latest_error AS latestError, notified_version AS notifiedVersion,
@@ -236,6 +252,56 @@ function pendingFromJson(text: string | null): CompetitorRow["pending"] {
   }
 }
 
+export function watchFromJson(text: string | null): CompetitorWatch | null {
+  if (!text) return null;
+  try { return checkWatch(JSON.parse(text) as unknown).watch; } catch { return null; }
+}
+
+function watchSummary(text: string | null): CompetitorRow["watch"] {
+  const watch = watchFromJson(text);
+  return watch ? { kind: watch.kind, url: watch.url } : null;
+}
+
+const WATCH_KINDS = ["json", "page", "hash"] as const;
+const WATCH_KEYS = new Set(["kind", "url", "versionPath", "versionPattern"]);
+const BLOCKED_HOST = /^(localhost|.*\.(local|localhost|internal|lan|home|test))$/i;
+
+/** A watch source is fetched by the hub, so it must be a public https page. An address literal or a local name is refused. */
+export function watchHostAllowed(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "" || BLOCKED_HOST.test(host) || host.includes(":") || /^\d+(\.\d+){0,3}$/.test(host)) return false;
+  return host.includes(".");
+}
+
+/** Validates one watch source. The result carries the cleaned value or the first problem found. */
+export function checkWatch(value: unknown): { ok: true; watch: CompetitorWatch } | { ok: false; error: string; watch: null } {
+  const fail = (error: string): { ok: false; error: string; watch: null } => ({ ok: false, error, watch: null });
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fail("watch must be an object");
+  const row = value as Record<string, unknown>;
+  for (const key of Object.keys(row)) if (!WATCH_KEYS.has(key)) return fail(`unknown watch field ${key}`);
+  const kind = row["kind"];
+  if (typeof kind !== "string" || !(WATCH_KINDS as readonly string[]).includes(kind)) return fail("watch kind must be json, page, or hash");
+  const url = textOrNull(row["url"]);
+  if (!url || url.length > 500 || !URL.canParse(url)) return fail("watch url must be a web address");
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:" || parsed.username !== "" || parsed.password !== "") return fail("watch url must be https and carry no credentials");
+  if (!watchHostAllowed(parsed.hostname)) return fail("watch url must name a public host");
+  const versionPath = textOrNull(row["versionPath"]);
+  const versionPattern = textOrNull(row["versionPattern"]);
+  if (versionPath !== null && (versionPath.length > 200 || !/^[A-Za-z0-9_$-]+(\.[A-Za-z0-9_$-]+)*$/.test(versionPath))) return fail("versionPath must be a dotted path");
+  if (versionPattern !== null) {
+    if (versionPattern.length > 200) return fail("versionPattern is too long");
+    try {
+      if (new RegExp(`${versionPattern}|`).exec("")?.length !== 2) return fail("versionPattern needs one capture group");
+    } catch { return fail("versionPattern is not a valid expression"); }
+  }
+  if (kind === "json" && versionPath === null) return fail("a json watch needs a versionPath");
+  const watch: CompetitorWatch = { kind: kind as CompetitorWatch["kind"], url: parsed.toString() };
+  if (kind === "json" && versionPath !== null) watch.versionPath = versionPath;
+  if (kind === "page" && versionPattern !== null) watch.versionPattern = versionPattern;
+  return { ok: true, watch };
+}
+
 function triggerOf(value: string | null): CompetitorRun["trigger"] {
   return value === "auto" || value === "manual" ? value : null;
 }
@@ -262,17 +328,20 @@ export function resolveResearchGate(fileGate: Partial<ResearchGateConfig> | unde
   return { ...DEFAULT_RESEARCH_GATE, ...gateOverrides(fileGate), ...gateOverrides(entryGate), queuedRuns };
 }
 
-/** Pure. A new stable tag skips the size, docs, dependency, and quiet-hour checks. It still waits when the queue is full, and a competitor with no baseline commit never queues. */
-export function evaluateResearchGate(row: { baseline: { commit: string | null } }, delta: ResearchDelta, config: ResearchGateConfig, now: string): ResearchGateDecision {
+/** Pure. A new stable tag skips the size, docs, dependency, and quiet-hour checks. It still waits when the queue is full. A competitor with no baseline never queues: a baseline is a commit, or for a watched competitor a version. */
+export function evaluateResearchGate(row: { baseline: { commit: string | null; version?: string | null }; watch?: unknown }, delta: ResearchDelta, config: ResearchGateConfig, now: string): ResearchGateDecision {
   const pending = { commits: delta.commits, sourceFilesChanged: delta.sourceFilesChanged };
   const queuedRuns = config.queuedRuns ?? 0;
   if (!config.enabled) return { decision: "skip", reason: "gate is off", pending };
-  if (!row.baseline.commit) return { decision: "skip", reason: "no baseline", pending };
+  // A watched competitor has no commits to anchor on, so a version alone is a baseline.
+  const based = Boolean(row.baseline.commit) || (Boolean(row.watch) && Boolean(row.baseline.version));
+  if (!based) return { decision: "skip", reason: "no baseline", pending };
   const tag = config.onNewTag && delta.newStableTag;
   if (tag) {
     if (queuedRuns >= config.maxQueued) return { decision: "wait", reason: "the research queue is full", pending };
     return { decision: "queue", reason: "new stable tag", pending };
   }
+  if (delta.pageChanged) return { decision: "wait", reason: "the watched page changed and shows no new version", pending };
   if (config.ignoreDocsOnly && delta.docsOnly) return { decision: "skip", reason: "docs only", pending };
   if (config.ignoreDependencyBumpOnly && delta.dependencyBumpOnly) return { decision: "skip", reason: "dependency bump only", pending };
   if (delta.commits === 0 && delta.sourceFilesChanged === 0) return { decision: "skip", reason: "nothing new", pending };
@@ -303,7 +372,11 @@ export function deriveCompetitorStatus(input: StatusInput): { status: Competitor
   return { status: "current", newBasis: null };
 }
 
+/** A page snapshot is stored as `page:` and a short digest in the commit slots. */
+export const PAGE_TOKEN = /^page:[0-9a-f]{8,64}$/;
+
 export function competitorNotice(name: string, latest: string, baseline: string): string {
+  if (PAGE_TOKEN.test(latest)) return redactUrlSecrets(`${name}: the watched page changed since the last analysis`);
   return redactUrlSecrets(`${name}: new version ${latest} since the last analysis (${baseline})`);
 }
 
@@ -368,6 +441,7 @@ function mapRow(row: StoredCompetitor, run: StoredRun | undefined, now: string):
     newBasis: derived.newBasis,
     sync: { at: row.syncedAt, head: row.syncHead, error: row.syncError },
     pending: pendingFromJson(row.pendingJson),
+    watch: watchSummary(row.watchJson),
     run: mapped ? { id: mapped.id, state: mapped.state, toVersion: mapped.toVersion, updatedAt: mapped.updatedAt, claimedBy: mapped.claimedBy, error: mapped.error, stale: mapped.stale, trigger: mapped.trigger } : null,
   };
 }
@@ -418,6 +492,7 @@ export function parseCompetitorsFile(text: string): CompetitorsFile {
       baseline: baselineOf(row["baseline"]),
       gate: gateOverrides(row["gate"]),
       followUpstream: row["followUpstream"] === true,
+      watch: row["watch"] === undefined || row["watch"] === null ? null : checkWatch(row["watch"]).watch,
     });
   }
   return { dossierRoot: file["dossierRoot"], mirrorRoot: file["mirrorRoot"], gate: gateOverrides(file["gate"]), entries };
@@ -428,20 +503,21 @@ export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
     const ids = new Set(entries.map((entry) => entry.id));
     const insert = db.prepare(`INSERT INTO competitors (
       id, name, org, remote_url, mirror_path, package_url, dossier_dir, dossier_reviewed, flags_json,
-      baseline_version, baseline_commit, baseline_at, baseline_source, follow_upstream
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      baseline_version, baseline_commit, baseline_at, baseline_source, follow_upstream, watch_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const update = db.prepare(`UPDATE competitors SET name = ?, org = ?, remote_url = ?, mirror_path = ?, package_url = ?,
-      dossier_dir = ?, dossier_reviewed = ?, flags_json = ?, follow_upstream = ? WHERE id = ?`);
+      dossier_dir = ?, dossier_reviewed = ?, flags_json = ?, follow_upstream = ?, watch_json = ? WHERE id = ?`);
     const fillBaseline = db.prepare(`UPDATE competitors SET baseline_version = ?, baseline_commit = ?, baseline_at = ?, baseline_source = ?
       WHERE id = ? AND baseline_version IS NULL AND baseline_commit IS NULL AND baseline_source IS NULL`);
     for (const entry of entries) {
       const flags = JSON.stringify(knownFlags(entry.flags));
+      const watchJson = entry.watch ? JSON.stringify(entry.watch) : null;
       const existing = db.prepare("SELECT id FROM competitors WHERE id = ?").get(entry.id);
       const baseline = entry.baseline;
       if (!existing) {
-        insert.run(entry.id, entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, baseline?.version ?? null, baseline?.commit ?? null, baseline?.at ?? null, baseline?.source ?? null, entry.followUpstream ? 1 : 0);
+        insert.run(entry.id, entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, baseline?.version ?? null, baseline?.commit ?? null, baseline?.at ?? null, baseline?.source ?? null, entry.followUpstream ? 1 : 0, watchJson);
       } else {
-        update.run(entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, entry.followUpstream ? 1 : 0, entry.id);
+        update.run(entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, entry.followUpstream ? 1 : 0, watchJson, entry.id);
         if (baseline) fillBaseline.run(baseline.version, baseline.commit, baseline.at, baseline.source, entry.id);
       }
     }
@@ -506,9 +582,9 @@ export function failCompetitorRun(db: Db, runId: number, error: string, now: str
 
 export function startPullingRun(db: Db, competitorId: string, now: string): CompetitorRun {
   return immediate(db, () => {
-    const row = db.prepare("SELECT mirror_path AS mirrorPath, baseline_version AS baselineVersion, baseline_commit AS baselineCommit FROM competitors WHERE id = ?").get(competitorId) as { mirrorPath: string | null; baselineVersion: string | null; baselineCommit: string | null } | undefined;
+    const row = db.prepare("SELECT mirror_path AS mirrorPath, watch_json AS watchJson, baseline_version AS baselineVersion, baseline_commit AS baselineCommit FROM competitors WHERE id = ?").get(competitorId) as { mirrorPath: string | null; watchJson: string | null; baselineVersion: string | null; baselineCommit: string | null } | undefined;
     if (!row) throw new Error("unknown competitor");
-    if (!row.mirrorPath) throw new Error("competitor has no mirror");
+    if (!row.mirrorPath && !row.watchJson) throw new Error("competitor has no mirror");
     if (db.prepare(`SELECT 1 FROM competitor_runs WHERE competitor_id = ? AND state IN ${ACTIVE}`).get(competitorId)) throw new Error("a run is already active");
     const inserted = db.prepare("INSERT INTO competitor_runs (competitor_id, state, from_version, from_commit, requested_at, updated_at, trigger) VALUES (?, 'pulling', ?, ?, ?, ?, 'manual')").run(competitorId, row.baselineVersion, row.baselineCommit, now, now);
     db.prepare("UPDATE competitors SET pending_json = NULL WHERE id = ?").run(competitorId);
@@ -584,11 +660,102 @@ export function markCompetitorNotified(db: Db, id: string, version: string): voi
   db.prepare("UPDATE competitors SET notified_version = ? WHERE id = ?").run(version, id);
 }
 
+/** A watched competitor with no baseline takes its first observation as the baseline, so only later changes read as new. */
+export function seedWatchBaseline(db: Db, id: string, observed: { version: string | null; commit: string | null }, now: string): boolean {
+  const row = db.prepare("SELECT watch_json AS watchJson, baseline_version AS baselineVersion, baseline_commit AS baselineCommit FROM competitors WHERE id = ?").get(id) as { watchJson: string | null; baselineVersion: string | null; baselineCommit: string | null } | undefined;
+  if (!row?.watchJson || row.baselineVersion !== null || row.baselineCommit !== null) return false;
+  if (observed.version === null && observed.commit === null) return false;
+  db.prepare("UPDATE competitors SET baseline_version = ?, baseline_commit = ?, baseline_at = ?, baseline_source = 'watch' WHERE id = ?").run(observed.version, observed.commit, now, id);
+  return true;
+}
+
+export interface GateSettings {
+  defaults: typeof DEFAULT_RESEARCH_GATE;
+  global: Partial<ResearchGateConfig>;
+  entries: { id: string; name: string; gate: Partial<ResearchGateConfig> }[];
+}
+
+/** What the registry file sets for the gate, beside the built-in defaults. Only entries with an override of their own are listed. */
+export function readGateSettings(text: string): GateSettings {
+  const file = parseCompetitorsFile(text);
+  return {
+    defaults: DEFAULT_RESEARCH_GATE,
+    global: file.gate ?? {},
+    entries: file.entries.filter((entry) => entry.gate && Object.keys(entry.gate).length > 0).map((entry) => ({ id: entry.id, name: entry.name, gate: entry.gate ?? {} })),
+  };
+}
+
+export interface GateChange {
+  /** The competitor whose override changes. Left out, the file-wide gate changes. */
+  id?: string;
+  set?: Record<string, unknown>;
+  /** Fields to drop, so the value falls back to the file-wide gate or the default. */
+  clear?: string[];
+}
+
+function parseRegistry(text: string): { file: Record<string, unknown>; entries: Record<string, unknown>[] } {
+  const file = JSON.parse(text) as unknown;
+  if (!file || typeof file !== "object" || Array.isArray(file) || !Array.isArray((file as Record<string, unknown>)["entries"])) throw new Error("competitors file must be an object with entries");
+  return { file: file as Record<string, unknown>, entries: (file as { entries: Record<string, unknown>[] })["entries"] };
+}
+
+const GATE_KEYS: readonly string[] = [...GATE_NUMBERS, ...GATE_FLAGS];
+const GATE_LIMIT = 100_000;
+
+function checkedGateValues(set: Record<string, unknown>): Partial<ResearchGateConfig> {
+  const out: Record<string, number | boolean> = {};
+  for (const [key, value] of Object.entries(set)) {
+    if (!GATE_KEYS.includes(key)) throw new Error(`unknown gate field ${key}`);
+    if ((GATE_FLAGS as readonly string[]).includes(key)) {
+      if (typeof value !== "boolean") throw new Error(`${key} must be true or false`);
+      out[key] = value;
+      continue;
+    }
+    const min = key === "maxQueued" ? 1 : 0;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > GATE_LIMIT) throw new Error(`${key} must be a whole number from ${min} to ${GATE_LIMIT}`);
+    out[key] = value;
+  }
+  return out as Partial<ResearchGateConfig>;
+}
+
+/** Returns the registry file text with one gate changed. Everything else in the file is kept as written. */
+export function applyGateChange(text: string, change: GateChange): string {
+  const { file, entries } = parseRegistry(text);
+  const values = checkedGateValues(change.set ?? {});
+  for (const key of change.clear ?? []) if (!GATE_KEYS.includes(key)) throw new Error(`unknown gate field ${key}`);
+  let holder: Record<string, unknown> = file;
+  if (change.id !== undefined) {
+    const entry = entries.find((item) => item["id"] === change.id);
+    if (!entry) throw new Error("unknown competitor");
+    holder = entry;
+  }
+  const current = holder["gate"] && typeof holder["gate"] === "object" && !Array.isArray(holder["gate"]) ? { ...(holder["gate"] as Record<string, unknown>) } : {};
+  for (const key of change.clear ?? []) delete current[key];
+  Object.assign(current, values);
+  if (Object.keys(current).length === 0) delete holder["gate"];
+  else holder["gate"] = current;
+  return `${JSON.stringify(file, null, 2)}\n`;
+}
+
+/** Returns the registry file text with one competitor's watch source set, or removed when `watch` is null. */
+export function applyWatchChange(text: string, id: string, watch: unknown): string {
+  const { file, entries } = parseRegistry(text);
+  const entry = entries.find((item) => item["id"] === id);
+  if (!entry) throw new Error("unknown competitor");
+  if (watch === null) delete entry["watch"];
+  else {
+    const checked = checkWatch(watch);
+    if (!checked.ok) throw new Error(checked.error);
+    entry["watch"] = checked.watch;
+  }
+  return `${JSON.stringify(file, null, 2)}\n`;
+}
+
 /** Absolute paths stay in the catalog for the update. The runs payload reads them from the request, not from this row. */
-export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null; baselineVersion: string | null; baselineCommit: string | null; followUpstream: boolean } | null {
+export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null; baselineVersion: string | null; baselineCommit: string | null; followUpstream: boolean; watch: CompetitorWatch | null } | null {
   const row = db.prepare(`SELECT ${COMPETITOR_COLUMNS} FROM competitors WHERE id = ?`).get(id) as StoredCompetitor | undefined;
   if (!row) return null;
-  return { mirrorPath: row.mirrorPath, dossierDir: row.dossierDir, remoteUrl: row.remoteUrl, packageUrl: row.packageUrl, name: row.name, org: row.org, flags: flagsFromJson(row.flagsJson), latestVersion: row.latestVersion, baselineVersion: row.baselineVersion, baselineCommit: row.baselineCommit, followUpstream: row.followUpstream === 1 };
+  return { mirrorPath: row.mirrorPath, dossierDir: row.dossierDir, remoteUrl: row.remoteUrl, packageUrl: row.packageUrl, name: row.name, org: row.org, flags: flagsFromJson(row.flagsJson), latestVersion: row.latestVersion, baselineVersion: row.baselineVersion, baselineCommit: row.baselineCommit, followUpstream: row.followUpstream === 1, watch: watchFromJson(row.watchJson) };
 }
 
 export function competitorRunRecord(db: Db, id: number, now?: string): (CompetitorRun & { fromCommit: string | null; toCommit: string | null }) | null {

@@ -500,7 +500,7 @@ To work on the panel's UI in a plain browser, serve `packages/tray` and open `ui
 
 The Competitors view sits in the top navigation. On a phone it is in the More sheet, with the same count. The count is how many competitors have a new version. Each row shows the organization, any flags, the last analyzed version and date, the latest version, and the research state in ordinary words. A prerelease that is newer than the stable version shows in quieter text. Search matches the name and the organization. New only starts on when any row is new, and you can turn it off.
 
-Update is there when that competitor has a local mirror and no research run is still going. It asks you to confirm, then pulls the mirror and queues a research request immediately, ignoring the usual wait. Nothing is installed, and the research waits until a person picks it up. A row with no mirror shows Update disabled, with the reason beside the button. Each row says when the mirror was last synced, or the sync error in plain words. A change the gate is holding says how many commits are waiting. The research state says Auto-queued or Manual. Check now starts a check of the remotes. The time of the last check is under the title.
+Update is there when that competitor has a local mirror or a watch source, and no research run is still going. It asks you to confirm, then pulls the mirror and queues a research request immediately, ignoring the usual wait. Nothing is installed, and the research waits until a person picks it up. A row with neither shows Update disabled, with the reason beside the button. A row with no repository offers Watch a page to set a watch source, and Update rules, beside Check now, edits the research rules. Each row says when the mirror was last synced, or the sync error in plain words. A change the gate is holding says how many commits are waiting. The research state says Auto-queued or Manual. Check now starts a check of the remotes. The time of the last check is under the title.
 
 When competitor watch is not set up, the page says to run the seed command:
 
@@ -601,7 +601,29 @@ node packages/cli/src/competitors.ts seed --dossiers <dir> --mirrors <dir>
 }
 ```
 
-An optional top-level `gate` object, and an optional `gate` on an entry, change when research is queued. The defaults are 5 commits or 3 changed source files, a new stable tag queues on its own, the last commit must be at least 24 hours old, docs-only and dependency-bump-only changes are skipped, and at most 5 runs may be queued or claimed. An entry replaces only the fields it sets. A competitor with no baseline commit is never queued by the gate.
+An optional top-level `gate` object, and an optional `gate` on an entry, change when research is queued. The defaults are 5 commits or 3 changed source files, a new stable tag queues on its own, the last commit must be at least 24 hours old, docs-only and dependency-bump-only changes are skipped, and at most 5 runs may be queued or claimed. An entry replaces only the fields it sets. A competitor with no baseline commit, or a watched one with no baseline version, is never queued by the gate.
+
+The gate can be changed in three places, and all three write `competitors.json`, which stays the source of truth. On the Competitors page, Update rules opens a dialog with a scope menu (All competitors, or one competitor) and one field per rule, and a field left empty goes back to the default, which it shows as a placeholder. `GET /api/competitors/gate` returns `{ defaults, global, entries }`, where `entries` lists only the competitors with rules of their own. `POST /api/competitors/gate` takes `{ id?, set?, clear? }` and answers with the same shape: leave out `id` to change the file-wide gate, put field values in `set`, and list the field names to remove in `clear`. The MCP tool `scout_competitor_gate` takes the same arguments and only reads when it gets none. The fields are `enabled` (true by default), `minCommits`, `minSourceFilesChanged`, `onNewTag`, `quietHours`, `ignoreDocsOnly`, `ignoreDependencyBumpOnly`, and `maxQueued`. Numbers are whole numbers from 0 to 100000, or 1 to 100000 for `maxQueued`, and the other fields are true or false. An unknown field or a value of the wrong type is refused, and the file is left as it was. The hub reloads the file as soon as it is saved, so a change applies at the next check, sync, or update. The Update button ignores the gate.
+
+A competitor with no public repository can be watched through a web page or a JSON feed. Add a `watch` object to its entry with a `kind`, an https `url`, and, depending on the kind, a `versionPath` or a `versionPattern`. A `json` watch fetches the URL as JSON and reads the version at `versionPath`, a dotted path such as `latest.version`, which this kind requires. A `page` watch fetches the page, strips the tags, and reads the version from the one capture group in `versionPattern`, or takes the highest version-looking string when there is no pattern. A `hash` watch stores a sha256 of the page text with the tags removed and treats any change to it as an update.
+
+```json
+{
+  "id": "acme-tools",
+  "name": "Acme Tools",
+  "org": "Acme",
+  "dossierDir": "C:/path/to/dossiers/Acme - Acme Tools",
+  "watch": {
+    "kind": "page",
+    "url": "https://acme.example.com/releases",
+    "versionPattern": "Acme Tools ([0-9]+\\.[0-9]+\\.[0-9]+)"
+  }
+}
+```
+
+Watches run on the same 6-hour check as repository remotes, for entries that have no `remoteUrl`. The first reading becomes the baseline, with source `watch`, so a new watch never shows as New on its first check. After that, a higher version marks the competitor New and goes through the same gate and the same one-time notice as a repository. From a `json` or `page` watch, a new version counts as a new stable release and queues research unless the queue is full. A changed `hash` page with no version only waits: the row says the page changed and shows no new version, and research is queued only when someone presses Update. Update on a watched row reads the page right away and queues research with `trigger` set to `manual`. A failed read stores the reason on the row and keeps the earlier version. On the Competitors page, a row with no repository offers Watch a page, or Change source once a watch is set. `POST /api/competitors/<id>/watch` takes `{ "watch": {...} }`, or `{ "watch": null }` to remove the watch, and the MCP tool `scout_competitor_watch` takes `id` and `watch` the same way.
+
+The hub fetches these addresses itself, so the URL must use https, carry no credentials, and name a public host. Localhost, IP addresses, single-label names, and names ending in `.local`, `.internal`, `.lan`, `.home`, or `.test` are refused. Redirects are followed for up to 4 hops, and each hop is checked against the same rules. A response is capped at 1.5 MB, and a read times out after 20 seconds. A `hash` watch on a page whose text changes on its own, such as a date, a counter, or a rotating banner, reports changes that are not releases, so use `json` or `page` whenever the page shows a version.
 
 When scheduled work is on, the hub also fast-forwards each local mirror every 12 hours, one mirror at a time, with 2 seconds between mirrors and 120 seconds for each one. It syncs a mirror whose latest commit differs from the last synced commit, and once a week it syncs every mirror that has a path. After a sync, and after a check whose commit the mirror already has, the gate may queue research. The request includes an analysis of commit types, file categories, a 0 to 100 change score, manifest changes, new hosts, new settings, and pricing lines. The score is a log of the changed lines, and docs, lockfiles, assets, and generated files count for little. Update still pulls that one mirror and queues research immediately.
 
