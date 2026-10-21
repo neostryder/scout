@@ -1,12 +1,13 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { decideRecipe, listActions, openCatalog, recipesResponse, recordListeners, recordServices, scanRecipes, upsertMachine, type ActionRecord, type ServiceFact, type Stack } from "@scout/core";
 import { ControlRunner, type ControlRunnerDeps } from "../src/control.ts";
 
 function fixture(t: TestContext) {
-  const root = mkdtempSync(resolve("stack-ops-")).replace(/\\/g, "/");
+  const root = mkdtempSync(join(tmpdir(), "stack-ops-")).replace(/\\/g, "/");
   mkdirSync(`${root}/.claude`);
   const putRecipe = (arg = "app.js") => writeFileSync(`${root}/.claude/launch.json`, JSON.stringify({ configurations: [{ name: "dev", runtimeExecutable: "node", runtimeArgs: [arg] }] }));
   putRecipe();
