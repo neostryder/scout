@@ -3,6 +3,14 @@ $ErrorActionPreference = 'Stop'
 $data = ''
 $candidates = [Collections.Generic.List[string]]::new()
 if ($env:COGITATOR_HOME) { $candidates.Add($env:COGITATOR_HOME) }
+# The scheduled task's command line names the live install (--config <home>\cogitator.toml or <home>\bin\cogitator.exe), so a later move is followed too.
+try {
+    foreach ($action in (Get-ScheduledTask -TaskName 'Cogitator' -ErrorAction Stop).Actions) {
+        $line = [Environment]::ExpandEnvironmentVariables("$($action.Execute) $($action.Arguments)")
+        if ($line -match '(?i)([A-Za-z]:[^"]*?)[\\/]cogitator\.toml') { $candidates.Add($Matches[1]) }
+        elseif ($line -match '(?i)([A-Za-z]:[^"]*?)[\\/]bin[\\/]cogitator\.exe') { $candidates.Add($Matches[1]) }
+    }
+} catch { }
 $candidates.Add((Join-Path $env:LOCALAPPDATA 'Cogitator'))
 foreach ($drive in [IO.DriveInfo]::GetDrives()) { if ($drive.DriveType -eq 'Fixed') { $candidates.Add((Join-Path $drive.Name 'Cogitator')) } }
 foreach ($candidate in $candidates) {

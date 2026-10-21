@@ -135,7 +135,7 @@ test("the Windows probe omits secret settings, validates magic and caps model fi
     writeFileSync(join(data, "cogitator.toml"), '[[engines]]\nid = "stub"\nargs = ["--api-key", "FAKE-SECRET"]\n[[peers]]\nkey_file = "FAKE-SECRET"\n');
     writeFileSync(join(data, "manage.key"), "FAKE-SECRET");
     writeFileSync(join(models, "invalid.gguf"), "not gguf");
-    const run = () => spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-File", join(root, "tools/probes/windows/cogmodels.ps1")], { encoding: "utf8", windowsHide: true, env: { ...process.env, LOCALAPPDATA: temp }, timeout: 25_000 });
+    const run = () => spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-File", join(root, "tools/probes/windows/cogmodels.ps1")], { encoding: "utf8", windowsHide: true, env: { ...process.env, LOCALAPPDATA: temp, COGITATOR_HOME: data }, timeout: 25_000 });
     const invalid = run();
     assert.equal(invalid.status, 0, invalid.stderr);
     assert.equal(invalid.stdout.includes("FAKE-SECRET"), false);
