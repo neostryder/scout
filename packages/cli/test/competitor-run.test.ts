@@ -34,3 +34,12 @@ test("claim refuses a run that does not exist", async (t) => {
   const paths = harness(t);
   await assert.rejects(() => runCompetitorTool("claim", JSON.stringify({ runId: 99, by: "test" }), paths), /no such run/);
 });
+
+test("probe reads a watch source once and saves nothing", async (t) => {
+  const paths = harness(t);
+  const fetcher = async () => new Response(JSON.stringify({ latest: { version: "3.4.5" } }), { status: 200, headers: { "content-type": "application/json" } });
+  const read = (await runCompetitorTool("probe", JSON.stringify({ kind: "json", url: "https://example.com/v.json", versionPath: "latest.version" }), paths, fetcher)) as { version: string; error: string | null };
+  assert.equal(read.version, "3.4.5");
+  assert.equal(read.error, null);
+  await assert.rejects(() => runCompetitorTool("probe", JSON.stringify({ kind: "json", url: "http://example.com/v.json", versionPath: "v" }), paths, fetcher), /https/);
+});
