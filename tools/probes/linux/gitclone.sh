@@ -19,7 +19,7 @@ fi
 expand_root() {
   case "$1" in
     '~') printf '%s\n' "$HOME" ;;
-    '~/'*) printf '%s\n' "$HOME/${1#~/}" ;;
+    '~/'*) printf '%s\n' "$HOME/${1#??}" ;;
     *) printf '%s\n' "$1" ;;
   esac
 }

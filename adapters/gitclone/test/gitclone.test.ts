@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fixtureTests } from "@scout/core/testing";
 import { adapter, normalizeRemote } from "../src/index.ts";
@@ -127,4 +130,15 @@ test("recorded probes skip hidden names and keep an explicit root", () => {
     assert.equal(stdout.includes("fixture-token"), false);
     assert.equal(stdout.includes("neost"), false);
   }
+});
+
+test("the shell probe expands a leading tilde root under bash", { skip: spawnSync("bash", ["-c", "exit 0"], { windowsHide: true }).status !== 0 }, () => {
+  const home = mkdtempSync(join(tmpdir(), "scout-gc-home-"));
+  try {
+    mkdirSync(join(home, "code", "demo", ".git"), { recursive: true });
+    const argv = adapter.probes({ machineId: "host", os: "linux", roots: { clone: ["~/code"] } }, "")[0]!.argv;
+    const run = spawnSync("bash", ["-c", argv[2]!, ...argv.slice(3)], { encoding: "utf8", windowsHide: true, env: { ...process.env, HOME: home.replaceAll("\\", "/") } });
+    assert.match(run.stdout, /---SCOUT-REPO---/);
+    assert.match(run.stdout, /path=.*demo/);
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });
