@@ -45,10 +45,10 @@ function harness(t: TestContext, competitors: NonNullable<ToolContext["competito
   return { tools, tool };
 }
 
-test("the competitor tools are named, and only claim, complete, fail, gate, watch, and start change anything", (t) => {
+test("the competitor tools are named, and only claim, complete, fail, gate, watch, repo, and start change anything", (t) => {
   const { tools } = harness(t);
-  assert.deepEqual(tools.map((tool) => tool.name).filter((name) => name.startsWith("scout_competitor")), ["scout_competitors", "scout_competitor_queue", "scout_competitor_gate", "scout_competitor_watch", "scout_competitor_claim", "scout_competitor_complete", "scout_competitor_fail"]);
-  assert.deepEqual(tools.filter((tool) => !tool.readOnly).map((tool) => tool.name).sort(), ["scout_competitor_claim", "scout_competitor_complete", "scout_competitor_fail", "scout_competitor_gate", "scout_competitor_watch", "scout_start_service"]);
+  assert.deepEqual(tools.map((tool) => tool.name).filter((name) => name.startsWith("scout_competitor")), ["scout_competitors", "scout_competitor_queue", "scout_competitor_gate", "scout_competitor_watch", "scout_competitor_repo", "scout_competitor_claim", "scout_competitor_complete", "scout_competitor_fail"]);
+  assert.deepEqual(tools.filter((tool) => !tool.readOnly).map((tool) => tool.name).sort(), ["scout_competitor_claim", "scout_competitor_complete", "scout_competitor_fail", "scout_competitor_gate", "scout_competitor_repo", "scout_competitor_watch", "scout_start_service"]);
 });
 
 test("scout_competitors filters by status and caps the rows at 200", async (t) => {

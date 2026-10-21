@@ -1,5 +1,5 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { actionById, applyGateChange, applyWatchChange, parseCompetitorsFile, readGateSettings,alertsFileReader, alertsResponse, claimCompetitorRun, completeCompetitorRun, failCompetitorRun, hubMachineId, listActions, listCompetitorRuns, listCompetitors, loadTunnelHosts, openCatalog, outagesResponse, portsFileReader, portsResponse, systemsMapMarkdown, watchFileReader, whoIs, type ActionRecord, type ControlAction, type ControlTarget, type Db } from "@scout/core";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { actionById, applyGateChange, applyRepoChange, applyWatchChange, parseCompetitorsFile, readGateSettings,alertsFileReader, alertsResponse, claimCompetitorRun, completeCompetitorRun, failCompetitorRun, hubMachineId, listActions, listCompetitorRuns, listCompetitors, loadTunnelHosts, openCatalog, outagesResponse, portsFileReader, portsResponse, systemsMapMarkdown, watchFileReader, whoIs, type ActionRecord, type ControlAction, type ControlTarget, type Db } from "@scout/core";
 import { ControlRunner, loadMachines, localMapInput, localStatus, localTray, type ControlRunnerDeps, type LocalPaths } from "@scout/ops";
 import type { Tool } from "./server.ts";
 
@@ -67,7 +67,7 @@ const filters = (args: Record<string, unknown>, keys: string[]): URLSearchParams
 const brief = (record: ActionRecord | null): unknown => record && { id: record.id, state: record.state, action: record.action, name: record.name, machineId: record.machineId, message: record.message, at: record.at, finishedAt: record.finishedAt };
 const withoutToken = <T extends { token?: unknown }>(plan: T): Omit<T, "token"> => { const { token: _token, ...rest } = plan; void _token; return rest; };
 
-/** The tools an agent gets. Reads are free. scout_start_service can only start a stopped service. scout_competitor_claim, scout_competitor_complete, and scout_competitor_fail move a research run state and never touch files, repositories, or machines. scout_competitor_gate and scout_competitor_watch edit only the competitors registry file. */
+/** The tools an agent gets. Reads are free. scout_start_service can only start a stopped service. scout_competitor_claim, scout_competitor_complete, and scout_competitor_fail move a research run state and never touch files, repositories, or machines. scout_competitor_gate, scout_competitor_watch, and scout_competitor_repo edit only the competitors registry file. */
 export function createTools(context: ToolContext): Tool[] {
   const { paths } = context;
   const now = (): string => context.now?.() ?? new Date().toISOString();
@@ -178,6 +178,14 @@ export function createTools(context: ToolContext): Tool[] {
       const id = requiredText(args, "id", 80);
       if (!("watch" in args)) throw new Error("watch is required, or null to remove it");
       return writeRegistry(applyWatchChange(readFileSync(paths.competitors, "utf8"), id, args.watch), () => ({ ok: true }));
+    } },
+    { name: "scout_competitor_repo", readOnly: false, description: "Sets or removes the public repository Scout mirrors for a competitor. repo is an object with remoteUrl (an https address on a public host), mirrorPath (an existing git checkout inside the registry's mirror root), and an optional baseline with a full commit and a version, where the research gate starts counting. Setting a repo drops the competitor's watch source, because the mirror replaces it. Pass null to remove the repository. It edits only the competitors registry file and never clones or pulls; the checkout must already exist.", inputSchema: object({ id: { type: "string", maxLength: 80 }, repo: { description: "The repo object, or null to remove it." } }, ["id"]), run: (args) => {
+      const id = requiredText(args, "id", 80);
+      if (!("repo" in args)) throw new Error("repo is required, or null to remove it");
+      const next = applyRepoChange(readFileSync(paths.competitors, "utf8"), id, args.repo, now());
+      const repo = args.repo as { mirrorPath?: string } | null;
+      if (repo && !existsSync(`${repo.mirrorPath?.replace(/\\/g, "/")}/.git`)) throw new Error("mirrorPath is not a git checkout");
+      return writeRegistry(next, () => ({ ok: true }));
     } },
     { name: "scout_competitor_claim", readOnly: false, description: "Claims a queued research run for the named person. It changes the run's state and does not touch files, repositories, or machines.", inputSchema: object({ runId: { type: "integer", minimum: 1 }, by: { type: "string", maxLength: 80, description: "Who is taking the run. At most 80 characters." } }, ["runId", "by"]), run: (args) => {
       const runId = runIdOf(args);

@@ -23,12 +23,12 @@ function harness(t: TestContext) {
     assert.ok(tool, name);
     return tool!.run(args);
   };
-  return { call, read: () => JSON.parse(readFileSync(paths.competitors, "utf8")), tools };
+  return { call, read: () => JSON.parse(readFileSync(paths.competitors, "utf8")), tools, dir, paths };
 }
 
-test("the gate and watch tools are listed as writers", (t) => {
+test("the gate, watch, and repo tools are listed as writers", (t) => {
   const { tools } = harness(t);
-  for (const name of ["scout_competitor_gate", "scout_competitor_watch"]) assert.equal(tools.find((tool) => tool.name === name)?.readOnly, false, name);
+  for (const name of ["scout_competitor_gate", "scout_competitor_watch", "scout_competitor_repo"]) assert.equal(tools.find((tool) => tool.name === name)?.readOnly, false, name);
 });
 
 test("the gate tool reads defaults and overrides when given nothing", async (t) => {
@@ -78,4 +78,50 @@ test("the watch tool refuses an unsafe address, a missing watch, and an unknown 
   await assert.rejects(() => call("scout_competitor_watch", { id: "a" }), /watch is required/);
   await assert.rejects(() => call("scout_competitor_watch", { id: "zzz", watch: null }), /unknown competitor/);
   assert.deepEqual(read(), FILE);
+});
+
+const SHA = "0123456789abcdef0123456789abcdef01234567";
+
+function repoHarness(t: TestContext) {
+  const found = harness(t);
+  const root = join(found.dir, "mirrors").replace(/\\/g, "/");
+  mkdirSync(`${root}/alpha/.git`, { recursive: true });
+  mkdirSync(`${root}/plain`, { recursive: true });
+  const file = { dossierRoot: "d", mirrorRoot: root, entries: [{ id: "a", name: "A", flags: [], watch: { kind: "hash", url: "https://example.com/p" } }] };
+  writeFileSync(found.paths.competitors, JSON.stringify(file));
+  return { ...found, root, file };
+}
+
+test("the repo tool sets a mirror, starts the gate at a baseline, drops the watch, and removes the repo again", async (t) => {
+  const { call, read, root } = repoHarness(t);
+  await call("scout_competitor_repo", { id: "a", repo: { remoteUrl: "https://github.com/example/alpha", mirrorPath: `${root}/alpha`, baseline: { version: "1.2.0", commit: SHA } } });
+  const entry = read().entries[0];
+  assert.equal(entry.remoteUrl, "https://github.com/example/alpha");
+  assert.equal(entry.mirrorPath, `${root}/alpha`);
+  assert.deepEqual({ ...entry.baseline, at: undefined }, { version: "1.2.0", commit: SHA, at: undefined, source: "mirror" });
+  assert.match(entry.baseline.at, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal("watch" in entry, false);
+  await call("scout_competitor_repo", { id: "a", repo: null });
+  assert.equal(read().entries[0].remoteUrl, null);
+  assert.equal(read().entries[0].mirrorPath, null);
+});
+
+test("the repo tool refuses an unsafe address, a folder outside the mirror root, a missing checkout, and a bad baseline", async (t) => {
+  const { call, read, root, file } = repoHarness(t);
+  const ok = { remoteUrl: "https://github.com/example/alpha", mirrorPath: `${root}/alpha` };
+  const refuse = (repo: unknown, pattern: RegExp) => assert.rejects(() => call("scout_competitor_repo", { id: "a", repo }), pattern);
+  await refuse({ ...ok, remoteUrl: "http://github.com/example/alpha" }, /https/);
+  await refuse({ ...ok, remoteUrl: "https://user:pass@github.com/example/alpha" }, /credentials/);
+  await refuse({ ...ok, remoteUrl: "https://localhost/alpha" }, /public host/);
+  await refuse({ ...ok, mirrorPath: `${root}/../elsewhere` }, /inside the mirror root/);
+  await refuse({ ...ok, mirrorPath: "/somewhere/else" }, /inside the mirror root/);
+  await refuse({ ...ok, mirrorPath: root }, /inside the mirror root/);
+  await refuse({ ...ok, mirrorPath: `${root}/plain` }, /not a git checkout/);
+  await refuse({ ...ok, baseline: { commit: "abc" } }, /40-character/);
+  await refuse({ ...ok, baseline: { commit: SHA, extra: 1 } }, /unknown baseline field/);
+  await refuse({ ...ok, extra: 1 }, /unknown repo field/);
+  await refuse("alpha", /repo must be an object/);
+  await assert.rejects(() => call("scout_competitor_repo", { id: "a" }), /repo is required/);
+  await assert.rejects(() => call("scout_competitor_repo", { id: "zzz", repo: null }), /unknown competitor/);
+  assert.deepEqual(read(), file);
 });

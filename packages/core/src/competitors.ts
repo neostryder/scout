@@ -751,6 +751,48 @@ export function applyWatchChange(text: string, id: string, watch: unknown): stri
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
+const REPO_KEYS: ReadonlySet<string> = new Set(["remoteUrl", "mirrorPath", "baseline"]);
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/** Returns the registry file text with one competitor's repository set, or cleared when `repo` is null. Setting one drops the competitor's watch source, since the mirror replaces it, and a given baseline starts the research gate from that commit. */
+export function applyRepoChange(text: string, id: string, repo: unknown, now: string): string {
+  const { file, entries } = parseRegistry(text);
+  const entry = entries.find((item) => item["id"] === id);
+  if (!entry) throw new Error("unknown competitor");
+  if (repo === null) {
+    entry["remoteUrl"] = null;
+    entry["mirrorPath"] = null;
+    return `${JSON.stringify(file, null, 2)}\n`;
+  }
+  if (!repo || typeof repo !== "object" || Array.isArray(repo)) throw new Error("repo must be an object, or null to remove it");
+  const row = repo as Record<string, unknown>;
+  for (const key of Object.keys(row)) if (!REPO_KEYS.has(key)) throw new Error(`unknown repo field ${key}`);
+  const raw = typeof row["remoteUrl"] === "string" ? row["remoteUrl"].trim() : "";
+  if (!raw || raw.length > 500 || !URL.canParse(raw)) throw new Error("remoteUrl must be a web address");
+  const url = new URL(raw);
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") throw new Error("remoteUrl must be https and carry no credentials");
+  if (!watchHostAllowed(url.hostname)) throw new Error("remoteUrl must name a public host");
+  const root = typeof file["mirrorRoot"] === "string" ? file["mirrorRoot"].replace(/\\/g, "/").replace(/\/+$/, "") : "";
+  const mirror = typeof row["mirrorPath"] === "string" ? row["mirrorPath"].trim().replace(/\\/g, "/") : "";
+  if (!root || !mirror.toLowerCase().startsWith(`${root.toLowerCase()}/`) || mirror.length === root.length + 1 || mirror.split("/").includes("..")) throw new Error("mirrorPath must be a folder inside the mirror root");
+  let baseline: { version: string | null; commit: string } | null = null;
+  if (row["baseline"] !== undefined) {
+    const given = row["baseline"];
+    if (!given || typeof given !== "object" || Array.isArray(given)) throw new Error("baseline must be an object");
+    const fields = given as Record<string, unknown>;
+    for (const key of Object.keys(fields)) if (key !== "version" && key !== "commit") throw new Error(`unknown baseline field ${key}`);
+    if (typeof fields["commit"] !== "string" || !FULL_SHA.test(fields["commit"])) throw new Error("baseline commit must be a full 40-character commit");
+    const version = fields["version"];
+    if (version !== undefined && version !== null && (typeof version !== "string" || version.length > 100)) throw new Error("baseline version must be text of at most 100 characters");
+    baseline = { version: typeof version === "string" ? version : null, commit: fields["commit"] };
+  }
+  entry["remoteUrl"] = url.toString();
+  entry["mirrorPath"] = mirror;
+  delete entry["watch"];
+  if (baseline) entry["baseline"] = { ...baseline, at: now.slice(0, 10), source: "mirror" };
+  return `${JSON.stringify(file, null, 2)}\n`;
+}
+
 /** Absolute paths stay in the catalog for the update. The runs payload reads them from the request, not from this row. */
 export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null; baselineVersion: string | null; baselineCommit: string | null; followUpstream: boolean; watch: CompetitorWatch | null } | null {
   const row = db.prepare(`SELECT ${COMPETITOR_COLUMNS} FROM competitors WHERE id = ?`).get(id) as StoredCompetitor | undefined;

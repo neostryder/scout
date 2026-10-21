@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Runs one competitor tool from the command line, for a research session that has no MCP connection to Scout.
-// Usage: node packages/cli/src/competitor-run.ts <queue|claim|complete|fail|list|gate|watch|probe> ['{"json":"args"}']
+// Usage: node packages/cli/src/competitor-run.ts <queue|claim|complete|fail|list|gate|watch|repo|probe> ['{"json":"args"}']
 // probe reads a watch source once, with the same fetch and version rules the hub uses, and saves nothing.
 // It reads the catalog and registry of the checkout it runs from, so the installed copy talks to the live hub's data.
 import { resolve } from "node:path";
@@ -17,6 +17,7 @@ const TOOLS: Record<string, string> = {
   fail: "scout_competitor_fail",
   gate: "scout_competitor_gate",
   watch: "scout_competitor_watch",
+  repo: "scout_competitor_repo",
 };
 
 export async function runCompetitorTool(command: string | undefined, rawArgs: string | undefined, paths: LocalPaths = localPaths(scoutRoot()), fetcher?: Parameters<typeof checkWatchSource>[1]): Promise<unknown> {
