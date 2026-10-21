@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +10,8 @@ import { adapter } from "../src/index.ts";
 const bigPackageJson = JSON.stringify({ name: "big", description: "x".repeat(3000), scripts: { build: "tsc" }, engines: { node: ">=24" }, packageManager: "pnpm@12.3.4" }, null, 2);
 
 function withProject(fn: (root: string) => void): void {
-  const root = mkdtempSync(join(tmpdir(), "scout-projectsel-"));
+  // The probe reports the long path, so resolve a short 8.3 temp folder name (as on the Windows runner) first.
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), "scout-projectsel-")));
   try {
     mkdirSync(join(root, "app"));
     writeFileSync(join(root, "app", "package.json"), bigPackageJson);
