@@ -570,7 +570,7 @@ Protected services never offer Stop, Restart, or Disable anywhere in Scout. They
 
 The MCP server has no sign-in. Anyone who can run it on the hub machine can read the catalog and start services, just as they could with the CLI, so connect it only to agents you would trust with the CLI.
 
-## Competitor watch
+## Competitor watch configuration
 
 The watch reads `.scout-data/competitors.json`. The seed command writes that file and does not change the dossier folders or the mirrors:
 
