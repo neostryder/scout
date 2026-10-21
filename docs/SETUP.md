@@ -633,6 +633,8 @@ A dossier folder is a direct child of the dossier root that contains numbered ma
 
 When scheduled work is on, the hub checks those remotes every 6 hours, starting 5 minutes after startup. `--no-competitor-watch` turns that schedule off. `GET /api/competitors` lists them. `POST /api/competitors/check` checks now. `POST /api/competitors/<id>/update` fetches that mirror and queues a research request. `GET /api/competitors/runs?state=queued,claimed` lists queued work. Claim, complete, and fail are `POST /api/competitors/runs/<id>/claim`, `/complete`, and `/fail`.
 
+A session with no MCP connection can run the same competitor tools from the command line. `node packages/cli/src/competitor-run.ts <queue|claim|complete|fail|list|gate|watch> '<json arguments>'` prints the tool's JSON answer, and it reads the catalog and registry of the checkout it runs from.
+
 ## Local state
 
 Everything Scout writes lives in `.scout-data/`:
