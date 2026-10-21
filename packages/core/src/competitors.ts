@@ -65,6 +65,8 @@ export interface CompetitorIdentity {
   flags: string[];
   baseline: CompetitorBaseline | null;
   gate?: Partial<ResearchGateConfig>;
+  /** The mirror follows an upstream that rewrites its published history; the sync keeps the old tip on a backup branch and moves to the new one. */
+  followUpstream?: boolean;
 }
 
 export interface CompetitorsFile {
@@ -123,6 +125,7 @@ export interface StatusInput {
 }
 
 interface StoredCompetitor {
+  followUpstream: number;
   id: string;
   name: string;
   org: string | null;
@@ -167,7 +170,7 @@ interface StoredRun {
 }
 
 const COMPETITOR_COLUMNS = `id, name, org, remote_url AS remoteUrl, mirror_path AS mirrorPath, package_url AS packageUrl,
-  dossier_dir AS dossierDir, dossier_reviewed AS dossierReviewed, flags_json AS flagsJson,
+  dossier_dir AS dossierDir, dossier_reviewed AS dossierReviewed, flags_json AS flagsJson, follow_upstream AS followUpstream,
   baseline_version AS baselineVersion, baseline_commit AS baselineCommit, baseline_at AS baselineAt, baseline_source AS baselineSource,
   latest_version AS latestVersion, latest_prerelease AS latestPrerelease, latest_commit AS latestCommit,
   latest_checked_at AS latestCheckedAt, latest_error AS latestError, notified_version AS notifiedVersion,
@@ -414,6 +417,7 @@ export function parseCompetitorsFile(text: string): CompetitorsFile {
       flags,
       baseline: baselineOf(row["baseline"]),
       gate: gateOverrides(row["gate"]),
+      followUpstream: row["followUpstream"] === true,
     });
   }
   return { dossierRoot: file["dossierRoot"], mirrorRoot: file["mirrorRoot"], gate: gateOverrides(file["gate"]), entries };
@@ -424,10 +428,10 @@ export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
     const ids = new Set(entries.map((entry) => entry.id));
     const insert = db.prepare(`INSERT INTO competitors (
       id, name, org, remote_url, mirror_path, package_url, dossier_dir, dossier_reviewed, flags_json,
-      baseline_version, baseline_commit, baseline_at, baseline_source
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      baseline_version, baseline_commit, baseline_at, baseline_source, follow_upstream
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const update = db.prepare(`UPDATE competitors SET name = ?, org = ?, remote_url = ?, mirror_path = ?, package_url = ?,
-      dossier_dir = ?, dossier_reviewed = ?, flags_json = ? WHERE id = ?`);
+      dossier_dir = ?, dossier_reviewed = ?, flags_json = ?, follow_upstream = ? WHERE id = ?`);
     const fillBaseline = db.prepare(`UPDATE competitors SET baseline_version = ?, baseline_commit = ?, baseline_at = ?, baseline_source = ?
       WHERE id = ? AND baseline_version IS NULL AND baseline_commit IS NULL AND baseline_source IS NULL`);
     for (const entry of entries) {
@@ -435,9 +439,9 @@ export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
       const existing = db.prepare("SELECT id FROM competitors WHERE id = ?").get(entry.id);
       const baseline = entry.baseline;
       if (!existing) {
-        insert.run(entry.id, entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, baseline?.version ?? null, baseline?.commit ?? null, baseline?.at ?? null, baseline?.source ?? null);
+        insert.run(entry.id, entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, baseline?.version ?? null, baseline?.commit ?? null, baseline?.at ?? null, baseline?.source ?? null, entry.followUpstream ? 1 : 0);
       } else {
-        update.run(entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, entry.id);
+        update.run(entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, entry.followUpstream ? 1 : 0, entry.id);
         if (baseline) fillBaseline.run(baseline.version, baseline.commit, baseline.at, baseline.source, entry.id);
       }
     }
@@ -581,10 +585,10 @@ export function markCompetitorNotified(db: Db, id: string, version: string): voi
 }
 
 /** Absolute paths stay in the catalog for the update. The runs payload reads them from the request, not from this row. */
-export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null; baselineVersion: string | null; baselineCommit: string | null } | null {
+export function competitorPaths(db: Db, id: string): { mirrorPath: string | null; dossierDir: string | null; remoteUrl: string | null; packageUrl: string | null; name: string; org: string | null; flags: string[]; latestVersion: string | null; baselineVersion: string | null; baselineCommit: string | null; followUpstream: boolean } | null {
   const row = db.prepare(`SELECT ${COMPETITOR_COLUMNS} FROM competitors WHERE id = ?`).get(id) as StoredCompetitor | undefined;
   if (!row) return null;
-  return { mirrorPath: row.mirrorPath, dossierDir: row.dossierDir, remoteUrl: row.remoteUrl, packageUrl: row.packageUrl, name: row.name, org: row.org, flags: flagsFromJson(row.flagsJson), latestVersion: row.latestVersion, baselineVersion: row.baselineVersion, baselineCommit: row.baselineCommit };
+  return { mirrorPath: row.mirrorPath, dossierDir: row.dossierDir, remoteUrl: row.remoteUrl, packageUrl: row.packageUrl, name: row.name, org: row.org, flags: flagsFromJson(row.flagsJson), latestVersion: row.latestVersion, baselineVersion: row.baselineVersion, baselineCommit: row.baselineCommit, followUpstream: row.followUpstream === 1 };
 }
 
 export function competitorRunRecord(db: Db, id: number, now?: string): (CompetitorRun & { fromCommit: string | null; toCommit: string | null }) | null {

@@ -596,7 +596,8 @@ CREATE TABLE IF NOT EXISTS competitors (
   synced_at TEXT,
   sync_error TEXT,
   sync_head TEXT,
-  pending_json TEXT
+  pending_json TEXT,
+  follow_upstream INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS competitor_runs (
@@ -631,7 +632,7 @@ export const V2_PACKAGE_COLUMNS = [
   "description_at TEXT",
 ];
 
-export const COMPETITOR_ADD_COLUMNS = ["synced_at TEXT", "sync_error TEXT", "sync_head TEXT", "pending_json TEXT"];
+export const COMPETITOR_ADD_COLUMNS = ["synced_at TEXT", "sync_error TEXT", "sync_head TEXT", "pending_json TEXT", "follow_upstream INTEGER NOT NULL DEFAULT 0"];
 export const COMPETITOR_RUN_ADD_COLUMNS = ["trigger TEXT"];
 export const JOB_COLUMNS = ["batch_id TEXT NOT NULL DEFAULT ''", "started_at TEXT", "from_version TEXT", "message TEXT"];
 export const SERVICE_COLUMNS = ["uid INTEGER", "keep_alive INTEGER", "plist TEXT", "expected_down INTEGER NOT NULL DEFAULT 0"];

@@ -144,7 +144,7 @@ function gitPath(cwd: string, printed: string): string {
   return isAbsolute(trimmed) ? trimmed : join(cwd, trimmed);
 }
 
-export async function pullMirror(mirrorPath: string, mirrorRoot: string, run: GitRunner = spawnGit, timeoutMs?: number): Promise<{ ok: true; cwd: string } | { ok: false; error: string }> {
+export async function pullMirror(mirrorPath: string, mirrorRoot: string, run: GitRunner = spawnGit, timeoutMs?: number, followUpstream = false): Promise<{ ok: true; cwd: string } | { ok: false; error: string }> {
   const folder = resolveMirror(mirrorRoot, mirrorPath);
   if (!folder.ok) return folder;
   const cwd = folder.cwd;
@@ -185,7 +185,16 @@ export async function pullMirror(mirrorPath: string, mirrorRoot: string, run: Gi
     if (behind.timedOut || behind.code !== 0 || !Number.isInteger(count)) return { ok: false, error: clip(behind, "git rev-list failed") };
     if (count > 0) {
       const merged = await limited(["merge", "--ff-only", ref], 60_000);
-      if (merged.timedOut || merged.code !== 0) return { ok: false, error: NOT_FF };
+      if (merged.timedOut || merged.code !== 0) {
+        if (!followUpstream) return { ok: false, error: NOT_FF };
+        // An upstream that republishes its history (a public mirror of a private repo) leaves the mirror ahead and behind at once. The clean work tree was checked above, and the old tip stays reachable on a backup branch.
+        const old = (await limited(["rev-parse", "HEAD"], 30_000)).stdout.trim();
+        if (!SHA.test(old)) return { ok: false, error: NOT_FF };
+        const kept = await limited(["branch", "-f", `scout-before-rewrite/${old.slice(0, 12)}`, old], 30_000);
+        if (kept.code !== 0) return { ok: false, error: NOT_FF };
+        const moved = await limited(["reset", "--hard", ref], 60_000);
+        if (moved.timedOut || moved.code !== 0) return { ok: false, error: NOT_FF };
+      }
     }
   }
   return { ok: true, cwd };
@@ -199,7 +208,7 @@ export async function syncCompetitorMirror(db: Db, id: string, options: { mirror
     recordMirrorSync(db, id, { error: "competitor has no mirror" });
     return { ok: false, error: "competitor has no mirror" };
   }
-  const pulled = await pullMirror(paths.mirrorPath, options.mirrorRoot, run, options.timeoutMs);
+  const pulled = await pullMirror(paths.mirrorPath, options.mirrorRoot, run, options.timeoutMs, paths.followUpstream);
   if (!pulled.ok) {
     recordMirrorSync(db, id, { error: pulled.error });
     return pulled;

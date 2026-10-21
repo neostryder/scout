@@ -353,3 +353,45 @@ test("sync survives an upstream that moves a tag it already published", async ()
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("an entry that follows a history-rewriting upstream moves to the new tip and keeps the old one on a backup branch", async () => {
+  const root = mkdtempSync(join(tmpdir(), "scout-comp-follow-"));
+  const mirrors = join(root, "mirrors");
+  try {
+    mkdirSync(mirrors);
+    const remote = join(root, "remote.git");
+    const upstream = join(root, "upstream");
+    const mirror = join(mirrors, "acme-tools");
+    git(root, ["-c", "init.defaultBranch=main", "init", "--bare", remote]);
+    git(root, ["clone", remote, upstream]);
+    configure(upstream);
+    writeFileSync(join(upstream, "README.md"), "one\n");
+    git(upstream, ["add", "."]);
+    git(upstream, ["commit", "-m", "first"]);
+    writeFileSync(join(upstream, "README.md"), "published tip\n");
+    git(upstream, ["commit", "-am", "publish"]);
+    git(upstream, ["push", "-u", "origin", "HEAD"]);
+    git(root, ["clone", remote, mirror]);
+    configure(mirror);
+    const oldTip = head(mirror);
+    git(upstream, ["reset", "--hard", "HEAD~1"]);
+    writeFileSync(join(upstream, "README.md"), "two\n");
+    git(upstream, ["commit", "-am", "second"]);
+    writeFileSync(join(upstream, "README.md"), "republished tip\n");
+    git(upstream, ["commit", "-am", "publish again"]);
+    git(upstream, ["push", "--force", "origin", "HEAD"]);
+    const db = openCatalog(":memory:");
+    const entry = { id: "acme-tools", name: "Acme Tools", org: null, remoteUrl: null, mirrorPath: mirror, packageUrl: null, dossierDir: null, dossierReviewed: null, flags: [], baseline: null };
+    syncCompetitors(db, [entry]);
+    const refused = await syncCompetitorMirror(db, "acme-tools", { mirrorRoot: mirrors, now: NOW });
+    assert.equal(refused.ok, false);
+    assert.equal(head(mirror), oldTip);
+    syncCompetitors(db, [{ ...entry, followUpstream: true }]);
+    const followed = await syncCompetitorMirror(db, "acme-tools", { mirrorRoot: mirrors, now: NOW });
+    assert.equal(followed.ok, true, followed.ok ? "" : followed.error);
+    assert.equal(head(mirror), head(upstream));
+    assert.equal(git(mirror, ["rev-parse", `scout-before-rewrite/${oldTip.slice(0, 12)}`]).trim(), oldTip);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
