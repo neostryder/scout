@@ -139,7 +139,7 @@ export const adapter: Adapter = {
   probes(ctx: ProbeContext, _location: string) {
     const roots = ctx.roots["project"];
     if (ctx.os === "windows") {
-      const fallback = Object.values(ctx.roots).flat().filter((root) => root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase() === "c:/repositories");
+      const fallback = Object.values(ctx.roots).flat().filter((root) => root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase().match(/^[cd]:\/repositories$/) !== null);
       return [{ id: "list", argv: ["pwsh", "-NoProfile", "-NonInteractive", "-CommandWithArgs", PROJECT_PS, JSON.stringify(roots ?? fallback.slice(0, 1))] }];
     }
     if (roots?.length === 0) return [{ id: "list", argv: ["/bin/bash", "-c", "exit 0"] }];
