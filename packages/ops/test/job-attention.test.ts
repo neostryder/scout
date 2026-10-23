@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { enqueueBatch, jobById, openCatalog, recordResearch, recordScan, setJobAttention, setJobPhase, upsertMachine, type Db, type Exec, type ExecHooks } from "@scout/core";
 import { planUpdate } from "../src/plan.ts";
-import { failure, Runner, type RunnerDeps } from "../src/runner.ts";
+import { failure, previewUpdate, Runner, type RunnerDeps } from "../src/runner.ts";
 import type { Observation } from "../src/observe.ts";
 
 const local = { transport: { type: "local" as const } };
@@ -160,5 +160,18 @@ test("phase and attention writes keep their first time, ignore finished jobs, an
   db.prepare("UPDATE jobs SET state = 'done' WHERE id = ?").run(jobId);
   setJobAttention(db, jobId, { kind: "uac" });
   assert.deepEqual(jobById(db, jobId)?.attention?.kind, "window", "a finished job cannot start waiting");
+  db.close();
+});
+
+test("a winget update is flagged for the prompt when the registry lists the same app as installed for the whole machine", () => {
+  const { db, id } = seeded();
+  const machines = [{ id: "eru", ...local }];
+  assert.equal(previewUpdate(db, id, machines)!.plan.needsAdmin, false, "with no registry entry nothing says the install is machine-wide");
+  recordScan(db, "eru", { sourceKind: "registry", location: "", status: "ok", installs: [{ ecosystem: "arp", key: "Obsidian", name: "Obsidian 1.12.7 x64", kind: "app", version: "1.12.7", location: "", details: { scope: "machine" } }] }, new Date().toISOString());
+  assert.equal(previewUpdate(db, id, machines)!.plan.needsAdmin, true);
+  db.prepare("UPDATE installs SET details_json = json_set(details_json, '$.scope', 'user') WHERE package_id IN (SELECT id FROM packages WHERE ecosystem = 'arp')").run();
+  assert.equal(previewUpdate(db, id, machines)!.plan.needsAdmin, false, "a per-user registry entry raises no prompt");
+  recordScan(db, "eru", { sourceKind: "registry", location: "", status: "ok", installs: [{ ecosystem: "arp", key: "Obsidianite", name: "Obsidianite 2", kind: "app", version: "2", location: "", details: { scope: "machine" } }] }, new Date().toISOString());
+  assert.equal(previewUpdate(db, id, machines)!.plan.needsAdmin, false, "a different app whose name merely starts the same is not a match");
   db.close();
 });

@@ -82,9 +82,25 @@ export function configureHubMachine(path: string): MachineConfig[] {
 }
 
 function installRecord(db: Db, id: number): { machineId: string; key: string; kind: string; details: Record<string, unknown> } | null {
-  const row = db.prepare("SELECT i.machine_id AS machineId, p.key, i.kind, i.details_json AS details FROM installs i JOIN packages p ON p.id = i.package_id WHERE i.id = ? AND i.removed_at IS NULL")
-    .get(id) as { machineId: string; key: string; kind: string; details: string } | undefined;
-  return row ? { ...row, details: JSON.parse(row.details) as Record<string, unknown> } : null;
+  const row = db.prepare("SELECT i.machine_id AS machineId, i.package_id AS packageId, p.ecosystem, p.key, i.kind, i.details_json AS details FROM installs i JOIN packages p ON p.id = i.package_id WHERE i.id = ? AND i.removed_at IS NULL")
+    .get(id) as { machineId: string; packageId: number; ecosystem: string; key: string; kind: string; details: string } | undefined;
+  if (!row) return null;
+  const details = JSON.parse(row.details) as Record<string, unknown>;
+  // A winget row carries no install scope; the registry entry of the same software on this machine does, and a machine-wide one raises the Windows prompt.
+  if (["winget", "msstore"].includes(row.ecosystem) && details["scope"] === undefined && machineScopeOfSameSoftware(db, row.packageId, row.machineId)) details["scope"] = "machine";
+  return { machineId: row.machineId, key: row.key, kind: row.kind, details };
+}
+
+function machineScopeOfSameSoftware(db: Db, packageId: number, machineId: string): boolean {
+  const own = db.prepare("SELECT name FROM packages WHERE id = ?").get(packageId) as { name: string } | undefined;
+  const name = own?.name.trim().toLowerCase();
+  if (!name) return false;
+  const registered = db.prepare(
+    `SELECT p.name FROM installs i JOIN packages p ON p.id = i.package_id
+     WHERE i.machine_id = ? AND i.removed_at IS NULL AND p.ecosystem = 'arp' AND json_extract(i.details_json, '$.scope') = 'machine'`,
+  ).all(machineId) as { name: string }[];
+  // The registry names an app as winget does, then often adds a version or architecture: "Wireshark 4.6.6 x64", "Notepad++ (64-bit x64)".
+  return registered.some((r) => { const other = r.name.trim().toLowerCase(); return other === name || other.startsWith(name) && /^[\s(]/.test(other.slice(name.length)); });
 }
 
 export function previewUpdate(db: Db, installId: number, machines: MachineConfig[], options: { alsoUpdating?: number[] } = {}): { preview: Preview; plan: UpdatePlan; transport: Transport | null } | null {
