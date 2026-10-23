@@ -279,3 +279,58 @@ test("one competitor's rules show its overrides and clear a field that is emptie
   const post = page.calls.find((call) => call.url === "/api/competitors/gate" && call.method === "POST");
   assert.deepEqual(JSON.parse(post!.body!), { id: "acme-tools", set: {}, clear: ["quietHours"] });
 });
+
+test("changing a watch source prefills its version path and pattern", async (t) => {
+  const page = await open(t, () => ok([watched({ watch: { kind: "json", url: "https://example.test/v.json", versionPath: "latest.version" } })]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  await click(walk(page.root).find((el) => el.tag === "button" && el.attrs["data-watch"] === "nofork")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  const path = walk(dialog).find((el) => el.tag === "input" && el.attrs.placeholder === "latest.version")!;
+  assert.equal((path as any).value, "latest.version");
+});
+
+test("Set repository posts the address, folder, and starting commit, and refuses a short commit without posting", async (t) => {
+  const page = await open(t, () => ok([watched({ watch: null })]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  await click(walk(page.root).find((el) => el.tag === "button" && el.attrs["data-repo"] === "nofork")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  const save = button(dialog, "Save repository")!;
+  await click(save);
+  assert.match(allText(dialog), /Enter the repository address\./);
+  const inputs = walk(dialog).filter((el) => el.tag === "input");
+  (inputs[0] as any).value = "https://github.com/example/nofork";
+  (inputs[1] as any).value = "nofork-clone";
+  (inputs[2] as any).value = "abc123";
+  await click(save);
+  assert.match(allText(dialog), /full 40-character hash/);
+  assert.equal(page.calls.some((call) => call.method === "POST"), false);
+  const sha = "a".repeat(40);
+  (inputs[2] as any).value = sha;
+  (inputs[3] as any).value = "1.4.0";
+  await click(save);
+  const post = page.calls.find((call) => call.method === "POST");
+  assert.equal(post?.url, "/api/competitors/nofork/repo");
+  assert.deepEqual(JSON.parse(post!.body!), { repo: { remoteUrl: "https://github.com/example/nofork", folder: "nofork-clone", baseline: { commit: sha, version: "1.4.0" } } });
+  assert.equal(dialog.open, false);
+});
+
+test("Remove appears only on a row with no repository and no watch, and posts after confirming", async (t) => {
+  const page = await open(t, () => ok([watched({ watch: null })]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  await click(walk(page.root).find((el) => el.tag === "button" && el.attrs["data-remove"] === "nofork")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  assert.match(allText(dialog), /stay on disk/);
+  await click(button(dialog, "Remove")!);
+  const post = page.calls.find((call) => call.method === "POST");
+  assert.equal(post?.url, "/api/competitors/nofork/remove");
+});
+
+test("a row that has a watch source cannot be removed from the page", async (t) => {
+  const page = await open(t, () => ok([watched()]));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
+  fire(toggle!, "change", { checked: false });
+  assert.equal(walk(page.root).some((el) => el.tag === "button" && el.attrs["data-remove"] === "nofork"), false);
+});

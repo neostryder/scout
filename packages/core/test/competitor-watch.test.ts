@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_RESEARCH_GATE, applyGateChange, applyWatchChange, checkWatch, competitorNotice, competitorPaths, evaluateResearchGate, listCompetitors, openCatalog, parseCompetitorsFile, readGateSettings, seedWatchBaseline, startPullingRun, syncCompetitors, watchHostAllowed, type CompetitorIdentity, type ResearchDelta, type ResearchGateConfig } from "../src/index.ts";
+import { DEFAULT_RESEARCH_GATE, applyGateChange, applyRemoveChange, applyWatchChange, checkWatch, competitorNotice, competitorPaths, evaluateResearchGate, listCompetitors, openCatalog, parseCompetitorsFile, readGateSettings, seedWatchBaseline, startPullingRun, syncCompetitors, watchHostAllowed, type CompetitorIdentity, type ResearchDelta, type ResearchGateConfig } from "../src/index.ts";
 
 const NOW = "2026-05-20T12:00:00.000Z";
 
@@ -60,7 +60,7 @@ test("a watched competitor syncs, seeds its first reading as the baseline, and c
   const db = openCatalog(":memory:");
   syncCompetitors(db, [entry()]);
   const row = () => listCompetitors(db, NOW)[0]!;
-  assert.deepEqual(row().watch, { kind: "json", url: "https://example.com/api/solo.json" });
+  assert.deepEqual(row().watch, { kind: "json", url: "https://example.com/api/solo.json", versionPath: "version" });
   assert.equal(row().status, "unknown");
   assert.equal(seedWatchBaseline(db, "solo-tool", { version: "2.0.0", commit: null }, NOW), true);
   assert.deepEqual(row().baseline, { version: "2.0.0", commit: null, at: NOW, source: "watch" });
@@ -147,4 +147,11 @@ test("a watch change sets, replaces, and removes one competitor's source", () =>
   assert.equal("watch" in JSON.parse(removed).entries[0], false);
   assert.throws(() => applyWatchChange(FILE, "a", { kind: "hash", url: "http://example.com/p" }), /https/);
   assert.throws(() => applyWatchChange(FILE, "zzz", null), /unknown competitor/);
+});
+
+test("a removal drops one entry and leaves the others", () => {
+  const next = JSON.parse(applyRemoveChange(FILE, "a"));
+  assert.equal(next.entries.some((item: { id: string }) => item.id === "a"), false);
+  assert.equal(next.entries.length, JSON.parse(FILE).entries.length - 1);
+  assert.throws(() => applyRemoveChange(FILE, "zzz"), /unknown competitor/);
 });

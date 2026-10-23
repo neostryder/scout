@@ -1,11 +1,11 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listCompetitorRuns, listCompetitors, openCatalog, type Db } from "@scout/core";
+import { listCompetitorRuns, listCompetitors, openCatalog, startPullingRun, type Db } from "@scout/core";
 import { checkWatchForSchedule, researchForWatch, runWatchUpdate, type WatchFetcher } from "@scout/ops";
 import { CompetitorSchedule } from "../src/competitor-schedule.ts";
 import { createHub } from "../src/server.ts";
@@ -182,9 +182,36 @@ test("the gate and watch routes read, change, validate, and refuse the wrong met
   const watch = await call("/api/competitors/plain/watch", "POST", { watch: { kind: "page", url: "https://example.com/changes", versionPattern: "Release (\\d+\\.\\d+)" } });
   assert.equal(watch.status, 200);
   const listed = await call("/api/competitors");
-  assert.deepEqual(listed.body.competitors.find((item: { id: string }) => item.id === "plain").watch, { kind: "page", url: "https://example.com/changes" });
+  assert.deepEqual(listed.body.competitors.find((item: { id: string }) => item.id === "plain").watch, { kind: "page", url: "https://example.com/changes", versionPattern: "Release (\\d+\\.\\d+)" });
   assert.equal((await call("/api/competitors/plain/watch", "POST", { watch: { kind: "page", url: "http://example.com/changes" } })).status, 400);
   assert.equal((await call("/api/competitors/plain/watch", "POST", {})).status, 400);
   assert.equal((await call("/api/competitors/plain/watch", "POST", { watch: null })).status, 200);
   assert.equal((await call("/api/competitors/plain/watch")).status, 405);
+});
+
+test("a repository is set from the page's fields once its clone exists, and a removal drops a row with nothing in progress", async (t) => {
+  const { dir, db, schedule } = setup(t);
+  const call = await hub(t, db, schedule);
+  const repo = { remoteUrl: "https://github.com/example/plain", folder: "plain-clone" };
+  const missing = await call("/api/competitors/plain/repo", "POST", { repo });
+  assert.equal(missing.status, 400);
+  assert.match(missing.body.error, /not a git checkout yet/);
+  assert.equal(row(db, "plain").remoteUrl, null, "a refused repository leaves the file alone");
+  mkdirSync(join(dir, "mirrors", "plain-clone", ".git"), { recursive: true });
+  const saved = await call("/api/competitors/plain/repo", "POST", { repo });
+  assert.equal(saved.status, 200);
+  assert.equal(row(db, "plain").remoteUrl, "https://github.com/example/plain");
+  assert.equal((await call("/api/competitors/plain/repo", "POST", { repo: { ...repo, folder: "../escape" } })).status, 400);
+  assert.equal((await call("/api/competitors/plain/repo", "POST", { repo: { remoteUrl: "http://github.com/example/plain" } })).status, 400);
+  assert.equal((await call("/api/competitors/plain/repo", "POST", {})).status, 400);
+  assert.equal((await call("/api/competitors/plain/repo")).status, 405);
+
+  startPullingRun(db, "solo-page", new Date(NOW).toISOString());
+  const busy = await call("/api/competitors/solo-page/remove", "POST", {});
+  assert.equal(busy.status, 400);
+  assert.match(busy.body.error, /in progress/);
+  assert.equal((await call("/api/competitors/plain/remove", "POST", {})).status, 200);
+  assert.equal(listCompetitors(db, new Date(NOW).toISOString()).some((item) => item.id === "plain"), false);
+  assert.equal(JSON.parse(readFileSync(join(dir, "competitors.json"), "utf8")).entries.some((item: { id: string }) => item.id === "plain"), false);
+  assert.equal((await call("/api/competitors/plain/remove", "POST", {})).status, 400);
 });

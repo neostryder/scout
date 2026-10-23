@@ -172,3 +172,21 @@ export function watchFromForm({ kind, url, versionPath, versionPattern }) {
   if (kind === "page" && String(versionPattern || "").trim()) watch.versionPattern = String(versionPattern).trim();
   return watch;
 }
+
+export const REMOVE_CONFIRM = "Remove this competitor from the list. Its research folder and any cloned repository stay on disk.";
+
+/** The repository form to what the hub takes. A starting commit is optional and, when given, must be the full 40-character hash. */
+export function repoFromForm({ remoteUrl, folder, commit, version }) {
+  const address = String(remoteUrl || "").trim();
+  if (!address) throw new Error("Enter the repository address.");
+  const repo = { remoteUrl: address };
+  const name = String(folder || "").trim();
+  if (name) repo.folder = name;
+  const hash = String(commit || "").trim().toLowerCase();
+  if (hash) {
+    if (!/^[0-9a-f]{40}$/.test(hash)) throw new Error("A starting commit must be the full 40-character hash.");
+    const label = String(version || "").trim();
+    repo.baseline = { commit: hash, ...(label ? { version: label } : {}) };
+  }
+  return repo;
+}

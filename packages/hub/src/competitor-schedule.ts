@@ -1,5 +1,5 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { applyCompetitorCheck, applyGateChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { applyCompetitorCheck, applyGateChange, applyRemoveChange, applyRepoChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
 import type { Notifier } from "./notify.ts";
 import type { ScheduleClock } from "./schedule.ts";
 
@@ -151,6 +151,28 @@ export class CompetitorSchedule {
   /** Sets or removes one competitor's watch source. Pass null to remove it. */
   updateWatch(id: string, watch: unknown): void {
     this.rewriteConfig((text) => applyWatchChange(text, id, watch));
+  }
+
+  /** Sets one competitor's repository. The mirror is a folder of the given name inside the mirror root and must already be a git checkout of the address. */
+  updateRepo(id: string, repo: unknown): { mirrorPath: string } {
+    if (!repo || typeof repo !== "object" || Array.isArray(repo)) throw new Error("repo must be an object");
+    const { folder, ...rest } = repo as Record<string, unknown>;
+    const name = typeof folder === "string" && folder.trim() ? folder.trim() : id;
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(name) || name.includes("..")) throw new Error("the mirror folder name can use letters, numbers, dots, dashes, and underscores");
+    const root = parseCompetitorsFile(readFileSync(this.options.configPath, "utf8")).mirrorRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+    const mirrorPath = `${root}/${name}`;
+    this.rewriteConfig((text) => {
+      const next = applyRepoChange(text, id, { ...rest, mirrorPath }, this.iso());
+      if (!existsSync(`${mirrorPath}/.git`)) throw new Error(`${mirrorPath} is not a git checkout yet. Clone the repository there first.`);
+      return next;
+    });
+    return { mirrorPath };
+  }
+
+  /** Removes a competitor from the registry. A competitor with research in progress stays until that finishes. */
+  removeCompetitor(id: string): void {
+    if (this.db.prepare("SELECT 1 FROM competitor_runs WHERE competitor_id = ? AND state IN ('pulling','queued','claimed')").get(id)) throw new Error("research is in progress for this competitor");
+    this.rewriteConfig((text) => applyRemoveChange(text, id));
   }
 
   private rewriteConfig(change: (text: string) => string): void {

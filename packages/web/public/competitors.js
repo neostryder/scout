@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, pendingText, runText, sortCompetitors, statusText, syncedText, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortCompetitors, statusText, syncedText, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
 const postJson = (value) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
@@ -66,7 +66,10 @@ export function createCompetitorsView(root) {
 
   function watchButton(row) {
     if (row.remoteUrl) return [];
-    return [h("button", { type: "button", class: "link-button", "data-watch": row.id, "aria-label": `${row.watch ? "Change" : "Set"} watch source for ${row.name}`, onclick: (event) => askWatch(row, event.currentTarget) }, row.watch ? "Change source" : "Watch a page")];
+    const buttons = [h("button", { type: "button", class: "link-button", "data-watch": row.id, "aria-label": `${row.watch ? "Change" : "Set"} watch source for ${row.name}`, onclick: (event) => askWatch(row, event.currentTarget) }, row.watch ? "Change source" : "Watch a page"),
+      h("button", { type: "button", class: "link-button", "data-repo": row.id, "aria-label": `Set repository for ${row.name}`, onclick: (event) => askRepo(row, event.currentTarget) }, "Set repository")];
+    if (!row.watch) buttons.push(h("button", { type: "button", class: "link-button", "data-remove": row.id, "aria-label": `Remove ${row.name}`, onclick: (event) => askRemove(row, event.currentTarget) }, "Remove"));
+    return buttons;
   }
 
   function updateCell(row) {
@@ -275,7 +278,9 @@ export function createCompetitorsView(root) {
     const url = h("input", { type: "url", placeholder: "https://", autocomplete: "off", inputmode: "url" });
     url.value = row.watch?.url || "";
     const path = h("input", { type: "text", placeholder: "latest.version", autocomplete: "off" });
+    path.value = row.watch?.versionPath || "";
     const pattern = h("input", { type: "text", placeholder: "Optional, one capture group", autocomplete: "off" });
+    pattern.value = row.watch?.versionPattern || "";
     const help = h("p", { class: "field-help" });
     const pathField = field("Path to the version", path);
     const patternField = field("Version pattern", pattern);
@@ -309,6 +314,64 @@ export function createCompetitorsView(root) {
       h("p", {}, "This competitor has no public repository. Scout reads this address on every check and marks the competitor New when the version changes."),
       field("What to watch for", kind), field("Address", url, "Only public https addresses can be watched."), pathField, patternField, help, problem,
       h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), remove, submit),
+    );
+    dialog.showModal();
+  }
+
+  /** For a competitor with no repository: the address, and the folder where its clone lives. The clone has to exist before the hub accepts it. */
+  function askRepo(row, opener) {
+    const problem = h("p", { role: "alert" });
+    const remote = h("input", { type: "url", placeholder: "https://github.com/owner/name", autocomplete: "off", inputmode: "url" });
+    const folder = h("input", { type: "text", placeholder: row.id, autocomplete: "off" });
+    const commit = h("input", { type: "text", placeholder: "Optional, 40 characters", autocomplete: "off" });
+    const version = h("input", { type: "text", placeholder: "Optional, such as 1.4.0", autocomplete: "off" });
+    const submit = h("button", { type: "button", class: "primary", onclick: async () => {
+      submit.disabled = true;
+      problem.textContent = "";
+      try {
+        const repo = repoFromForm({ remoteUrl: remote.value, folder: folder.value, commit: commit.value, version: version.value });
+        const response = await fetch(`/api/competitors/${encodeURIComponent(row.id)}/repo`, postJson({ repo }));
+        const body = await readJson(response);
+        if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+        notice = "Repository saved. The mirror syncs on the next cycle.";
+        error = "";
+        closeDialog(opener);
+        if (!visible) return;
+        await load();
+      } catch (cause) { problem.textContent = failureText(cause); submit.disabled = false; }
+    } }, "Save repository");
+    dialog.replaceChildren(
+      h("h2", { id: "competitor-confirm-title" }, `Repository for ${row.name}`),
+      h("p", {}, "Scout mirrors this repository and counts new commits against the last analysis. The repository must already be cloned into the mirror folder, and a watch source on this competitor is dropped."),
+      field("Address", remote, "Only public https addresses work."), field("Mirror folder", folder, "A folder name inside the mirror root. Empty uses the competitor's id."),
+      field("Starting commit", commit, "Where counting starts. Empty keeps the current baseline."), field("Starting version", version),
+      problem,
+      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), submit),
+    );
+    dialog.showModal();
+  }
+
+  function askRemove(row, opener) {
+    const problem = h("p", { role: "alert" });
+    const submit = h("button", { type: "button", class: "primary", onclick: async () => {
+      submit.disabled = true;
+      problem.textContent = "";
+      try {
+        const response = await fetch(`/api/competitors/${encodeURIComponent(row.id)}/remove`, JSON_POST);
+        const body = await readJson(response);
+        if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+        notice = `${row.name} removed.`;
+        error = "";
+        closeDialog(opener);
+        if (!visible) return;
+        await load();
+      } catch (cause) { problem.textContent = failureText(cause); submit.disabled = false; }
+    } }, "Remove");
+    dialog.replaceChildren(
+      h("h2", { id: "competitor-confirm-title" }, `Remove ${row.name}`),
+      h("p", {}, REMOVE_CONFIRM),
+      problem,
+      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), submit),
     );
     dialog.showModal();
   }

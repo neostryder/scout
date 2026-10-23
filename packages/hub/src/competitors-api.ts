@@ -75,7 +75,9 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
     if (!states.length || states.some((state) => !RUN_STATES.has(state as RunState))) return json(res, 400, { error: "state must be pulling, queued, claimed, done, or failed" });
     return json(res, 200, listCompetitorRuns(db, states as RunState[]));
   }
-  const known = path === "/api/competitors/check" || path === "/api/competitors/gate" || runPath || updatePath || watchPath;
+  const repoPath = /^\/api\/competitors\/([^/]+)\/repo$/.exec(path);
+  const removePath = /^\/api\/competitors\/([^/]+)\/remove$/.exec(path);
+  const known = path === "/api/competitors/check" || path === "/api/competitors/gate" || runPath || updatePath || watchPath || repoPath || removePath;
   if (req.method !== "POST") return json(res, known ? 405 : 404, { error: known ? "method not allowed" : "no such route" });
   const body = await readBody(req, res, hostAllowed, json);
   if (!body) return;
@@ -105,6 +107,18 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
       only(body, ["watch"]);
       if (!("watch" in body)) throw new Error("watch is required, or null to remove it");
       schedule.updateWatch(decodeURIComponent(watchPath[1]), body["watch"]);
+      return json(res, 200, { ok: true });
+    }
+    if (repoPath?.[1]) {
+      if (!schedule) return json(res, 404, { error: "competitor watch is off" });
+      only(body, ["repo"]);
+      if (!("repo" in body)) throw new Error("repo is required");
+      return json(res, 200, { ok: true, ...schedule.updateRepo(decodeURIComponent(repoPath[1]), body["repo"]) });
+    }
+    if (removePath?.[1]) {
+      if (!schedule) return json(res, 404, { error: "competitor watch is off" });
+      only(body, []);
+      schedule.removeCompetitor(decodeURIComponent(removePath[1]));
       return json(res, 200, { ok: true });
     }
     if (updatePath?.[1]) {

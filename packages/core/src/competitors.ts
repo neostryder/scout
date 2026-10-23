@@ -53,7 +53,7 @@ export interface CompetitorRow {
   newBasis: "version" | "commits" | null;
   sync: { at: string | null; head: string | null; error: string | null };
   pending: { commits: number; sourceFilesChanged: number; reason: string } | null;
-  watch: { kind: CompetitorWatch["kind"]; url: string } | null;
+  watch: { kind: CompetitorWatch["kind"]; url: string; versionPath?: string; versionPattern?: string } | null;
   run: Pick<CompetitorRun, "id" | "state" | "toVersion" | "updatedAt" | "claimedBy" | "error" | "stale" | "trigger"> | null;
 }
 
@@ -259,7 +259,8 @@ export function watchFromJson(text: string | null): CompetitorWatch | null {
 
 function watchSummary(text: string | null): CompetitorRow["watch"] {
   const watch = watchFromJson(text);
-  return watch ? { kind: watch.kind, url: watch.url } : null;
+  if (!watch) return null;
+  return { kind: watch.kind, url: watch.url, ...(watch.versionPath !== undefined ? { versionPath: watch.versionPath } : {}), ...(watch.versionPattern !== undefined ? { versionPattern: watch.versionPattern } : {}) };
 }
 
 const WATCH_KINDS = ["json", "page", "hash"] as const;
@@ -749,6 +750,16 @@ export function applyWatchChange(text: string, id: string, watch: unknown): stri
     entry["watch"] = checked.watch;
   }
   return `${JSON.stringify(file, null, 2)}\n`;
+}
+
+/** Returns the registry file text without one competitor's entry. Its dossier folder and mirror checkout stay on disk. */
+export function applyRemoveChange(text: string, id: string): string {
+  const { file, entries } = parseRegistry(text);
+  const at = entries.findIndex((item) => item["id"] === id);
+  if (at < 0) throw new Error("unknown competitor");
+  entries.splice(at, 1);
+  return `${JSON.stringify(file, null, 2)}
+`;
 }
 
 const REPO_KEYS: ReadonlySet<string> = new Set(["remoteUrl", "mirrorPath", "baseline"]);
