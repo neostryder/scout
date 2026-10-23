@@ -31,6 +31,7 @@ function run(file: string, args: string[], timeoutMs: number, signal?: AbortSign
     const child = spawn(file, args, { windowsHide: true, detached: process.platform !== "win32", stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env: { ...process.env, ...env } } : {}) });
     let stdout = "";
     let stderr = "";
+    if (child.pid !== undefined) hooks?.onSpawn?.(child.pid);
     const stop = () => child.kill();
     if (input !== undefined) {
       child.stdin?.on("error", () => undefined);
@@ -39,8 +40,8 @@ function run(file: string, args: string[], timeoutMs: number, signal?: AbortSign
     signal?.addEventListener("abort", stop, { once: true });
     if (signal?.aborted) stop();
     const timer = setTimeout(stop, timeoutMs);
-    child.stdout?.setEncoding("utf8").on("data", (d: string) => (stdout += d));
-    child.stderr?.setEncoding("utf8").on("data", (d: string) => (stderr += d));
+    child.stdout?.setEncoding("utf8").on("data", (d: string) => { stdout += d; hooks?.onOutput?.(d); });
+    child.stderr?.setEncoding("utf8").on("data", (d: string) => { stderr += d; hooks?.onOutput?.(d); });
     child.on("error", (err) => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", stop);
@@ -70,14 +71,14 @@ export function sshProgram(env: NodeJS.ProcessEnv = process.env, platform: strin
 }
 
 /** Run one argv locally or through SSH, with no stdin and an abortable child. */
-export const runArgv: Exec = (transport, argv, timeoutMs, signal, env) => {
+export const runArgv: Exec = (transport, argv, timeoutMs, signal, env, hooks) => {
   if (transport.type === "local") {
     const [file, ...args] = argv;
-    return file ? run(file, args, timeoutMs, signal, env) : Promise.resolve({ exitCode: 127, stdout: "", stderr: "empty argv" });
+    return file ? run(file, args, timeoutMs, signal, env, undefined, hooks) : Promise.resolve({ exitCode: 127, stdout: "", stderr: "empty argv" });
   }
   const words = transport.guest ? [...transport.guest, ...argv] : argv;
   const remote = env ? ["env", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), ...words] : words;
-  return run(sshProgram(), ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...(transport.options ?? []), transport.target, remoteCommand(remote)], timeoutMs, signal);
+  return run(sshProgram(), ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...(transport.options ?? []), transport.target, remoteCommand(remote)], timeoutMs, signal, undefined, undefined, hooks);
 };
 
 /** Run one probe on a machine and return its raw output. Never throws. */
