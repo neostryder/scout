@@ -7,7 +7,7 @@ export function planResponse(db: Db, runner: Runner, installId: number, alsoInst
 }
 
 export function createJobsResponse(db: Db, runner: Runner, body: unknown): { status: number; body: unknown } {
-  const request = body as { installIds?: unknown; confirm?: unknown; confirmSoft?: unknown; allowDisruptive?: unknown; action?: unknown } | null;
+  const request = body as { installIds?: unknown; confirm?: unknown; confirmSoft?: unknown; allowDisruptive?: unknown; allowAdmin?: unknown; action?: unknown } | null;
   if (request?.action !== undefined && request.action !== "update") return { status: 400, body: { error: "action must be update or download" } };
   if (request?.confirm !== true) return { status: 400, body: { error: "confirm must be true" } };
   if (!Array.isArray(request.installIds) || request.installIds.length === 0 || request.installIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
@@ -20,6 +20,7 @@ export function createJobsResponse(db: Db, runner: Runner, body: unknown): { sta
     const preview = previewUpdate(db, installId, runner.deps.machines, { alsoUpdating: request.installIds as number[] })?.preview;
     let reason = preview ? preview.refusal : "no such install or update";
     if (preview?.allowed && preview.disruptive && request.allowDisruptive !== true) reason = "disruptive update needs confirmation";
+    if (preview?.allowed && preview.needsAdmin && request.allowAdmin !== true) reason = "administrator prompt needs confirmation";
     if (preview?.allowed && preview.softConfirmation && request.confirmSoft !== true) reason = `needs confirmation: ${[...preview.softConfirmation.projects, ...preview.softConfirmation.dependents].join(", ")}`;
     if (preview?.allowed && seen.has(installId)) reason = "an update for this install is already queued";
     if (preview?.allowed && db.prepare("SELECT 1 FROM jobs WHERE install_id = ? AND state IN ('queued','preflight','running')").get(installId)) reason = "an update for this install is already queued";

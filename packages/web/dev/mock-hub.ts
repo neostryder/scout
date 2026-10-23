@@ -110,6 +110,8 @@ function downloadPlan(id: number) {
   const file = row.downloadUrl && row.installId % 2 === 0;
   return { installId: id, machineId: row.machineId, name: row.name, kind: file ? "file" : row.downloadUrl ? "page" : "none", url: file ? `https://example.com/tool-${id}${extension}` : row.downloadUrl, fileName: file ? `tool-${id}${extension}` : null, size: file ? 123456 : null, sha256: null, source: file ? "github" : null, folder: row.machineId === "hub" ? "User Downloads" : "~/Downloads", warnings: file ? ["No checksum is available."] : [], allowed: !!file && !row.blockedBy, refusal: row.blockedBy || (!file ? "No exact file is available" : null) };
 }
+/** Multiplies the mock job pauses so a person can watch the stages; tests leave it at 1. */
+export const mockTiming = { scale: 1 };
 function runJob(job: Job) {
   if (job.state !== "queued") return;
   if (jobs.some((j) => j !== job && j.machineId === job.machineId && ["preflight", "running"].includes(j.state))) { setTimeout(() => runJob(job), 100); return; }
@@ -117,15 +119,22 @@ function runJob(job: Job) {
   setTimeout(() => {
     if (job.state === "stopped") return;
     job.steps[0].state = "done"; job.state = "running"; job.steps.push({ seq: 2, name: job.action === "download" ? "download" : "update", state: "running", output: "", at: new Date().toISOString() });
+    if (job.action !== "download") {
+      // A winget-like update: the stages arrive in order, and an install can wait on the Windows prompt.
+      job.ecosystem = "winget"; job.phase = "download"; job.phaseAt = new Date().toISOString();
+      setTimeout(() => { if (job.state === "running") { job.phase = "verify"; job.phaseAt = new Date().toISOString(); } }, 120 * mockTiming.scale);
+      setTimeout(() => { if (job.state === "running") { job.phase = "install"; job.phaseAt = new Date().toISOString(); if (job.installId % 2 === 0) job.attention = { kind: "uac", detail: null, since: new Date().toISOString() }; } }, 240 * mockTiming.scale);
+    }
     setTimeout(() => {
       if (job.state === "stopped") return;
       const failure = job.installId === 29;
+      job.attention = null;
       job.steps[1].state = failure ? "failed" : "done"; job.steps[1].output = failure ? "Mock update failed." : "Update complete.";
       if (failure) { job.state = "failed"; job.message = "Mock update failed"; job.finishedAt = new Date().toISOString(); for (const next of jobs) if (next.batchId === job.batchId && next.state === "queued") { next.state = "stopped"; next.message = "stopped: an earlier update in this batch failed"; } return; }
       job.steps.push({ seq: 3, name: "verify", state: "running", output: "", at: new Date().toISOString() });
-      setTimeout(() => { if (job.state === "stopped") return; job.steps[2].state = "done"; job.state = "done"; job.finishedAt = new Date().toISOString(); if (job.action === "download") { job.finalPath = `${job.machineId === "hub" ? "C:/Users/fixture/Downloads" : "~/Downloads"}/${job.download.fileName}`; job.steps[2].output = `${job.finalPath}\nunverified`; return; } job.steps[2].output = "Installed version verified."; const row = installs.find((r) => r.installId === job.installId)!; row.installed = row.available; row.version = row.available; row.updatable = false; row.bump = null; row.statuses = ["current"]; }, 350);
-    }, 350);
-  }, 350);
+      setTimeout(() => { if (job.state === "stopped") return; job.steps[2].state = "done"; job.state = "done"; job.finishedAt = new Date().toISOString(); if (job.action === "download") { job.finalPath = `${job.machineId === "hub" ? "C:/Users/fixture/Downloads" : "~/Downloads"}/${job.download.fileName}`; job.steps[2].output = `${job.finalPath}\nunverified`; return; } job.steps[2].output = "Installed version verified."; const row = installs.find((r) => r.installId === job.installId)!; row.installed = row.available; row.version = row.available; row.updatable = false; row.bump = null; row.statuses = ["current"]; }, 350 * mockTiming.scale);
+    }, 350 * mockTiming.scale);
+  }, 350 * mockTiming.scale);
 }
 function json(res: import("node:http").ServerResponse, status: number, data: unknown) { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(data)); }
 const publicDir = resolve(fileURLToPath(new URL("../public/", import.meta.url)));
@@ -163,7 +172,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
         return json(res, 202, { batchId: job.batchId, jobs: [job], refused: [] });
       }
       const batchId = `mock-${Date.now()}`; const refused: Row[] = []; const queued: Job[] = [];
-      for (const id of body.installIds) { const p = plan(Number(id), body.installIds.map(Number).filter((otherId: number) => otherId !== Number(id))); if (!p.allowed || p.disruptive && !body.allowDisruptive || p.softConfirmation && body.confirmSoft !== true) { refused.push({ installId: id, reason: p.refusal || (p.softConfirmation && body.confirmSoft !== true ? `needs confirmation: ${[...p.softConfirmation.projects, ...p.softConfirmation.dependents].join(", ")}` : "Disruptive update needs confirmation") }); continue; } const job = { id: nextJob++, batchId, installId: id, machineId: p.machineId, name: p.name, ecosystem: p.ecosystem, action: "update", from: p.from, to: p.to, state: "queued", requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null, message: null, steps: [] }; jobs.unshift(job); queued.push(job); }
+      for (const id of body.installIds) { const p = plan(Number(id), body.installIds.map(Number).filter((otherId: number) => otherId !== Number(id))); if (!p.allowed || p.disruptive && !body.allowDisruptive || p.needsAdmin && !body.allowAdmin || p.softConfirmation && body.confirmSoft !== true) { refused.push({ installId: id, reason: p.refusal || (p.softConfirmation && body.confirmSoft !== true ? `needs confirmation: ${[...p.softConfirmation.projects, ...p.softConfirmation.dependents].join(", ")}` : "Disruptive update needs confirmation") }); continue; } const job = { id: nextJob++, batchId, installId: id, machineId: p.machineId, name: p.name, ecosystem: p.ecosystem, action: "update", from: p.from, to: p.to, state: "queued", requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null, message: null, steps: [] }; jobs.unshift(job); queued.push(job); }
       for (const job of queued) setTimeout(() => runJob(job), 25);
       return json(res, queued.length ? 202 : 409, { batchId, jobs: queued.map(({ id, installId, machineId, name, from, to, state }) => ({ id, installId, machineId, name, from, to, state })), refused });
     }

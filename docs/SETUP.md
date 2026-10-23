@@ -225,6 +225,18 @@ As you browse, the service worker keeps a copy of each page file and each succes
 
 A page has a saved copy only if you opened it in that browser while the hub was reachable, so open the pages you want on hand before you leave home. Each browser keeps at most 200 saved answers.
 
+## Watching an update
+
+While an update runs, its row on the Updates page and its entry on the Jobs page show the current stage, a progress bar, and the elapsed time as m:ss, refreshed every 1.5 seconds. Updates through winget and the Microsoft Store move through four stages: Downloading the update, Checking the download, Installing, and Finishing up. Updates through brew and brew cask skip Checking the download. Other package managers print no stages, so their jobs show a single moving bar. A queued job reads "Waiting for its turn", a job in preflight reads "Checking the install", and a job whose command has ended reads "Confirming the new version".
+
+A machine-scope winget or Microsoft Store update on the hub computer (the computer running Scout) triggers a Windows administrator (UAC) prompt. Its confirmation dialog has a checkbox, "Windows will ask for administrator permission. I am at this computer and will approve the prompt.", and the update starts only after it is ticked. An API call needs `allowAdmin: true` for the same update, or it fails with "administrator prompt needs confirmation". Remote and SSH machines, and brew or sudo updates that need admin rights, still fail with a needs-admin error.
+
+Scout never runs anything as administrator and never answers the prompt. The winget installer raises the Windows prompt, and Scout watches for it. While the prompt is up, the job reads "Windows is asking for permission on <machine>. Approve the prompt to continue.", its status reads "waiting for the Windows prompt", and the browser tab title changes to "Needs you - Scout". If nobody answers within 3 minutes of the prompt appearing, Scout stops the update and fails the job, so one ignored prompt cannot hold up the rest of that machine's queue. A declined prompt fails the job at once, and Stop works the whole time.
+
+During a local Windows update, Scout also checks every 4 seconds for windows opened by the installer. When one appears, the job reads "The installer opened a window on <machine>: <window title>. It may be waiting for you." and the status reads "installer window open" until the window closes. Scout leaves the window alone, and Stop stays available. If the update then runs into the 20-minute limit, the failure says the installer opened a window and may have been waiting.
+
+Failures from documented winget exit codes use plain words: the installation was cancelled, the app is running, another installation is in progress, the computer needs a restart to finish, or no applicable update is available. Each message names the next step when there is one, such as closing the app or trying again after the other installation finishes.
+
 ## Optional integrations
 
 All of these stay off until configured, and the page works without any of them.

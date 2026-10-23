@@ -204,3 +204,14 @@ a.button:hover { background: var(--accent); color: var(--accent-ink); }
 .settings-list li code { font-family: var(--mono); }
 .settings-list li button { margin-left: auto; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 8px; }
+.job-progress { margin-top: 6px; }
+.stages { display: flex; gap: 3px; list-style: none; margin: 4px 0 0; padding: 0; height: 5px; }
+.stages li { flex: 1; background: var(--chip); border-radius: 2px; }
+.stages li.done { background: var(--accent); }
+.stages li.current { background: var(--accent); animation: job-pulse 1.4s ease-in-out infinite; }
+.stages.sweep { position: relative; display: block; overflow: hidden; background: var(--chip); border-radius: 2px; }
+.stages.sweep span { display: block; width: 35%; height: 100%; background: var(--accent); animation: job-sweep 1.8s ease-in-out infinite; }
+.needs-you { margin: 6px 0 0; font-weight: 600; }
+@keyframes job-pulse { 50% { opacity: 0.35; } }
+@keyframes job-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .stages li.current, .stages.sweep span { animation: none; } .stages.sweep span { width: 100%; opacity: 0.5; } }

@@ -50,7 +50,8 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
   if (!machine) refusal = "machine is not configured";
   else if (!ID.test(install.key) || !VERSION.test(target)) refusal = "invalid package id or version";
-  else if (needsAdmin) refusal = "needs admin; Scout cannot elevate yet";
+  // winget raises the Windows administrator prompt itself, so Scout can run it only where someone can answer: on this computer.
+  else if (needsAdmin && !(["winget", "msstore"].includes(install.ecosystem) && machine.transport.type === "local")) refusal = "needs admin; Scout cannot elevate yet";
   else {
     const key = install.key;
     switch (install.ecosystem) {

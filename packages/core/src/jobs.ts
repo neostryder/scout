@@ -3,22 +3,37 @@ import type { Db } from "./db.ts";
 import type { ConfirmedDownload } from "./download-source.ts";
 
 export type JobState = "queued" | "preflight" | "running" | "done" | "failed" | "stopped";
+export const JOB_PHASES = ["download", "verify", "install", "finish"] as const;
+export type JobPhase = typeof JOB_PHASES[number];
+export const JOB_ATTENTION = ["uac", "window"] as const;
+export type JobAttentionKind = typeof JOB_ATTENTION[number];
+/** What a running job is waiting on a person for: the Windows administrator prompt, or a window the installer opened. */
+export interface JobAttention { kind: JobAttentionKind; detail: string | null; since: string }
 export interface JobStep { seq: number; name: string; state: string; output: string | null; at: string }
 export interface Job {
   id: number; batchId: string; installId: number; machineId: string; name: string; ecosystem: string;
   action: string; from: string | null; to: string | null; state: JobState; requestedAt: string;
   startedAt: string | null; finishedAt: string | null; message: string | null; steps: JobStep[];
+  phase: JobPhase | null; phaseAt: string | null; attention: JobAttention | null;
   download?: ConfirmedDownload; finalPath?: string;
 }
 
 const SELECT = `SELECT j.id, j.batch_id AS batchId, j.install_id AS installId, j.machine_id AS machineId,
  p.name, p.ecosystem, j.action, j.from_version AS "from", j.target AS "to", j.state,
- j.requested_at AS requestedAt, j.started_at AS startedAt, j.finished_at AS finishedAt, j.message
+ j.requested_at AS requestedAt, j.started_at AS startedAt, j.finished_at AS finishedAt, j.message,
+ j.phase, j.phase_at AS phaseAt, j.attention AS attentionKind, j.attention_detail AS attentionDetail, j.attention_at AS attentionAt
  FROM jobs j JOIN installs i ON i.id = j.install_id JOIN packages p ON p.id = i.package_id`;
 
+type JobRow = Omit<Job, "steps" | "attention"> & { attentionKind: JobAttentionKind | null; attentionDetail: string | null; attentionAt: string | null };
+function withoutAttention(row: JobRow): Omit<Job, "steps"> {
+  const { attentionKind, attentionDetail, attentionAt, ...rest } = row;
+  return { ...rest, attention: attentionKind && attentionAt ? { kind: attentionKind, detail: attentionDetail, since: attentionAt } : null };
+}
+
 export function jobById(db: Db, id: number): Job | null {
-  const row = db.prepare(`${SELECT} WHERE j.id = ?`).get(id) as Omit<Job, "steps"> | undefined;
-  if (!row) return null;
+  const found = db.prepare(`${SELECT} WHERE j.id = ?`).get(id) as JobRow | undefined;
+  if (!found) return null;
+  const row = withoutAttention(found);
   const steps = db.prepare("SELECT seq, name, state, output, at FROM job_steps WHERE job_id = ? ORDER BY seq").all(id) as unknown as JobStep[];
   if (row.action === "download") {
     try {
@@ -86,7 +101,26 @@ export function recordStep(db: Db, id: number, name: string, state: string, outp
 
 export function setJobState(db: Db, id: number, state: JobState, message: string | null = null): void {
   const finished = ["done", "failed", "stopped"].includes(state) ? new Date().toISOString() : null;
+  // A finished job waits on no one.
+  if (finished) db.prepare("UPDATE jobs SET attention = NULL, attention_detail = NULL, attention_at = NULL WHERE id = ?").run(id);
   db.prepare("UPDATE jobs SET state = ?, message = ?, finished_at = ? WHERE id = ?").run(state, message, finished, id);
+}
+
+/** Records the stage a running update has reached; a repeat of the same stage keeps its first time. */
+export function setJobPhase(db: Db, id: number, phase: JobPhase, at = new Date().toISOString()): void {
+  db.prepare("UPDATE jobs SET phase = ?, phase_at = ? WHERE id = ? AND state IN ('preflight','running') AND phase IS NOT ?").run(phase, at, id, phase);
+}
+
+/** Sets or, with null, clears what the job is waiting on a person for; the same kind keeps its first time. */
+export function setJobAttention(db: Db, id: number, attention: { kind: JobAttentionKind; detail?: string | null } | null, at = new Date().toISOString()): void {
+  if (attention === null) {
+    db.prepare("UPDATE jobs SET attention = NULL, attention_detail = NULL, attention_at = NULL WHERE id = ?").run(id);
+    return;
+  }
+  const detail = attention.detail ?? null;
+  const same = db.prepare("SELECT 1 FROM jobs WHERE id = ? AND attention = ?").get(id, attention.kind);
+  if (same) db.prepare("UPDATE jobs SET attention_detail = ? WHERE id = ? AND state IN ('preflight','running')").run(detail, id);
+  else db.prepare("UPDATE jobs SET attention = ?, attention_detail = ?, attention_at = ? WHERE id = ? AND state IN ('preflight','running')").run(attention.kind, detail, at, id);
 }
 
 export function stopJob(db: Db, id: number): boolean {

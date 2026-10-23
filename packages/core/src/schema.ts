@@ -136,7 +136,12 @@ CREATE TABLE IF NOT EXISTS jobs (
   started_at  TEXT,
   from_version TEXT,
   message     TEXT,
-  finished_at TEXT
+  finished_at TEXT,
+  phase       TEXT,                             -- download | verify | install | finish, set while an update runs
+  phase_at    TEXT,
+  attention   TEXT,                             -- uac | window, set while the job waits on a person
+  attention_detail TEXT,
+  attention_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS job_steps (
@@ -635,5 +640,5 @@ export const V2_PACKAGE_COLUMNS = [
 
 export const COMPETITOR_ADD_COLUMNS = ["synced_at TEXT", "sync_error TEXT", "sync_head TEXT", "pending_json TEXT", "follow_upstream INTEGER NOT NULL DEFAULT 0", "watch_json TEXT"];
 export const COMPETITOR_RUN_ADD_COLUMNS = ["trigger TEXT"];
-export const JOB_COLUMNS = ["batch_id TEXT NOT NULL DEFAULT ''", "started_at TEXT", "from_version TEXT", "message TEXT"];
+export const JOB_COLUMNS = ["batch_id TEXT NOT NULL DEFAULT ''", "started_at TEXT", "from_version TEXT", "message TEXT", "phase TEXT", "phase_at TEXT", "attention TEXT", "attention_detail TEXT", "attention_at TEXT"];
 export const SERVICE_COLUMNS = ["uid INTEGER", "keep_alive INTEGER", "plist TEXT", "expected_down INTEGER NOT NULL DEFAULT 0"];

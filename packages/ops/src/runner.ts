@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
-import { compareVersions, claimNext, failInterruptedJobs, jobById, listJobs, recordStep, runArgv, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type Job, type Transport } from "@scout/core";
+import { compareVersions, claimNext, failInterruptedJobs, jobById, listJobs, recordStep, runArgv, setJobAttention, setJobPhase, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type ExecHooks, type ExecResult, type Job, type Transport } from "@scout/core";
 import { planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } from "./plan.ts";
 import { findHubMachine, setHubMachine, downloadFileName, downloadHttps, type ConfirmedDownload, type DownloadPlan } from "@scout/core";
 import { dependencyRefusal, softConfirmation, updateBreaks, type SoftConfirmation, type UpdateBreaks } from "./guard.ts";
+import { progressReader, unstaged } from "./progress.ts";
+import { AttentionTracker, windowsObserver, type Observer } from "./observe.ts";
 
 export interface MachineConfig extends PlanMachine {
   id: string;
@@ -14,7 +16,16 @@ export interface MachineConfig extends PlanMachine {
   extraCloneRoots?: string[];
 }
 export interface ResolvedDownload { preview: DownloadPlan; download: ConfirmedDownload | null; transport: Transport | null }
-export interface RunnerDeps { exec?: Exec; machines: MachineConfig[]; updateTimeoutMs?: number; checkTimeoutMs?: number; resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null> }
+export interface RunnerDeps {
+  exec?: Exec; machines: MachineConfig[]; updateTimeoutMs?: number; checkTimeoutMs?: number;
+  /** Reads the desktop while an update runs. Unset means the Windows reader when the real exec runs on this Windows machine, `false` means none. */
+  observe?: Observer | false;
+  /** How often the desktop is read, in milliseconds. */
+  observeIntervalMs?: number;
+  /** How long an administrator prompt may sit unanswered before the update is stopped. */
+  promptTimeoutMs?: number;
+  resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null>;
+}
 export interface Preview { installId: number; machineId: string; name: string; ecosystem: string; from: string | null; to: string | null; command: string; disruptive: boolean; needsAdmin: boolean; running: boolean; warnings: string[]; allowed: boolean; refusal: string | null; breaks: UpdateBreaks; softConfirmation: SoftConfirmation | null }
 
 export function loadMachines(path: string): MachineConfig[] {
@@ -127,10 +138,74 @@ export async function dependencyRisk(exec: Exec, transport: Transport, key: stri
   return { message: shared.join("; "), report: shared.join("\n") };
 }
 
-function failure(exitCode: number, output: string): string {
+// Exit codes from winget's documented list, plus the Windows codes a declined administrator prompt surfaces as.
+const DECLINED = new Set([1223, -2147023673, -1978334964]);
+const IN_USE = new Set([-1978334975, -1978334973, -1978334959]);
+const REBOOT = new Set([-1978334967, -1978334966, -1978334965]);
+
+export interface FailureContext { promptSeen: boolean; windowSeen: boolean; timeoutMs: number }
+
+export function failure(exitCode: number, output: string, context?: FailureContext): string {
+  if (context?.promptSeen && (DECLINED.has(exitCode) || /operation (?:was )?cancel|cancelled by|declined/i.test(output))) return "the Windows administrator prompt was declined";
+  if (DECLINED.has(exitCode)) return "the installation was cancelled";
+  if (IN_USE.has(exitCode)) return "the app is running; close it and try again";
+  if (exitCode === -1978334974) return "another installation is in progress; try again when it finishes";
+  if (REBOOT.has(exitCode)) return "restart the computer to finish the update";
   if (exitCode === -1978335207 || /requires? (?:administrator|admin|sudo)|sudo:|a terminal is required|password is required/i.test(output)) return "needs admin; Scout cannot elevate yet";
   if (exitCode === -1978335189) return "no applicable update is available";
+  if (exitCode === -1 && context) return `did not finish in ${Math.round(context.timeoutMs / 60_000)} minutes${context.windowSeen ? "; the installer opened a window and may have been waiting for you" : ""}`;
   return `command exited with code ${exitCode}`;
+}
+
+export interface WatchedRun { result: ExecResult; tracker: AttentionTracker; promptExpired: boolean }
+
+/**
+ * Runs the update command and, while it runs, records the stage its output reaches and what it is waiting on a person for.
+ * An administrator prompt left unanswered past `promptTimeoutMs` stops the command, so one ignored prompt cannot hold the machine's queue.
+ */
+export async function runWatched(db: Db, job: Job, deps: RunnerDeps, exec: Exec, transport: Transport, argv: string[], ecosystem: string, timeoutMs: number, signal: AbortSignal, env?: Record<string, string>): Promise<WatchedRun> {
+  const tracker = new AttentionTracker();
+  const read = progressReader(ecosystem);
+  const controller = new AbortController();
+  const forward = (): void => controller.abort();
+  signal.addEventListener("abort", forward, { once: true });
+  if (signal.aborted) forward();
+  let rootPid: number | undefined;
+  let promptSince: number | null = null;
+  let promptExpired = false;
+  const sync = (): void => setJobAttention(db, job.id, tracker.current());
+  if (unstaged(ecosystem)) setJobPhase(db, job.id, "install");
+  const hooks: ExecHooks = {
+    onSpawn: (pid) => { rootPid = pid; },
+    onOutput: (chunk) => {
+      for (const event of read(chunk)) {
+        if (event.phase) setJobPhase(db, job.id, event.phase);
+        tracker.line(event);
+      }
+      sync();
+    },
+  };
+  const observe = deps.observe === false ? undefined : deps.observe ?? (deps.exec === undefined && process.platform === "win32" && transport.type === "local" ? windowsObserver() : undefined);
+  let looking = false;
+  const timer = observe ? setInterval(() => {
+    if (looking || rootPid === undefined || controller.signal.aborted) return;
+    looking = true;
+    void observe(rootPid, controller.signal).then((seen) => {
+      tracker.look(seen);
+      sync();
+      if (!tracker.prompting) promptSince = null;
+      else if (promptSince === null) promptSince = Date.now();
+      else if (Date.now() - promptSince > (deps.promptTimeoutMs ?? 180_000)) { promptExpired = true; controller.abort(); }
+    }, () => undefined).finally(() => { looking = false; });
+  }, deps.observeIntervalMs ?? 4000) : undefined;
+  try {
+    const result = await exec(transport, argv, timeoutMs, controller.signal, env, hooks);
+    return { result, tracker, promptExpired };
+  } finally {
+    if (timer) clearInterval(timer);
+    signal.removeEventListener("abort", forward);
+    setJobAttention(db, job.id, null);
+  }
 }
 
 export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSignal): Promise<void> {
@@ -196,11 +271,16 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       fail(reason);
       return;
     }
-    const updated = await exec(transport, plan.argv, updateTimeout, signal, env);
+    const { result: updated, tracker, promptExpired } = await runWatched(db, job, deps, exec, transport, plan.argv, preview.preview.ecosystem, updateTimeout, signal, env);
     if (signal.aborted) throw new Error("stopped by user");
+    if (promptExpired) {
+      recordStep(db, job.id, "update", "failed", cleanOutput(updated.stdout + "\n" + updated.stderr));
+      fail(`no one answered the Windows administrator prompt in ${Math.max(1, Math.round((deps.promptTimeoutMs ?? 180_000) / 60_000))} minutes, so Scout stopped the update`);
+      return;
+    }
     if (updated.exitCode !== 0) {
       recordStep(db, job.id, "update", "failed", cleanOutput(updated.stdout + "\n" + updated.stderr));
-      fail(failure(updated.exitCode, updated.stderr + "\n" + updated.stdout));
+      fail(failure(updated.exitCode, updated.stderr + "\n" + updated.stdout, { promptSeen: tracker.uacSeen, windowSeen: tracker.windowSeen, timeoutMs: updateTimeout }));
       return;
     }
     recordStep(db, job.id, "update", "done", cleanOutput(updated.stdout + "\n" + updated.stderr));

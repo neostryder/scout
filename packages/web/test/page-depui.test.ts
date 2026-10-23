@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 
-const helpers = await import(new URL("../public/lib.js", import.meta.url).href);
+const helpers = { ...await import(new URL("../public/lib.js", import.meta.url).href), ...await import(new URL("../public/jobs-model.js", import.meta.url).href) };
 
 class Element {
   tag: string;
@@ -60,7 +60,7 @@ test("depui dialog requires both acknowledgements and posts soft confirmation", 
   p.byId("allow-disruptive").checked = true;
   p.byId("allow-disruptive").attrs.onchange();
   await p.run("submitPlans()");
-  assert.deepEqual(calls.at(-1).body, { installIds: [7], confirm: true, allowDisruptive: true, confirmSoft: true });
+  assert.deepEqual(calls.at(-1).body, { installIds: [7], confirm: true, allowDisruptive: true, allowAdmin: false, confirmSoft: true });
 });
 
 test("depui hard refusals name affected installs and cannot start", async () => {

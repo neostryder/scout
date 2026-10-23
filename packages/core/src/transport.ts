@@ -4,7 +4,9 @@ import { join } from "node:path";
 import type { Probe, ProbeOutput } from "./adapter.ts";
 
 export interface ExecResult { exitCode: number; stdout: string; stderr: string }
-export type Exec = (transport: Transport, argv: string[], timeoutMs: number, signal?: AbortSignal, env?: Record<string, string>) => Promise<ExecResult>;
+/** Live views of a running command: `onOutput` gets each chunk as it arrives, `onSpawn` the local child's process id. */
+export interface ExecHooks { onOutput?: (chunk: string) => void; onSpawn?: (pid: number) => void }
+export type Exec = (transport: Transport, argv: string[], timeoutMs: number, signal?: AbortSignal, env?: Record<string, string>, hooks?: ExecHooks) => Promise<ExecResult>;
 
 export type Transport = { type: "local" } | { type: "ssh"; target: string; options?: string[]; guest?: string[] };
 
@@ -23,7 +25,7 @@ export function remoteCommand(argv: string[]): string {
 
 /** `input`, when given, is written to the child's stdin and the pipe is closed; otherwise stdin is closed. */
 // A detached pwsh on Windows prints nothing to a pipe, so only POSIX children are detached; windowsHide keeps the console window away.
-function run(file: string, args: string[], timeoutMs: number, signal?: AbortSignal, env?: Record<string, string>, input?: string): Promise<ExecResult> {
+function run(file: string, args: string[], timeoutMs: number, signal?: AbortSignal, env?: Record<string, string>, input?: string, hooks?: ExecHooks): Promise<ExecResult> {
   if (signal?.aborted) return Promise.resolve({ exitCode: -1, stdout: "", stderr: "stopped" });
   return new Promise((resolve) => {
     const child = spawn(file, args, { windowsHide: true, detached: process.platform !== "win32", stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env: { ...process.env, ...env } } : {}) });

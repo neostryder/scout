@@ -266,6 +266,8 @@ flowchart TD
 
 `planUpdate` turns an install and its newer version into an exact winget, Store, brew, cask, npm, pipx, or uv command. The dependency guard refuses an update that would break a runtime requirement or a library other programs use, and asks for an extra confirmation on softer risks. A confirmed batch runs preflight, update, and verify one job at a time per machine and stops at the first failure.
 
+`runWatched` in `packages/ops/src/runner.ts` runs each update command and receives its output line by line, along with the child process id, from the exec layer. `packages/ops/src/progress.ts` turns those lines into a stage: four stages for winget and Microsoft Store, three for brew and brew cask, and none for other ecosystems, whose jobs show a single moving bar. `packages/ops/src/observe.ts` holds the observer and the attention tracker. For a real exec on a local Windows machine, the observer runs a hidden, read-only PowerShell check every 4 seconds that looks for the Windows consent process and for visible windows owned by the installer's process tree. The attention tracker turns each check into the job's attention state, runs the prompt timer (`promptTimeoutMs`, 3 minutes) only while the consent prompt is showing, and clears the state when the prompt or window goes away. Remote machines and tests never start the observer. The `jobs` table stores the stage in `phase` and the attention state in `attention`, and a migration adds both columns to an existing database in place.
+
 ## Control: plan, token, audit
 
 ```mermaid

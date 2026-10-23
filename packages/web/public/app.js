@@ -2,6 +2,7 @@ import { $, h, flagRow, marked, safeUrl, defaultDir, riskBadge, updateDialogMode
 import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 import { upstreamSections } from "./intel-detail.js";
+import { isLive, jobProgress, jobSummary } from "./jobs-model.js";
 
 let servicesView;
 let resourcesView;
@@ -106,12 +107,15 @@ function noteSummary(row) {
 }
 function nameCell(row) { return h("td", { class: "name" }, h("div", { class: "t" }, marked(row.name, value("q"))), h("div", { class: "d" }, marked(row.description || "No description yet", value("q"))), ...flagRow(row.flags)); }
 function rowBase(row, cells) { return h("tr", { tabindex: 0, "aria-selected": String(state.detailId === row.installId), onclick: () => openDetail(row.installId), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) openDetail(row.installId); } }, ...cells); }
-function jobText(job) {
-  if (!job) return "";
-  if (job.state === "preflight") return "checking";
-  if (job.state === "running") return job.steps?.find((step) => step.state === "running")?.name === "verify" ? "verifying" : job.action === "download" ? "downloading" : "updating";
-  if (job.state === "failed") return `failed: ${job.message || "update failed"}`;
-  return job.state;
+function jobText(job) { return jobSummary(job); }
+// A segmented bar of the stages the command reports, with the current one pulsing; a command with no stages shows a sweep.
+function jobProgressView(job) {
+  const progress = jobProgress(job);
+  if (!progress) return [];
+  const bar = progress.stages > 1
+    ? h("ol", { class: "stages", role: "progressbar", "aria-label": "Update progress", "aria-valuemin": "0", "aria-valuemax": String(progress.stages), "aria-valuenow": String(progress.stage), "aria-valuetext": `Step ${progress.stage} of ${progress.stages}: ${progress.label}` }, ...Array.from({ length: progress.stages }, (_, index) => h("li", { class: index + 1 < progress.stage ? "done" : index + 1 === progress.stage ? "current" : "" })))
+    : progress.stages === 1 ? h("div", { class: "stages sweep", role: "progressbar", "aria-label": "Update progress", "aria-valuetext": "The duration is unknown" }, h("span", {})) : [];
+  return h("div", { class: "job-progress" }, h("div", { class: "muted" }, progress.label, progress.stages > 1 && progress.stage > 0 ? ` (step ${progress.stage} of ${progress.stages})` : "", progress.elapsed ? `, ${progress.elapsed}` : ""), bar, progress.attention ? h("div", { class: `warning needs-you ${job.attention.kind}`, role: "status" }, progress.attention) : []);
 }
 function renderTable() {
   const updates = view() === "updates";
@@ -137,7 +141,7 @@ function updateRow(row) {
   const updateButton = h("button", { class: row.risk?.hard > 0 ? "primary muted-action" : "primary", type: "button", disabled: !row.updatable || !!job && !["done", "failed", "stopped"].includes(job.state), title: row.updatable ? badge?.text || "" : reason, "aria-label": row.updatable ? `Update ${row.name} on ${row.machineId}${badge ? `: ${badge.text}` : ""}` : `Cannot update ${row.name}: ${reason}`, onclick: (e) => { e.stopPropagation(); startPlan([row.installId]); } }, "Update");
   const canDownload = !row.updatable && !row.blockedBy && (row.downloadUrl || row.statuses?.some((status) => status === "upstream" || status === "advisory"));
   const button = canDownload ? h("button", { class: "button download", "data-install-id": String(row.installId), type: "button", disabled: !!job && !["done", "failed", "stopped"].includes(job.state), "aria-label": `Download ${row.name} to ${row.machineId}`, onclick: (e) => { e.stopPropagation(); startDownload(row, e.currentTarget); } }, "Download") : updateButton;
-  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button)]);
+  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button)]);
 }
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
@@ -207,15 +211,17 @@ async function startPlan(ids) {
   const allowed = plans.filter((p) => p.allowed);
   const refused = plans.filter((p) => !p.allowed);
   const disruptive = allowed.some((p) => p.disruptive);
+  const admin = allowed.some((p) => p.needsAdmin);
   const soft = plans.some((p) => p.softConfirmation) ? updateDialogModel(plans) : { requiresSoftConfirmation: false };
-  const refreshSubmit = () => { $("confirm-submit").disabled = !allowed.length || disruptive && !$("allow-disruptive")?.checked || soft.requiresSoftConfirmation && !$("confirm-soft")?.checked; };
+  const refreshSubmit = () => { $("confirm-submit").disabled = !allowed.length || disruptive && !$("allow-disruptive")?.checked || admin && !$("allow-admin")?.checked || soft.requiresSoftConfirmation && !$("confirm-soft")?.checked; };
   const acknowledgement = disruptive ? h("label", { class: "warning" }, h("input", { id: "allow-disruptive", type: "checkbox", onchange: refreshSubmit }), "I understand this will close or restart the app") : null;
+  const adminAcknowledgement = admin ? h("label", { class: "warning" }, h("input", { id: "allow-admin", type: "checkbox", onchange: refreshSubmit }), "Windows will ask for administrator permission. I am at this computer and will approve the prompt.") : null;
   const softAcknowledgement = soft.requiresSoftConfirmation ? h("section", { class: "warning" }, h("p", {}, "These installs or projects need a check before updating."), soft.projects.length ? h("p", {}, `Projects: ${soft.projects.join(", ")}`) : [], soft.dependents.length ? h("p", {}, `Dependents: ${soft.dependents.join(", ")}`) : [], h("label", {}, h("input", { id: "confirm-soft", type: "checkbox", onchange: refreshSubmit }), "I have checked these")) : null;
   const affects = (p) => {
     const breaks = [...(p.breaks?.hard || []), ...(p.breaks?.soft || [])];
     return breaks.length ? [h("h3", {}, "Also affects"), h("ul", {}, breaks.map((entry) => h("li", {}, `${entry.dependent.name} (${entry.dependent.machine}): ${entry.reason}`)))] : [];
   };
-  $("confirm-body").replaceChildren(h("ul", {}, allowed.map((p) => h("li", {}, `${p.machineId}: ${p.name}, ${p.from || "unknown"} to ${p.to}`, h("pre", {}, p.command), (p.warnings || []).map((w) => h("div", { class: "warning" }, w)), affects(p)))), acknowledgement || [], softAcknowledgement || [], refused.length ? h("section", {}, h("h3", {}, "Cannot update"), h("ul", {}, refused.map((p) => h("li", {}, `${p.name || p.installId}: ${p.refusal}`, affects(p))))) : []);
+  $("confirm-body").replaceChildren(h("ul", {}, allowed.map((p) => h("li", {}, `${p.machineId}: ${p.name}, ${p.from || "unknown"} to ${p.to}`, h("pre", {}, p.command), (p.warnings || []).map((w) => h("div", { class: "warning" }, w)), affects(p)))), acknowledgement || [], adminAcknowledgement || [], softAcknowledgement || [], refused.length ? h("section", {}, h("h3", {}, "Cannot update"), h("ul", {}, refused.map((p) => h("li", {}, `${p.name || p.installId}: ${p.refusal}`, affects(p))))) : []);
   refreshSubmit();
   $("confirm").showModal();
 }
@@ -223,7 +229,7 @@ async function submitPlans() {
   if (state.downloadPlan) return submitDownload();
   if ($("confirm-submit").disabled) return;
   const ids = state.plans.filter((p) => p.allowed).map((p) => p.installId);
-  const response = await fetch("/api/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installIds: ids, confirm: true, allowDisruptive: !!$("allow-disruptive")?.checked, confirmSoft: !!$("confirm-soft")?.checked }) });
+  const response = await fetch("/api/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installIds: ids, confirm: true, allowDisruptive: !!$("allow-disruptive")?.checked, allowAdmin: !!$("allow-admin")?.checked, confirmSoft: !!$("confirm-soft")?.checked }) });
   const data = await response.json();
   if (!response.ok) { $("confirm-body").append(h("p", { role: "alert" }, data.error || data.refused?.map((entry) => entry.reason).join("; ") || "No updates were queued.")); return; }
   $("confirm").close(); state.selected.clear(); await pollJobs(); await load();
@@ -256,11 +262,15 @@ async function submitDownload() {
   } catch (error) { $("confirm-body").append(h("p", { role: "alert" }, error.message)); }
   finally { $("confirm-submit").disabled = false; }
 }
+// A prompt or installer window can sit behind other windows, so the tab title says when a job is waiting on a person.
+const BASE_TITLE = document.title;
+function flagNeedsYou() { document.title = state.jobs.some((j) => isLive(j) && j.attention) ? `Needs you - ${BASE_TITLE}` : BASE_TITLE; }
 async function pollJobs() {
   try {
     const data = await (await fetch("/api/jobs?limit=50")).json();
     const previous = state.jobs;
     state.jobs = data.jobs;
+    flagNeedsYou();
     if (view() === "updates") renderTable();
     if (view() === "jobs") renderJobs();
     if (data.jobs.some((j) => ["queued", "preflight", "running"].includes(j.state))) {
@@ -271,7 +281,7 @@ async function pollJobs() {
 }
 async function loadJobs(signal, sequence) { const data = await (await fetch("/api/jobs?limit=50", { signal })).json(); if (sequence !== state.sequence) return; state.jobs = data.jobs; renderJobs(); }
 function renderJobs() {
-  $("jobs").replaceChildren(h("label", { class: "search-label" }, "Search", h("input", { type: "search", value: value("q"), "aria-label": "Search jobs", oninput: (e) => { setParam("q", e.target.value, false); renderJobs(); restoreSearch("jobs", e.target.selectionStart); } })), h("h2", {}, "Recent jobs"), ...state.jobs.filter((j) => matches(`${j.name} ${j.machineId} ${j.state} ${j.download?.fileName || ""} ${j.finalPath || ""}`)).map((j) => h("article", { class: "proposal" }, h("div", { class: "job-head" }, h("strong", {}, `${j.machineId}: ${j.name}`), h("span", {}, j.action === "download" ? `Download: ${j.download?.fileName || "unknown file"}` : `${j.from || "unknown"} to ${j.to || "unknown"}`), j.finalPath ? h("span", {}, j.finalPath) : [], h("span", {}, jobText(j)), ["queued", "preflight", "running"].includes(j.state) ? h("button", { type: "button", onclick: async () => { await fetch(`/api/jobs/${j.id}/stop`, { method: "POST", headers: { "content-type": "application/json" } }); await pollJobs(); } }, "Stop") : []), h("details", {}, h("summary", {}, "Steps"), ...(j.steps || []).map((s) => h("div", {}, `${s.seq}. ${s.name}: ${s.state}`, h("pre", {}, s.output || "")))))));
+  $("jobs").replaceChildren(h("label", { class: "search-label" }, "Search", h("input", { type: "search", value: value("q"), "aria-label": "Search jobs", oninput: (e) => { setParam("q", e.target.value, false); renderJobs(); restoreSearch("jobs", e.target.selectionStart); } })), h("h2", {}, "Recent jobs"), ...state.jobs.filter((j) => matches(`${j.name} ${j.machineId} ${j.state} ${j.download?.fileName || ""} ${j.finalPath || ""}`)).map((j) => h("article", { class: "proposal" }, h("div", { class: "job-head" }, h("strong", {}, `${j.machineId}: ${j.name}`), h("span", {}, j.action === "download" ? `Download: ${j.download?.fileName || "unknown file"}` : `${j.from || "unknown"} to ${j.to || "unknown"}`), j.finalPath ? h("span", {}, j.finalPath) : [], h("span", {}, jobText(j)), ["queued", "preflight", "running"].includes(j.state) ? h("button", { type: "button", onclick: async () => { await fetch(`/api/jobs/${j.id}/stop`, { method: "POST", headers: { "content-type": "application/json" } }); await pollJobs(); } }, "Stop") : []), isLive(j) ? jobProgressView(j) : [], h("details", {}, h("summary", {}, "Steps"), ...(j.steps || []).map((s) => h("div", {}, `${s.seq}. ${s.name}: ${s.state}`, h("pre", {}, s.output || "")))))));
 }
 function restoreSearch(root, position) { const input = $(root).querySelector("input[type=search]"); input.focus(); input.setSelectionRange(position, position); }
 function matches(text) { const lower = text.toLowerCase(); return value("q").toLowerCase().split(/\s+/).filter(Boolean).every((term) => lower.includes(term)); }

@@ -6,6 +6,8 @@ import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createMockHub, installs, jobs } from "../dev/mock-hub.ts";
 
+const jobsModel = await import(new URL("../public/jobs-model.js", import.meta.url).href);
+
 class Element {
   tag: string;
   attrs: Record<string, any>;
@@ -27,7 +29,7 @@ function page(fetcher: (...args: any[]) => Promise<any>) {
   const byId = (id: string) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id)!; };
   const opened: any[][] = [];
   const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/^import .*\n/gm, "").split('\ndocument.querySelectorAll("[data-view]").forEach')[0]!;
-  const context = createContext({ $: byId, h: (tag: string, attrs: Record<string, any>, ...children: any[]) => new Element(tag, attrs, children), marked: (text: string) => text, flagRow: () => [], safeUrl: (url: string) => url.startsWith("https:") ? url : null, defaultDir: () => "asc", location: { search: "", pathname: "/" }, URLSearchParams, document: { addEventListener: () => {} }, window: { open: (...args: any[]) => opened.push(args) }, fetch: fetcher, row: { installId: 7, name: "Demo", machineId: "mini", downloadUrl: filePlan.url, updatable: false }, button: new Element("button") });
+  const context = createContext({ ...jobsModel, $: byId, h: (tag: string, attrs: Record<string, any>, ...children: any[]) => new Element(tag, attrs, children), marked: (text: string) => text, flagRow: () => [], safeUrl: (url: string) => url.startsWith("https:") ? url : null, defaultDir: () => "asc", location: { search: "", pathname: "/" }, URLSearchParams, document: { addEventListener: () => {} }, window: { open: (...args: any[]) => opened.push(args) }, fetch: fetcher, row: { installId: 7, name: "Demo", machineId: "mini", downloadUrl: filePlan.url, updatable: false }, button: new Element("button") });
   runInContext(source, context);
   runInContext("pollJobs = async () => {}; load = async () => {};", context);
   return { context, byId, opened, run: (text: string) => runInContext(text, context) };
