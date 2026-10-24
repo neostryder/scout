@@ -345,3 +345,7 @@ export function phoneDefaultMachine(params, machines, phone) {
   if (NO_MACHINE_FILTER.has(params.get("tab") ?? "")) return null;
   return machines.find((machine) => machine.hub)?.id ?? null;
 }
+const WORKSPACE_KINDS = { "windows-service": "Windows service", "scheduled-task": "Scheduled task", "run-key": "Logon entry (registry)", "startup-folder": "Logon entry (Startup folder)", launchd: "launchd job", systemd: "systemd unit", autostart: "Autostart entry" };
+export function workspaceKindLabel(kind) {
+  return WORKSPACE_KINDS[kind] || String(kind);
+}

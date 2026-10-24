@@ -1,11 +1,13 @@
-import { recordListeners, recordServices, runProbe, type Db, type ListenerAdapter, type ListenerResult, type Probe, type ProbeOutput, type ServiceAdapter, type ServiceResult, type Transport } from "@scout/core";
+import { recordListeners, recordServices, recordWorkspaceInstalls, runProbe, type Db, type ListenerAdapter, type ListenerResult, type Probe, type ProbeOutput, type ServiceAdapter, type ServiceResult, type Transport, type WorkspaceAdapter, type WorkspaceInstallResult } from "@scout/core";
 import { dockerPortsAdapter, linuxListenersAdapter, macListenersAdapter, windowsListenersAdapter } from "@scout/adapter-listeners";
-import { linuxSystemdAdapter, macLaunchdStateAdapter, windowsServicesAdapter, windowsTasksAdapter } from "@scout/adapter-services";
+import { linuxSystemdAdapter, linuxWorkspaceAdapter, macLaunchdStateAdapter, macWorkspaceAdapter, windowsServicesAdapter, windowsTasksAdapter, windowsWorkspaceAdapter } from "@scout/adapter-services";
 import { alertsFileReader, evaluateAlerts, loadTunnelHosts, type AlertChange, type AlertOptions } from "@scout/core";
 
 export const LISTENER_ADAPTERS: ListenerAdapter[] = [windowsListenersAdapter, macListenersAdapter, linuxListenersAdapter, dockerPortsAdapter];
 
 export const SERVICE_ADAPTERS: ServiceAdapter[] = [windowsServicesAdapter, windowsTasksAdapter, macLaunchdStateAdapter, linuxSystemdAdapter];
+
+export const WORKSPACE_ADAPTERS: WorkspaceAdapter[] = [windowsWorkspaceAdapter, macWorkspaceAdapter, linuxWorkspaceAdapter];
 
 // Get-ScheduledTaskInfo walks every task and takes about two minutes on a Windows machine with many tasks.
 const TASK_ORIGIN = "win-tasks";
@@ -127,6 +129,30 @@ async function runServices(db: Db, machine: LiveMachine, options: StoreOptions):
   return results;
 }
 
+/** Entries that start a program from inside the Repositories tree. A failed probe leaves the stored rows alone. */
+async function runWorkspace(db: Db, machine: LiveMachine, options: StoreOptions): Promise<WorkspaceInstallResult[]> {
+  const results: WorkspaceInstallResult[] = [];
+  for (const adapter of WORKSPACE_ADAPTERS) {
+    if (!adapter.os.includes(machine.os)) continue;
+    const outputs: Record<string, ProbeOutput> = {};
+    try {
+      for (const probe of adapter.probes({ machineId: machine.id, os: machine.os, roots: {} })) {
+        outputs[probe.id] = await probeOutput(options.run, machine.transport, probe, options.cheapTimeoutMs);
+      }
+    } catch (error) {
+      const failed: WorkspaceInstallResult = { origin: adapter.origin, status: "failed", facts: [], message: error instanceof Error ? error.message : "workspace probe failed" };
+      options.log?.(`  workspace ${failed.origin.padEnd(18)}failed  (${failed.message})`);
+      results.push(failed);
+      continue;
+    }
+    const result = adapter.parse(outputs);
+    options.log?.(`  workspace ${result.origin.padEnd(18)}${result.status.padEnd(8)}${String(result.facts.length).padStart(5)} facts${result.message ? `  (${result.message})` : ""}`);
+    recordWorkspaceInstalls(db, machine.id, result, options.now);
+    results.push(result);
+  }
+  return results;
+}
+
 function storedOptions(options: CollectOptions, slow: boolean): StoreOptions {
   return {
     ...(options.log ? { log: options.log } : {}),
@@ -147,8 +173,10 @@ export function collectListeners(db: Db, machine: LiveMachine, options: CollectO
 
 /** The scan's service pass, including the scheduled-task probe and its 10 minute limit. */
 export function collectServices(db: Db, machine: LiveMachine, options: CollectOptions = {}): Promise<void> {
-  return runServices(db, machine, storedOptions(options, true)).then((results) => {
+  const stored = storedOptions(options, true);
+  return runServices(db, machine, stored).then(async (results) => {
     if (results.some((result) => result.status === "ok" || result.status === "partial")) scanAlerts(db, machine.id, options);
+    await runWorkspace(db, machine, stored);
   });
 }
 
@@ -218,6 +246,7 @@ export async function readLive(db: Db, machine: LiveMachine, options: CollectOpt
   try {
     results.push(...await runListeners(db, machine, stored));
     results.push(...await runServices(db, machine, stored));
+    if (stored.slow) results.push(...await runWorkspace(db, machine, stored));
   } catch (err) {
     const result: LiveReadResult = { ...diff(before, fingerprint(db, machine.id)), status: "failed", error: err instanceof Error ? err.message : "live read failed" };
     if (result.changed) notifyServiceRead(db, machine.id, stored.now);

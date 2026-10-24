@@ -624,6 +624,20 @@ CREATE TABLE IF NOT EXISTS competitor_runs (
   trigger TEXT
 );
 CREATE INDEX IF NOT EXISTS competitor_runs_competitor_state ON competitor_runs(competitor_id, state);
+
+-- Entries that start a program from inside the Repositories tree. Only the matched path is stored, never the command line.
+CREATE TABLE IF NOT EXISTS workspace_installs (
+  id             INTEGER PRIMARY KEY,
+  machine_id     TEXT NOT NULL REFERENCES machines(id),
+  kind           TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  location       TEXT NOT NULL,
+  workspace_path TEXT NOT NULL,
+  first_seen_at  TEXT NOT NULL,
+  last_seen_at   TEXT NOT NULL,
+  gone_at        TEXT,
+  UNIQUE (machine_id, kind, location, name)
+);
 `;
 
 /** Columns added to `packages` in version 2, applied to a version 1 catalog. */

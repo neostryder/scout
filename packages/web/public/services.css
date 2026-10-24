@@ -119,6 +119,9 @@
 #services .health-chip.danger, #services .health-state.danger { color: var(--danger); }
 #services .health-chip.quiet, #services .health-state.quiet { color: var(--muted); }
 #services .health-table { min-width: 760px; }
+#services .workspace-installs { margin-top: 24px; }
+#services .workspace-installs h2 { margin: 0 0 4px; font-size: 15px; }
+#services .workspace-table { min-width: 760px; }
 #services .health-dot { display: inline-block; width: 8px; height: 8px; min-width: 8px; margin: 0 6px 0 0; background: currentColor; vertical-align: middle; }
 #services .health-dot.ok { color: var(--ok); }
 #services .health-dot.warn { color: var(--warn); }

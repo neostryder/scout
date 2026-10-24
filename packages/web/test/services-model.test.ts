@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { phoneDefaultMachine, servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, routeChain, routeConfidence, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, exposureLabel, stateLabel, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertSeverityLabel, alertSeverityTone, alertKindLabel, alertTitle, groupAlerts, alertEventReducer, badgeModel, alertEndpointMissing, muteCoverage, alertFilter, countAlerts, healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer, rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, planStepsText, stackFilter, stackEventReducer } = await import(new URL("../public/services-model.js", import.meta.url).href);
+const { workspaceKindLabel, phoneDefaultMachine, servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, routeChain, routeConfidence, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, exposureLabel, stateLabel, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertSeverityLabel, alertSeverityTone, alertKindLabel, alertTitle, groupAlerts, alertEventReducer, badgeModel, alertEndpointMissing, muteCoverage, alertFilter, countAlerts, healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer, rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, planStepsText, stackFilter, stackEventReducer } = await import(new URL("../public/services-model.js", import.meta.url).href);
 
 test("alert labels, tones, titles and sorting cover contract values", () => {
   assert.deepEqual(["info", "warn", "high"].map(alertSeverityLabel), ["Info", "Warning", "High"]);
@@ -298,4 +298,8 @@ test("on a phone the chart room opens on the hub machine unless the link or the 
   assert.equal(phoneDefaultMachine(new URLSearchParams("tab=ports"), machines, true), null);
   assert.equal(phoneDefaultMachine(new URLSearchParams(""), machines, false), null);
   assert.equal(phoneDefaultMachine(new URLSearchParams(""), [{ id: "aragorn", hub: false }], true), null);
+});
+
+test("workspace entry kinds read as plain labels", () => {
+  assert.deepEqual(["windows-service", "scheduled-task", "run-key", "startup-folder", "launchd", "systemd", "autostart", "other"].map(workspaceKindLabel), ["Windows service", "Scheduled task", "Logon entry (registry)", "Logon entry (Startup folder)", "launchd job", "systemd unit", "Autostart entry", "other"]);
 });

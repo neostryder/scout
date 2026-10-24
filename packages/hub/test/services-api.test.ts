@@ -6,7 +6,7 @@ import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listServices, openCatalog, recordListeners, recordServices, upsertMachine, type ListenerFact, type ServiceFact } from "@scout/core";
+import { listServices, openCatalog, recordListeners, recordServices, recordWorkspaceInstalls, upsertMachine, type ListenerFact, type ServiceFact } from "@scout/core";
 import { createHub } from "../src/server.ts";
 import { LiveSchedule, type LiveClock, type LiveReader } from "../src/live.ts";
 
@@ -415,4 +415,15 @@ test("a refresh already running for that machine answers running", { timeout: 10
     liveDb.close();
     rmSync(liveRoot, { recursive: true, force: true });
   }
+});
+
+test("workspace installs are listed, can be limited to one machine, and refuse writes", async () => {
+  recordWorkspaceInstalls(db, "hub", { origin: "workspace-windows", status: "ok", facts: [{ kind: "scheduled-task", name: "Tool", location: "/", workspacePath: "D:/Repositories/tool/run.js" }] }, T2);
+  recordWorkspaceInstalls(db, "laptop", { origin: "workspace-macos", status: "ok", facts: [{ kind: "launchd", name: "a.plist", location: "/Users/USER/Library/LaunchAgents/a.plist", workspacePath: "/Users/USER/Repositories/a" }] }, T2);
+  const all = await call("GET", "/api/services/workspace-installs");
+  assert.equal(all.status, 200, all.body);
+  assert.deepEqual((JSON.parse(all.body) as { installs: { machineId: string; name: string }[] }).installs.map((row) => [row.machineId, row.name]), [["hub", "Tool"], ["laptop", "a.plist"]]);
+  const one = JSON.parse((await call("GET", "/api/services/workspace-installs?machine=laptop")).body) as { installs: { name: string }[] };
+  assert.deepEqual(one.installs.map((row) => row.name), ["a.plist"]);
+  assert.equal((await call("POST", "/api/services/workspace-installs", { "content-type": "application/json" }, "{}")).status, 405);
 });

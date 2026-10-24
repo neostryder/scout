@@ -11,7 +11,7 @@ import { acknowledgeAlerts, alertMutes, alertsResponse, alertsSummary, defaultWa
 import { RecipeError, recipesResponse } from "@scout/core";
 import type { HubRecipes } from "./recipes.ts";
 import type { HubAlerts } from "./alerts.ts";
-import { healthResponse, healthSummary } from "@scout/core";
+import { healthResponse, healthSummary, listWorkspaceInstalls } from "@scout/core";
 import type { HealthSchedule } from "./health.ts";
 import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
@@ -496,6 +496,11 @@ export async function servicesApi(db: Db, req: IncomingMessage, url: URL, res: S
       return !range ? json(res, 404, { error: "unknown range" }) : range.next === null ? json(res, 409, { error: "range is full" }) : json(res, 200, { range: range.name, port: range.next });
     }
     return json(res, 200, ports);
+  }
+  if (path === "/api/services/workspace-installs") {
+    if (req.method !== "GET" && req.method !== "HEAD") return json(res, 405, { error: "method not allowed" });
+    const machine = url.searchParams.get("machine");
+    return json(res, 200, { installs: listWorkspaceInstalls(db, machine ? { machine } : {}) });
   }
   if (path === "/api/services/health" || path === "/api/services/health/refresh") {
     const post = path.endsWith("/refresh");

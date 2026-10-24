@@ -361,3 +361,6 @@ export const linuxSystemdAdapter: ServiceAdapter = {
     return finish("systemd-state", probe, [...facts.values()], malformed);
   },
 };
+
+export { windowsWorkspaceAdapter, macWorkspaceAdapter, linuxWorkspaceAdapter } from "./workspace.ts";
+export { WINDOWS_WORKSPACE_SCRIPT, MAC_WORKSPACE_SCRIPT, LINUX_WORKSPACE_SCRIPT } from "./workspace-probes.ts";

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { alertsSummary, listListeners, listServices, openCatalog, upsertMachine, type Db, type Probe, type ProbeOutput, type Transport } from "@scout/core";
+import { alertsSummary, listListeners, listServices, listWorkspaceInstalls, openCatalog, upsertMachine, type Db, type Probe, type ProbeOutput, type Transport } from "@scout/core";
 import { collectListeners, collectServices, readLive, type LiveMachine, type ProbeRunner } from "../src/live.ts";
 
 const local: Transport = { type: "local" };
@@ -36,6 +36,24 @@ test("listener scans evaluate changes and return alert changes to their subscrib
     // The new port raises its alert; the old one was an ad hoc node listener no service keeps up, so its disappearance raises none.
     assert.equal(alertsSummary(db).open, 1);
     assert.deepEqual(changes, ["created"]);
+  } finally { db.close(); }
+});
+
+test("a scan stores entries that start from the workspace, and a quick read leaves them alone", async () => {
+  const db = dbWith(windows, "Hub");
+  const entry = JSON.stringify([{ Kind: "scheduled-task", Name: "Buddy", Location: "\\", Command: "node.exe D:\\Repositories\\buddy\\run.js" }]);
+  const run: ProbeRunner = async (_transport, probe) => ({ exitCode: 0, stdout: probe.id === "workspace" ? entry : windowsStdout(probe.id, "Running"), stderr: "" });
+  const failing: ProbeRunner = async (_transport, probe) => { if (probe.id === "workspace") throw new Error("transport dropped"); return { exitCode: 0, stdout: windowsStdout(probe.id, "Running"), stderr: "" }; };
+  try {
+    await collectServices(db, windows, { run });
+    assert.deepEqual(listWorkspaceInstalls(db).map((row) => [row.kind, row.name, row.workspacePath]), [["scheduled-task", "Buddy", "D:/Repositories/buddy/run.js"]]);
+    const quick = await readLive(db, windows, { run: failing, slow: false });
+    assert.equal(quick.status, "ok");
+    const slow = await readLive(db, windows, { run: failing, slow: true });
+    assert.equal(slow.status, "partial");
+    assert.equal(listWorkspaceInstalls(db).length, 1);
+    await collectServices(db, windows, { run: async (_transport, probe) => ({ exitCode: 0, stdout: windowsStdout(probe.id, "Running"), stderr: "" }) });
+    assert.equal(listWorkspaceInstalls(db).length, 0);
   } finally { db.close(); }
 });
 
@@ -100,10 +118,12 @@ test("collect keeps the scan timeouts and the coverage lines", async () => {
       ["listeners", undefined],
       ["services", undefined],
       ["tasks", 600_000],
+      ["workspace", undefined],
     ]);
     assert.equal(logs[0], "  listeners netconn     ok          1 facts");
     assert.equal(logs[1], "  services win-services  ok          1 facts");
     assert.equal(logs[2], "  services win-tasks     ok          1 facts");
+    assert.equal(logs[3], "  workspace workspace-windows ok          0 facts");
     calls.length = 0;
     await readLive(db, windows, { run, slow: false });
     assert.deepEqual(calls.map((call) => call.id), ["listeners", "services"]);
@@ -114,7 +134,7 @@ test("collect keeps the scan timeouts and the coverage lines", async () => {
     assert.ok(calls.filter((call) => call.id !== "tasks").every((call) => call.timeout === 30_000));
     const macCalls: { id: string; timeout: number | undefined }[] = [];
     await collectServices(macDb, mac, { run: runner((probe) => probe.id === "state" ? launchd : "", macCalls) });
-    assert.deepEqual(macCalls, [{ id: "state", timeout: undefined }]);
+    assert.deepEqual(macCalls, [{ id: "state", timeout: undefined }, { id: "workspace", timeout: undefined }]);
   } finally {
     db.close();
     macDb.close();
