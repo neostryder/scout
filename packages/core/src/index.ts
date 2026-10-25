@@ -58,4 +58,5 @@ export * from "./systems-map.ts";
 export * from "./meter-alerts.ts";
 export * from "./backup-health.ts";
 export * from "./competitors.ts";
+export * from "./competitor-candidates.ts";
 export * from "./update-window.ts";

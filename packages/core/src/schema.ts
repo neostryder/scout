@@ -625,6 +625,26 @@ CREATE TABLE IF NOT EXISTS competitor_runs (
 );
 CREATE INDEX IF NOT EXISTS competitor_runs_competitor_state ON competitor_runs(competitor_id, state);
 
+-- Projects the discovery run found. Nothing here is tracked until it is accepted; a dismissed row keeps the key so the run never offers it again.
+CREATE TABLE IF NOT EXISTS competitor_candidates (
+  id          TEXT PRIMARY KEY,
+  source_key  TEXT NOT NULL UNIQUE,
+  source      TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  org         TEXT,
+  url         TEXT NOT NULL,
+  repo_url    TEXT,
+  description TEXT NOT NULL DEFAULT '',
+  topics_json TEXT NOT NULL DEFAULT '[]',
+  stars       INTEGER NOT NULL DEFAULT 0,
+  pushed_at   TEXT,
+  score       REAL NOT NULL DEFAULT 0,
+  judge_json  TEXT,
+  status      TEXT NOT NULL CHECK (status IN ('new','tracked','dismissed')),
+  found_at    TEXT NOT NULL,
+  decided_at  TEXT
+);
+
 -- Entries that start a program from inside the Repositories tree. Only the matched path is stored, never the command line.
 CREATE TABLE IF NOT EXISTS workspace_installs (
   id             INTEGER PRIMARY KEY,

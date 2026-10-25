@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { applyCompetitorCheck, applyGateChange, applyRemoveChange, applyRepoChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
+import { applyAddChange, applyCompetitorCheck, applyGateChange, applyRemoveChange, applyRepoChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
 import type { Notifier } from "./notify.ts";
 import type { ScheduleClock } from "./schedule.ts";
 
@@ -167,6 +167,16 @@ export class CompetitorSchedule {
       return next;
     });
     return { mirrorPath };
+  }
+
+  /** Adds a competitor to the registry. A repository address also gets a first baseline from one read of it, so the next check can tell what is new. */
+  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null }): Promise<void> {
+    let baseline: { version: string | null; commit: string | null; at: string; source: string } | null = null;
+    if (entry.remoteUrl && this.options.check) {
+      const read = await this.options.check(entry.remoteUrl).catch(() => null);
+      if (read && !read.error && (read.version || read.commit)) baseline = { version: read.version, commit: read.commit, at: this.iso().slice(0, 10), source: "tracked" };
+    }
+    this.rewriteConfig((text) => applyAddChange(text, { ...entry, baseline }));
   }
 
   /** Removes a competitor from the registry. A competitor with research in progress stays until that finishes. */
