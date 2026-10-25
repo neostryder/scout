@@ -225,6 +225,12 @@ As you browse, the service worker keeps a copy of each page file and each succes
 
 A page has a saved copy only if you opened it in that browser while the hub was reachable, so open the pages you want on hand before you leave home. Each browser keeps at most 200 saved answers.
 
+## Planning an update window
+
+The "Plan a window" button on the Updates page opens a plan for each machine with pending updates. "Safe to start now" lists updates that close nothing and share nothing with a running program, in the order they should run: a library or runtime goes before the programs that use it. "Better in the quiet hours" lists updates that would close or restart a running program, plus anything that shares a library with one, so a library and its dependents are updated together. "Needs you first" lists updates Scout will not put in either batch: a blocked or frozen update, one that needs the Windows administrator prompt, and one whose dependents need a check. Each held line gives the reason.
+
+The quiet hours are the least busy two hours of the machine's day by CPU over the last 7 days, shown on your own clock. A machine with too little load history uses 03:00 to 05:00, and the panel says so. Each batch has a Review button that opens the usual confirmation dialog with the updates in plan order, and nothing starts until you confirm. Scout does not start a batch by itself when the quiet hours arrive.
+
 ## Watching an update
 
 While an update runs, its row on the Updates page and its entry on the Jobs page show the current stage, a progress bar, and the elapsed time as m:ss, refreshed every 1.5 seconds. Updates through winget and the Microsoft Store move through four stages: Downloading the update, Checking the download, Installing, and Finishing up. Updates through brew and brew cask skip Checking the download. Other package managers print no stages, so their jobs show a single moving bar. A queued job reads "Waiting for its turn", a job in preflight reads "Checking the install", and a job whose command has ended reads "Confirming the new version".

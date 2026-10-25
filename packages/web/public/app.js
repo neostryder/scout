@@ -4,6 +4,7 @@ import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 import { upstreamSections } from "./intel-detail.js";
 import { isLive, jobProgress, jobSummary } from "./jobs-model.js";
 
+let windowPanel;
 let servicesView;
 let resourcesView;
 let competitorsView;
@@ -201,11 +202,11 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if (document.activeElement === search) { search.value = ""; if (view() === "review") { setParam("q", "", false); renderReview(); } else if (view() === "jobs") { setParam("q", "", false); renderJobs(); } else searchChanged(); } else if (!$("confirm").open) closeDetail(); }
 });
 
-async function startPlan(ids) {
+async function startPlan(ids, machineId = null) {
   state.downloadPlan = null;
   $("confirm-title").textContent = "Confirm updates";
   $("confirm-submit").textContent = "Start updates";
-  const selected = ids.map((installId) => ({ installId, machineId: state.selected.get(installId) || state.rows.find((row) => row.installId === installId)?.machineId }));
+  const selected = ids.map((installId) => ({ installId, machineId: machineId || state.selected.get(installId) || state.rows.find((row) => row.installId === installId)?.machineId }));
   const plans = await Promise.all(ids.map(async (id) => { try { const query = ids.length > 1 ? updatePlanQuery(id, selected) : `installId=${id}`; const r = await fetch(`/api/updates/plan?${query}`); if (!r.ok) throw new Error("Plan unavailable"); return await r.json(); } catch { return { installId: id, allowed: false, refusal: "Plan unavailable" }; } }));
   state.plans = plans;
   const allowed = plans.filter((p) => p.allowed);
@@ -232,7 +233,7 @@ async function submitPlans() {
   const response = await fetch("/api/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installIds: ids, confirm: true, allowDisruptive: !!$("allow-disruptive")?.checked, allowAdmin: !!$("allow-admin")?.checked, confirmSoft: !!$("confirm-soft")?.checked }) });
   const data = await response.json();
   if (!response.ok) { $("confirm-body").append(h("p", { role: "alert" }, data.error || data.refused?.map((entry) => entry.reason).join("; ") || "No updates were queued.")); return; }
-  $("confirm").close(); state.selected.clear(); await pollJobs(); await load();
+  $("confirm").close(); state.selected.clear(); await pollJobs(); await load(); windowPanel?.refresh();
 }
 async function startDownload(row, button) {
   const label = button.textContent;
@@ -302,6 +303,7 @@ function showView(next, initial = false) {
   if (next === "resources") openResources(); else resourcesView?.hide();
   if (next === "competitors") openCompetitors(); else competitorsView?.hide();
   $("toggle-filters").hidden = !["updates", "catalog"].includes(next);
+  $("plan-window").hidden = next !== "updates"; windowPanel?.hide();
   for (const button of document.querySelectorAll("[data-view]")) button.setAttribute("aria-current", String(button.dataset.view === next));
   if (["updates", "catalog"].includes(next)) { $("search").value = value("q"); renderFilters(); renderSorts(); renderChips(); }
   savedFilters.refresh();
@@ -319,6 +321,12 @@ async function openServices() {
   if (view() !== "services") return;
   servicesView ||= createServicesView($("services"));
   servicesView.show(state.params);
+}
+// The update-window planner loads the first time its button is pressed.
+async function openWindowPlanner() {
+  const { createWindowPanel } = await import("./update-window.js");
+  windowPanel ||= createWindowPanel({ root: $("window"), button: $("plan-window"), startPlan: (ids, machineId) => startPlan(ids, machineId) });
+  windowPanel.toggle();
 }
 async function openResources() {
   const { createResourcesView } = await import("./resources.js");
@@ -338,6 +346,7 @@ document.querySelectorAll("[data-view]").forEach((button) => button.addEventList
 $("search").addEventListener("input", searchChanged);
 $("sort").addEventListener("change", (e) => sortChanged(e.target.value));
 $("dir").addEventListener("change", (e) => setParam("dir", e.target.value));
+$("plan-window").addEventListener("click", openWindowPlanner);
 $("clear").addEventListener("click", () => { for (const key of [...state.params.keys()]) if (key !== "view") state.params.delete(key); $("search").value = ""; state.limit = PAGE; url(); renderFilters(); renderSorts(); renderChips(); load(); });
 $("more").addEventListener("click", () => { state.limit += PAGE; load(); });
 $("toggle-filters").addEventListener("click", (e) => { const open = $("filters").classList.toggle("open"); e.target.setAttribute("aria-expanded", String(open)); });

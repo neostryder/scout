@@ -9,7 +9,7 @@ import { trayApi } from "./tray-api.ts";
 import { isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
 import { ControlRunner, Runner, runHealthCycle, subscribeServiceReads, type ControlRunnerDeps, type RunnerDeps } from "@scout/ops";
-import { createDownloadJobsResponse, createJobsResponse, jobResponse, planResponse } from "./jobs-api.ts";
+import { createDownloadJobsResponse, createJobsResponse, jobResponse, planResponse, windowResponse } from "./jobs-api.ts";
 import { createDownloadKinds, createDownloadResolver, type DownloadsOptions } from "./downloads-api.ts";
 import { filtersApi } from "./filters-api.ts";
 import type { CloudflareSchedule } from "./cloudflare.ts";
@@ -282,6 +282,7 @@ export function createHub(options: HubOptions): Server {
         const plan = planResponse(db, runner, Number(url.searchParams.get("installId")), url.searchParams.get("alsoInstallIds"));
         return plan ? json(res, 200, plan) : json(res, 404, { error: "no such install or update" });
       }
+      if (runner && url.pathname === "/api/updates/window") return json(res, 200, windowResponse(db, runner));
       if (downloadKinds && url.pathname === "/api/downloads/kinds") return json(res, 200, downloadKinds.snapshot());
       if (runner && url.pathname === "/api/downloads/plan") {
         const installId = Number(url.searchParams.get("installId"));

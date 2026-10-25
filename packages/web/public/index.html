@@ -58,9 +58,10 @@
         <span id="count" class="count" aria-live="polite"></span>
         <label class="sort">Sort <select id="sort" aria-label="Sort by"></select></label>
         <label class="sort">Direction <select id="dir" aria-label="Sort direction"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
-        <button id="clear" type="button">Clear all</button>
+        <button id="clear" type="button">Clear all</button><button id="plan-window" type="button" aria-expanded="false" aria-controls="window">Plan a window</button>
       </div>
       <div id="chips" class="chips"></div>
+      <section id="window" class="window-panel" aria-label="Update window" hidden></section>
       <div id="selection" class="selection" hidden><button id="update-selected" class="primary" type="button"></button><button id="select-page" type="button">Select all on this page</button><button id="clear-selection" type="button">Clear selection</button></div>
       <div class="table-wrap"><table id="table"><thead></thead><tbody></tbody></table></div>
       <div class="more"><button id="more" type="button" hidden>Show more</button></div>

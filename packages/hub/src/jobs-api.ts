@@ -1,9 +1,13 @@
 import { enqueueBatch, jobById, type Db } from "@scout/core";
-import { previewUpdate, type Runner } from "@scout/ops";
+import { planWindows, previewUpdate, type Runner } from "@scout/ops";
 
 export function planResponse(db: Db, runner: Runner, installId: number, alsoInstallIds: string | null = null): unknown | null {
   const alsoUpdating = alsoInstallIds?.split(",").filter((id) => /^\d+$/.test(id.trim())).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0) ?? [];
   return previewUpdate(db, installId, runner.deps.machines, { alsoUpdating })?.preview ?? null;
+}
+
+export function windowResponse(db: Db, runner: Runner, now = new Date()): unknown {
+  return planWindows(db, runner.deps.machines, now);
 }
 
 export function createJobsResponse(db: Db, runner: Runner, body: unknown): { status: number; body: unknown } {

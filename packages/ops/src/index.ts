@@ -15,3 +15,4 @@ export * from "./competitor-analysis.ts";
 export * from "./competitor-watch.ts";
 export * from "./progress.ts";
 export * from "./observe.ts";
+export * from "./window.ts";

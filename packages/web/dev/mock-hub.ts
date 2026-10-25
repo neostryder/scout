@@ -46,6 +46,22 @@ function compare(a: Row, b: Row, key: string, dir: string) {
   const primary = order ? order.indexOf(av) - order.indexOf(bv) : ["installed", "available", "version"].includes(key) ? versionCompare(av || "", bv || "") : typeof av === "number" ? av - bv : String(av ?? "").localeCompare(String(bv ?? ""), undefined, { sensitivity: "base" });
   return primary ? primary * (dir === "desc" ? -1 : 1) : a.name.localeCompare(b.name) || a.machineId.localeCompare(b.machineId);
 }
+export function updateWindows() {
+  const now = new Date();
+  const start = new Date(now); start.setHours(3, 0, 0, 0); if (start.getTime() <= now.getTime()) start.setDate(start.getDate() + 1);
+  const quietHour = { hour: 3, length: 2, basis: "measured", meanCpuPct: 4.2, samples: 480, startsAt: start.toISOString(), inWindow: false };
+  const item = (row: Row) => ({ installId: row.installId, name: row.name, ecosystem: row.ecosystem, from: row.installed, to: row.available, bump: row.bump, running: row.running, warnings: [] as string[] });
+  return { generatedAt: now.toISOString(), machines: machines.map((machineId) => {
+    const rows = installs.filter((row) => row.machineId === machineId && row.updatable);
+    const disruptive = (row: Row) => row.kind === "app" || row.running;
+    return {
+      machineId, quietHour,
+      now: rows.filter((row) => !disruptive(row)).slice(0, 4).map(item),
+      atQuietHour: rows.filter(disruptive).slice(0, 3).map(item),
+      held: installs.filter((row) => row.machineId === machineId && row.blockedBy).slice(0, 2).map((row) => ({ ...item(row), kind: "blocked", reason: row.blockedBy })),
+    };
+  }) };
+}
 export function queryRows(kind: "updates" | "installs", query: URLSearchParams, skip = "") {
   const dimensions = kind === "updates" ? updateDims : catalogDims;
   let rows = installs.filter((row) => {
@@ -153,6 +169,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     }
     if (path === "/favicon.ico") { res.writeHead(204); res.end(); return; }
     if (path === "/api/summary") return json(res, 200, { installs: installs.length, packages: installs.length, described: installs.length, openProposals: proposals.length, updatable: installs.filter((r) => r.updatable).length, machines: machines.map((id) => ({ id, kind: "host" })) });
+    if (path === "/api/updates/window") return json(res, 200, updateWindows());
     if (path === "/api/updates/plan") return json(res, 200, plan(Number(url.searchParams.get("installId")), list(url.searchParams, "alsoInstallIds").map(Number)));
     if (path === "/api/downloads/plan") { const preview = downloadPlan(Number(url.searchParams.get("installId"))); return json(res, preview ? 200 : 404, preview || { error: "Install not found" }); }
     if (path === "/api/updates" || path === "/api/installs") return json(res, 200, listResponse(path.endsWith("updates") ? "updates" : "installs", url.searchParams));

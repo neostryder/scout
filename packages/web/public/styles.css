@@ -215,3 +215,11 @@ a.button:hover { background: var(--accent); color: var(--accent-ink); }
 @keyframes job-pulse { 50% { opacity: 0.35; } }
 @keyframes job-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 @media (prefers-reduced-motion: reduce) { .stages li.current, .stages.sweep span { animation: none; } .stages.sweep span { width: 100%; opacity: 0.5; } }
+.window-panel { border: 1px solid var(--chip); border-radius: 8px; padding: 4px 16px 12px; margin-bottom: 12px; }
+.window-panel[hidden], #plan-window[hidden] { display: none; }
+.window-machine { padding: 8px 0; border-top: 1px solid var(--chip); }
+.window-machine:first-of-type { border-top: 0; }
+.window-group { background: var(--chip); border-radius: 6px; padding: 4px 12px 12px; margin: 8px 0; }
+.window-group h4 { margin: 8px 0 2px; }
+.window-group.window-held { border-left: 4px solid var(--warn); }
+.window-group ul { margin: 6px 0 10px; padding-left: 20px; }
