@@ -7,6 +7,7 @@ import { createJobsResponse } from "./jobs-api.ts";
 export const WINDOW_TICK_MS = 60_000;
 /** The most updates one automatic run queues for a machine; what is left waits for the next window. */
 export const WINDOW_CAP_PER_MACHINE = 15;
+export const WINDOW_CAP_MAX = 100;
 
 export interface WindowRunState {
   enabled: boolean;
@@ -14,6 +15,8 @@ export interface WindowRunState {
   lastWindowStart: string | null;
   lastQueued: number;
   lastRunAt: string | null;
+  /** The most updates one run queues for a machine. */
+  cap: number;
   /** Updates the last run left for the next window because a machine was at its cap. */
   lastDeferred: number;
   /** Set when a failed job switched the run off, and cleared when it is switched on again. */
@@ -29,7 +32,7 @@ export interface WindowRunOptions {
   offsetMinutes?: () => number;
   log?: (line: string) => void;
   tickMs?: number;
-  /** Most updates queued per machine in one run. */
+  /** The cap a state file without one starts with. */
   cap?: number;
   /** Sends the finish and failure notices. Without it the run only logs. */
   notifier?: { send(notice: OutageNotice): Promise<unknown> };
@@ -45,10 +48,11 @@ const CLOCK: ScheduleClock = {
   clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
 };
 
-const EMPTY: WindowRunState = { enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null, lastDeferred: 0, pausedReason: null, batchIds: [] };
+const isCap = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= WINDOW_CAP_MAX;
 
-function readState(path: string | undefined): WindowRunState {
-  if (!path || !existsSync(path)) return { ...EMPTY };
+function readState(path: string | undefined, cap: number): WindowRunState {
+  const empty: WindowRunState = { enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null, cap, lastDeferred: 0, pausedReason: null, batchIds: [] };
+  if (!path || !existsSync(path)) return empty;
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<WindowRunState>;
     return {
@@ -56,11 +60,12 @@ function readState(path: string | undefined): WindowRunState {
       lastWindowStart: typeof raw.lastWindowStart === "string" ? raw.lastWindowStart : null,
       lastQueued: Number.isSafeInteger(raw.lastQueued) ? raw.lastQueued! : 0,
       lastRunAt: typeof raw.lastRunAt === "string" ? raw.lastRunAt : null,
+      cap: isCap(raw.cap) ? raw.cap : cap,
       lastDeferred: Number.isSafeInteger(raw.lastDeferred) ? raw.lastDeferred! : 0,
       pausedReason: typeof raw.pausedReason === "string" ? raw.pausedReason : null,
       batchIds: Array.isArray(raw.batchIds) ? raw.batchIds.filter((id): id is string => typeof id === "string") : [],
     };
-  } catch { return { ...EMPTY }; }
+  } catch { return empty; }
 }
 
 /** Picks at most `cap` of the ordered installs, keeping each dependency group whole so a library never runs without what uses it. The first group always goes, even past the cap, so a large group cannot starve. */
@@ -92,7 +97,7 @@ export class WindowRun {
     this.runner = runner;
     this.options = options;
     this.clock = options.clock ?? CLOCK;
-    this.state = readState(options.path);
+    this.state = readState(options.path, isCap(options.cap) ? options.cap : WINDOW_CAP_PER_MACHINE);
   }
 
   status(): WindowRunState { return { ...this.state }; }
@@ -101,6 +106,14 @@ export class WindowRun {
     this.state = { ...this.state, enabled, ...(enabled ? { pausedReason: null, batchIds: [] } : {}) };
     this.save();
     if (enabled && this.started) this.tick();
+    return this.status();
+  }
+
+  /** Sets how many updates one run may queue for a machine. */
+  setCap(cap: number): WindowRunState {
+    if (!isCap(cap)) throw new Error(`cap must be a whole number from 1 to ${WINDOW_CAP_MAX}`);
+    this.state = { ...this.state, cap };
+    this.save();
     return this.status();
   }
 
@@ -137,7 +150,7 @@ export class WindowRun {
     let queued = 0;
     let deferred = 0;
     const batchIds: string[] = [];
-    const cap = this.options.cap ?? WINDOW_CAP_PER_MACHINE;
+    const cap = this.state.cap;
     try {
       for (const machine of planWindows(this.db, this.runner.deps.machines, now, offset).machines) {
         const wanted = [...machine.now, ...machine.atQuietHour].map((item) => item.installId);

@@ -187,9 +187,12 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
       return json(res, 200, await research.runNow(sources as string[] | undefined));
     }
     if (autoWindow && windowRun) {
-      const enabled = (JSON.parse(raw) as { enabled?: unknown } | null)?.enabled;
-      if (typeof enabled !== "boolean") throw new Error("enabled must be true or false");
-      return json(res, 200, windowRun.setEnabled(enabled));
+      const { enabled, cap } = (JSON.parse(raw) ?? {}) as { enabled?: unknown; cap?: unknown };
+      if (enabled === undefined && cap === undefined) throw new Error("enabled or cap is required");
+      if (enabled !== undefined && typeof enabled !== "boolean") throw new Error("enabled must be true or false");
+      if (cap !== undefined && (typeof cap !== "number" || !Number.isSafeInteger(cap) || cap < 1 || cap > 100)) throw new Error("cap must be a whole number from 1 to 100");
+      if (typeof cap === "number") windowRun.setCap(cap);
+      return json(res, 200, typeof enabled === "boolean" ? windowRun.setEnabled(enabled) : windowRun.status());
     }
     if (m) return json(res, 200, decideProposalRequest(db, Number(m[1]), JSON.parse(raw)));
     if (jobId && runner) return runner.stop(Number(jobId[1])) ? json(res, 200, jobResponse(db, Number(jobId[1]))) : json(res, jobResponse(db, Number(jobId[1])) ? 409 : 404, { error: "job cannot be stopped" });

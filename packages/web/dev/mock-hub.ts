@@ -46,7 +46,7 @@ function compare(a: Row, b: Row, key: string, dir: string) {
   const primary = order ? order.indexOf(av) - order.indexOf(bv) : ["installed", "available", "version"].includes(key) ? versionCompare(av || "", bv || "") : typeof av === "number" ? av - bv : String(av ?? "").localeCompare(String(bv ?? ""), undefined, { sensitivity: "base" });
   return primary ? primary * (dir === "desc" ? -1 : 1) : a.name.localeCompare(b.name) || a.machineId.localeCompare(b.machineId);
 }
-const autoRun = { enabled: false, lastWindowStart: null as string | null, lastQueued: 0, lastRunAt: null as string | null, lastDeferred: 0, pausedReason: null as string | null, batchIds: [] as string[] };
+const autoRun = { enabled: false, lastWindowStart: null as string | null, lastQueued: 0, lastRunAt: null as string | null, cap: 15, lastDeferred: 0, pausedReason: null as string | null, batchIds: [] as string[] };
 export function updateWindows() {
   const now = new Date();
   const start = new Date(now); start.setHours(3, 30, 0, 0); if (start.getTime() <= now.getTime()) start.setDate(start.getDate() + 1);
@@ -173,8 +173,11 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (path === "/api/updates/window") return json(res, 200, updateWindows());
     if (path === "/api/updates/window/auto" && req.method === "POST") {
       let body: Row; try { body = JSON.parse(await new Promise<string>((resolveBody) => { let data = ""; req.on("data", (part) => data += part); req.on("end", () => resolveBody(data)); })); } catch { return json(res, 400, { error: "Invalid JSON" }); }
-      if (typeof body?.enabled !== "boolean") return json(res, 400, { error: "enabled must be true or false" });
-      autoRun.enabled = body.enabled;
+      if (body?.enabled === undefined && body?.cap === undefined) return json(res, 400, { error: "enabled or cap is required" });
+      if (body.enabled !== undefined && typeof body.enabled !== "boolean") return json(res, 400, { error: "enabled must be true or false" });
+      if (body.cap !== undefined && (!Number.isSafeInteger(body.cap) || body.cap < 1 || body.cap > 100)) return json(res, 400, { error: "cap must be a whole number from 1 to 100" });
+      if (typeof body.enabled === "boolean") autoRun.enabled = body.enabled;
+      if (typeof body.cap === "number") autoRun.cap = body.cap;
       return json(res, 200, { ...autoRun });
     }
     if (path === "/api/updates/plan") return json(res, 200, plan(Number(url.searchParams.get("installId")), list(url.searchParams, "alsoInstallIds").map(Number)));

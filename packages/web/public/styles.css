@@ -224,3 +224,5 @@ a.button:hover { background: var(--accent); color: var(--accent-ink); }
 .window-group.window-held { border-left: 4px solid var(--warn); }
 .window-group ul { margin: 6px 0 10px; padding-left: 20px; }
 .window-auto { display: flex; gap: 8px; align-items: center; margin: 8px 0 0; font-weight: 600; }
+.window-cap { display: flex; gap: 8px; align-items: center; margin: 4px 0 8px; }
+.window-cap input { width: 5em; }

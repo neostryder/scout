@@ -90,3 +90,8 @@ test("the mock hub serves the window plan and the new files", async () => {
     for (const file of ["update-window.js", "update-window-model.js"]) assert.equal((await fetch(`${base}/${file}`)).status, 200);
   } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
 });
+
+test("the automatic note names the cap that is set", () => {
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: null, lastQueued: 0, lastRunAt: null, cap: 40 }, quiet()), /up to 40 updates per machine/);
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 40, lastRunAt: "2026-10-25T10:31:00.000Z", cap: 40, lastDeferred: 18 }, quiet()), /more than 40 to run/);
+});

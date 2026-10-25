@@ -220,3 +220,46 @@ test("switching the run back on clears the pause", (t) => {
   assert.equal(run.status().pausedReason, null);
   assert.equal(run.status().enabled, true);
 });
+
+test("the cap can be changed, is kept across a restart, and rejects values outside 1 to 100", (t) => {
+  const { db, runner } = seedMany(t, 5);
+  const dir = mkdtempSync(join(tmpdir(), "scout-window-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "update-window.json");
+  const first = new WindowRun(db, runner, { path, clock: clockAt({ value: outside }), offsetMinutes: () => 0 });
+  assert.equal(first.status().cap, 15);
+  assert.equal(first.setCap(3).cap, 3);
+  assert.equal(new WindowRun(db, runner, { path }).status().cap, 3);
+  for (const bad of [0, 101, 2.5, Number.NaN]) assert.throws(() => first.setCap(bad), /whole number from 1 to 100/);
+  assert.equal(first.status().cap, 3);
+  const capped = new WindowRun(db, runner, { path, clock: clockAt({ value: inWindow }), offsetMinutes: () => 0 });
+  capped.start();
+  capped.setEnabled(true);
+  assert.equal(jobCount(db), 3);
+  assert.equal(capped.status().lastDeferred, 2);
+});
+
+test("the auto route sets the cap on its own and rejects a bad one", async (t) => {
+  const { db } = seed(t);
+  const server = createHub({ db, webRoot: process.cwd(), jobs: { machines, exec } });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const port = (server.address() as AddressInfo).port;
+  const call = (body: unknown) => new Promise<{ status: number; data: any }>((resolve, reject) => {
+    const req = request({ host: "127.0.0.1", port, path: "/api/updates/window/auto", method: "POST", headers: { host: `127.0.0.1:${port}`, "content-type": "application/json" } }, (res) => {
+      let text = "";
+      res.on("data", (chunk) => text += chunk);
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, data: JSON.parse(text) }));
+    });
+    req.on("error", reject);
+    req.end(JSON.stringify(body));
+  });
+  const set = await call({ cap: 7 });
+  assert.equal(set.status, 200);
+  assert.equal(set.data.cap, 7);
+  assert.equal(set.data.enabled, false);
+  assert.equal((await call({ cap: 0 })).status, 400);
+  assert.equal((await call({ cap: "7" })).status, 400);
+  assert.equal((await call({})).status, 400);
+  assert.equal((await call({ cap: 9, enabled: true })).data.cap, 9);
+});
