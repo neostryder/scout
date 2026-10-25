@@ -6,6 +6,7 @@ import { workspaceKindLabel, healthLabel, healthTone, latencyText, tlsText, spar
 import { rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, stackFilter, stackEventReducer } from "./services-model.js";
 import { renderDiagram } from "./services-diagram.js";
 import { createOutagesPanel } from "./outages.js";
+import { SNAPSHOT_KEY, SNAPSHOT_ROUTES, SNAPSHOT_SAVE_EVERY_MS, packSnapshot, unpackSnapshot, snapshotNote } from "./services-snapshot.js";
 
 const PAGE = 100;
 const TABS = ["services", "listeners", "activity", "actions", "recipes", "domains", "alerts", "health", "outages", "ports", "stacks"];
@@ -16,7 +17,7 @@ const date = (value) => value ? new Date(value).toLocaleString() : "None";
 export function createServicesView(root) {
   const portsState = { ports: null, supported: false };
   const stacksState = { stacks: [], supported: false };
-  const state = { shown: false, params: new URLSearchParams(), limit: PAGE, machines: [], listeners: [], routes: [], actionRows: [], runningActions: 0, recipes: [], recipeCounts: { proposed: 0, approved: 0 }, recipeSupported: false, alerts: [], alertCounts: { open: 0, high: 0 }, mutes: [], alertFile: ".scout-data/alerts.json", alertError: "", alertSupported: true, health: { targets: [], counts: healthCounts(), probe: { running: false, done: 0, total: 0 }, hello: null }, workspaceInstalls: [], healthSupported: true, healthOff: false, healthError: "", edge: { state: "never", lastReadAt: null, error: null }, edgeOverview: { domains: 0, originDown: 0, dnsDangling: 0 }, descriptionOverview: null, describe: null, describeError: "", describeMessage: "", edgeProgress: null, data: null, dataTab: "", probes: {}, source: null, poll: null, tick: null, debounce: null, searchTimer: null, controller: null, detailController: null, sequence: 0, livePaused: false, pending: {}, loading: {}, liveMachines: new Map(), previous: new Map(), readings: new Map(), changed: new Set(), frames: new Set() };
+  const state = { shown: false, params: new URLSearchParams(), limit: PAGE, machines: [], listeners: [], routes: [], actionRows: [], runningActions: 0, recipes: [], recipeCounts: { proposed: 0, approved: 0 }, recipeSupported: false, alerts: [], alertCounts: { open: 0, high: 0 }, mutes: [], alertFile: ".scout-data/alerts.json", alertError: "", alertSupported: true, health: { targets: [], counts: healthCounts(), probe: { running: false, done: 0, total: 0 }, hello: null }, workspaceInstalls: [], raw: {}, snapshotAt: null, snapshotSavedAt: 0, healthSupported: true, healthOff: false, healthError: "", edge: { state: "never", lastReadAt: null, error: null }, edgeOverview: { domains: 0, originDown: 0, dnsDangling: 0 }, descriptionOverview: null, describe: null, describeError: "", describeMessage: "", edgeProgress: null, data: null, dataTab: "", probes: {}, source: null, poll: null, tick: null, debounce: null, searchTimer: null, controller: null, detailController: null, sequence: 0, livePaused: false, pending: {}, loading: {}, liveMachines: new Map(), previous: new Map(), readings: new Map(), changed: new Set(), frames: new Set() };
   let effects = true;
   try { effects = localStorage.getItem("scout.services.effects") !== "off"; } catch {}
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
@@ -170,7 +171,7 @@ export function createServicesView(root) {
   function renderFigures(animate = true) {
     const serviceCount = state.machines.reduce((sum, machine) => sum + machine.services.total, 0);
     const portCount = state.machines.reduce((sum, machine) => sum + machine.listeners.total, 0);
-    subtitle.textContent = `${state.machines.length} machines, ${serviceCount} services, ${portCount} listening ports`;
+    subtitle.textContent = `${state.machines.length} machines, ${serviceCount} services, ${portCount} listening ports${state.snapshotAt ? ` (${snapshotNote(state.snapshotAt, Date.now())})` : ""}`;
     const entries = [["Services", serviceCount], ["Listening ports", portCount], ["Running", state.machines.reduce((sum, machine) => sum + machine.services.running, 0)], ["Could disable", state.machines.reduce((sum, machine) => sum + machine.services.optionalRunning, 0)], ["Domains", state.edgeOverview.domains], ["Needs attention", state.edgeOverview.originDown + state.edgeOverview.dnsDangling], ["Descriptions", `${state.descriptionOverview?.described ?? 0} of ${state.descriptionOverview?.total ?? 0} described`]];
     const old = [...figures.querySelectorAll("strong")].map((node) => Number(node.textContent));
     for (const frame of state.frames) cancelAnimationFrame(frame); state.frames.clear();
@@ -274,6 +275,8 @@ export function createServicesView(root) {
         node.hidden = false; node.textContent = `${route === "table" ? title(currentTab) : "Atlas"}: ${result.reason.message} Use Refresh now to retry.`;
         continue;
       }
+      if (SNAPSHOT_ROUTES.includes(route)) state.raw[route] = result.value;
+      if (route === "overview") state.snapshotAt = null;
       if (route === "recipeRows") {
         state.recipeSupported = true; state.recipes = result.value.recipes; state.recipeCounts = result.value.counts; paintRecipeTab();
         if (currentTab === "recipes") renderRecipes();
@@ -312,6 +315,28 @@ export function createServicesView(root) {
     if (routes.overview || routes.atlas || routes.routes || routes.edgeOverview) paintAtlas();
     if (routes.edgeOverview) renderFigures(false);
     renderMachines(); renderLenses();
+    if (routes.overview) saveSnapshot();
+  }
+  /** Keeps the last reads in the browser, at most once a minute, so the next cold start can paint them first. */
+  function saveSnapshot() {
+    const now = Date.now();
+    if (state.snapshotAt || now - state.snapshotSavedAt < SNAPSHOT_SAVE_EVERY_MS) return;
+    const text = packSnapshot(state.raw, now);
+    if (!text) return;
+    state.snapshotSavedAt = now;
+    try { localStorage.setItem(SNAPSHOT_KEY, text); } catch {}
+  }
+  /** Draws the saved map before the first read answers. A live read then replaces it. */
+  function paintSnapshot() {
+    if (state.machines.length || state.listeners.length) return;
+    let saved = null;
+    try { saved = unpackSnapshot(localStorage.getItem(SNAPSHOT_KEY), Date.now()); } catch {}
+    if (!saved) return;
+    state.machines = saved.overview.machines.map((machine) => ({ ...machine, live: { ...machine.live, state: "stale" } }));
+    state.edge = saved.routes.reader; state.edgeOverview = saved.edgeOverview.totals;
+    state.routes = routeChipOrder(saved.routes.rows.map(routeRow)); state.listeners = saved.atlas.rows;
+    state.snapshotAt = saved.at;
+    renderFigures(false); paintLive(); paintAtlas(); renderMachines();
   }
   function cell(label, content, className = "") { return h("td", { "data-label": label, class: className }, content); }
   function heading(label, sort) {
@@ -905,7 +930,7 @@ export function createServicesView(root) {
   return {
     show(params) {
       state.shown = true; root.hidden = false; state.params = new URLSearchParams(params); state.phoneDefault = matchMedia("(max-width: 719px)").matches; state.limit = PAGE; state.data = null; tableStatus.textContent = "The catalog is loading.";
-      syncControls(); load(); startLive(); clearInterval(state.tick); state.tick = setInterval(tick, 1000);
+      syncControls(); paintSnapshot(); load(); startLive(); clearInterval(state.tick); state.tick = setInterval(tick, 1000);
     },
     hide() {
       state.shown = false; root.hidden = true; stopLive(); clearInterval(state.tick); clearTimeout(state.searchTimer); state.tick = null;
