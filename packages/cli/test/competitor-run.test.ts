@@ -43,3 +43,26 @@ test("probe reads a watch source once and saves nothing", async (t) => {
   assert.equal(read.error, null);
   await assert.rejects(() => runCompetitorTool("probe", JSON.stringify({ kind: "json", url: "http://example.com/v.json", versionPath: "v" }), paths, fetcher), /https/);
 });
+
+test("facts reads a span from GitHub, says whether it is version-only, and saves nothing", async (t) => {
+  const paths = harness(t);
+  const from = "a".repeat(40);
+  const to = "b".repeat(40);
+  const reply = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+  const fetcher = async (url: string) => {
+    const path = url.replace("https://api.github.com/repos/example/demo-module", "");
+    if (path === "") return reply({ default_branch: "main" });
+    if (path.startsWith("/contents?")) return reply([{ name: "module.json" }]);
+    if (path.startsWith("/contents/")) return reply({ id: "demo" });
+    if (path.startsWith("/compare/")) return reply({ total_commits: 1, base_commit: { commit: { committer: { date: "2026-10-20T00:00:00Z" } } }, commits: [{ sha: to, commit: { message: "Bump", committer: { date: "2026-10-24T00:00:00Z" } } }] });
+    if (path.startsWith("/commits/")) return reply({ files: [{ filename: "module.json", patch: '@@ -1 +1 @@\n-  "version": "1.0.0",\n+  "version": "1.0.1",' }] });
+    if (path.startsWith("/releases")) return reply([]);
+    return { ok: false, status: 404, json: async () => ({}), text: async () => "" };
+  };
+  const args = JSON.stringify({ name: "Example Module", remoteUrl: "https://github.com/example/demo-module", from: { version: "1.0.0", commit: from }, to: { version: "1.0.1", commit: to } });
+  const result = (await runCompetitorTool("facts", args, paths, fetcher)) as { versionOnly: boolean; releaseDraft?: string };
+  assert.equal(result.versionOnly, true);
+  assert.match(result.releaseDraft ?? "", /^# Example Module 1\.0\.0 to 1\.0\.1/);
+  assert.deepEqual(await runCompetitorTool("queue", undefined, paths), { runs: [] });
+  await assert.rejects(() => runCompetitorTool("facts", JSON.stringify({ runId: 99 }), paths, fetcher), /no queued or claimed run/);
+});
