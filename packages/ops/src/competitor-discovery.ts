@@ -234,10 +234,10 @@ export function minimaxJudge(options: { post?: PostLike; readKey?: KeyReader } =
 const JEV_QUESTIONS = {
   competitor: {
     type: "noul",
-    instructions: "Would the owner of our products want to keep an eye on this public project as a competitor or close neighbor of one of the products in `ourProducts`? Count a tool a game master or player could use for part of what a product does, or in its place, including add-ons for the same virtual tabletop.",
+    instructions: "Would the owner of our products want to keep an eye on this public project as a competitor or close neighbor of one of the products in `ourProducts`? Count a tool a game master or player could use for part of what a product does, or in its place. Running on the same virtual tabletop is not enough on its own.",
     criteria: {
-      true: "The project is software for game masters or players of tabletop role-playing games, or for the same game, that overlaps part of what one of our products does: content or lore management, campaign or session help, AI assistants, generators for NPCs, items, quests, maps, or backstories, importers and converters, or modules that extend the same virtual tabletop.",
-      false: "The project is a game system, a rules or content pack with no tooling, a library for developers, a character sheet, a website, or a different kind of software that only shares a theme with our products.",
+      true: "The project is software for game masters or players of tabletop role-playing games, or for the same game, that overlaps part of what one of our products does: content or lore management, campaign or session help, AI assistants, generators for NPCs, items, quests, maps, or backstories, importers and converters, or modules for the same virtual tabletop that do one of those jobs.",
+      false: "The project is a game system or its implementation, a rules or content pack with no tooling, an art, sound, or effects pack, a performance or file utility, a visual or animation effect, a library for developers, a character sheet, a website, or a different kind of software that only shares a theme or a platform with our products.",
     },
   },
   worthTracking: {
