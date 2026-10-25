@@ -391,3 +391,23 @@ test("a failed Track keeps the dialog open and shows the hub's reason", async (t
   assert.equal(dialog.open, true);
   assert.match(allText(dialog), /already tracked/);
 });
+
+test("passed-over projects sit in a closed list with their scores, and Track anyway adds one", async (t) => {
+  const passed = candidate({ id: "github-acme-sheets", name: "Sheets", passedOver: true, status: "dismissed", judgement: { summary: "A character sheet.", overlaps: [], competitor: 0.2, worthTracking: 0.9, needs: { competitor: 0.6, worthTracking: 0.4 } } });
+  const page = await open(t, (url) => (url.endsWith("/candidates") ? { configured: true, discovery: null, candidates: [], passedOver: [passed] } : url.endsWith("/track") ? { state: "tracked", mirror: false, mirrorNote: "no clone yet" } : ok([row()])));
+  const details = walk(page.root).find((el) => el.tag === "details")!;
+  assert.equal(details.hidden, false);
+  assert.match(allText(details), /Passed over \(1\)/);
+  assert.match(allText(details), /Competitor 0\.20 of 0\.60 needed, worth watching 0\.90 of 0\.40 needed/);
+  assert.equal(walk(details).some((el) => el.attrs["data-dismiss"]), false);
+  await click(button(details, "Track anyway")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  await click(button(dialog, "Track")!);
+  assert.equal(page.calls.find((call) => call.url === "/api/competitors/candidates/github-acme-sheets/track")?.method, "POST");
+  assert.match(allText(page.root), /No local copy yet: no clone yet\./);
+});
+
+test("the passed-over list is hidden when there is nothing in it", async (t) => {
+  const page = await open(t, panel([candidate()]));
+  assert.equal(walk(page.root).find((el) => el.tag === "details")?.hidden, true);
+});

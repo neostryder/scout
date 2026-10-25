@@ -30,6 +30,8 @@ export interface CompetitorScheduleOptions {
   syncStartupDelayMs?: number;
   syncPauseMs?: number;
   sync?: (db: Db, id: string, now: string, timeoutMs: number) => Promise<{ ok: true; cwd: string; head: string } | { ok: false; error: string }>;
+  /** Clones a tracked project into the mirror root so its changes can be counted. Absent in tests that do not need it. */
+  clone?: (remoteUrl: string, folder: string) => Promise<{ ok: true; head: string } | { ok: false; error: string }>;
   research?: (db: Db, id: string, now: string) => Promise<{ request: Record<string, unknown>; delta: ResearchDelta; toVersion: string | null; toCommit: string | null } | { error: string }>;
   notifier?: Pick<Notifier, "send">;
   log?: (line: string) => void;
@@ -170,13 +172,23 @@ export class CompetitorSchedule {
   }
 
   /** Adds a competitor to the registry. A repository address also gets a first baseline from one read of it, so the next check can tell what is new. */
-  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null }): Promise<void> {
+  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null }): Promise<{ mirror: boolean; note: string | null }> {
     let baseline: { version: string | null; commit: string | null; at: string; source: string } | null = null;
     if (entry.remoteUrl && this.options.check) {
       const read = await this.options.check(entry.remoteUrl).catch(() => null);
       if (read && !read.error && (read.version || read.commit)) baseline = { version: read.version, commit: read.commit, at: this.iso().slice(0, 10), source: "tracked" };
     }
     this.rewriteConfig((text) => applyAddChange(text, { ...entry, baseline }));
+    if (!entry.remoteUrl || !this.options.clone) return { mirror: false, note: null };
+    // The clone is best effort: a project that cannot be mirrored is still tracked through its remote.
+    try {
+      const cloned = await this.options.clone(entry.remoteUrl, entry.id);
+      if (!cloned.ok) return { mirror: false, note: cloned.error };
+      this.updateRepo(entry.id, { remoteUrl: entry.remoteUrl, folder: entry.id, baseline: { commit: cloned.head, ...(baseline?.version ? { version: baseline.version } : {}) } });
+      return { mirror: true, note: null };
+    } catch (error) {
+      return { mirror: false, note: this.plain(error) };
+    }
   }
 
   /** Removes a competitor from the registry. A competitor with research in progress stays until that finishes. */

@@ -24,12 +24,16 @@ export interface CandidateJudgement {
   /** Jev's probabilities, 0 to 1. */
   competitor: number;
   worthTracking: number;
+  /** The bars this project was held to, so the page can say why it was or was not offered. */
+  needs?: { competitor: number; worthTracking: number };
 }
 
 export interface Candidate extends CandidateSource {
   id: string;
   status: CandidateStatus;
   score: number;
+  /** True when the run read the project and held it back; it can still be tracked from the passed-over list. */
+  passedOver: boolean;
   judgement: CandidateJudgement | null;
   foundAt: string;
   decidedAt: string | null;
@@ -38,13 +42,13 @@ export interface Candidate extends CandidateSource {
 interface Row {
   id: string; source_key: string; source: string; name: string; org: string | null; url: string; repo_url: string | null;
   description: string; topics_json: string; stars: number; pushed_at: string | null; score: number; judge_json: string | null;
-  status: string; found_at: string; decided_at: string | null;
+  status: string; found_at: string; decided_at: string | null; passed_over: number;
 }
 
 const toCandidate = (row: Row): Candidate => ({
   id: row.id, key: row.source_key, source: "github", name: row.name, org: row.org, url: row.url, repoUrl: row.repo_url,
   description: row.description, topics: JSON.parse(row.topics_json) as string[], stars: row.stars, pushedAt: row.pushed_at,
-  status: row.status as CandidateStatus, score: row.score, judgement: row.judge_json ? JSON.parse(row.judge_json) as CandidateJudgement : null,
+  status: row.status as CandidateStatus, score: row.score, passedOver: row.passed_over === 1, judgement: row.judge_json ? JSON.parse(row.judge_json) as CandidateJudgement : null,
   foundAt: row.found_at, decidedAt: row.decided_at,
 });
 
@@ -65,12 +69,17 @@ export function saveCandidate(db: Db, source: CandidateSource, judgement: Candid
   return Number(result.changes) > 0 ? getCandidate(db, id) : null;
 }
 
-/** Remembers a project that was read and found not to be a competitor, so the next run skips it. */
-export function rememberRejected(db: Db, source: CandidateSource, now: string): void {
+/** Remembers a project that was read and held back, with the reasoning, so the next run skips it and the owner can see why and still track it. */
+export function rememberPassedOver(db: Db, source: CandidateSource, judgement: CandidateJudgement, score: number, now: string): void {
   db.prepare(`INSERT OR IGNORE INTO competitor_candidates
-    (id, source_key, source, name, org, url, repo_url, description, topics_json, stars, pushed_at, score, judge_json, status, found_at, decided_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, '', '[]', ?, ?, 0, NULL, 'dismissed', ?, ?)`)
-    .run(candidateId(source.key), source.key, source.source, source.name, source.org, source.url, source.repoUrl, source.stars, source.pushedAt, now, now);
+    (id, source_key, source, name, org, url, repo_url, description, topics_json, stars, pushed_at, score, judge_json, status, found_at, decided_at, passed_over)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dismissed', ?, ?, 1)`)
+    .run(candidateId(source.key), source.key, source.source, source.name, source.org, source.url, source.repoUrl, source.description.slice(0, 1000), JSON.stringify(source.topics.slice(0, 20)), source.stars, source.pushedAt, score, JSON.stringify(judgement), now, now);
+}
+
+/** Projects the run read and held back, strongest first. */
+export function listPassedOver(db: Db, limit = 200): Candidate[] {
+  return (db.prepare("SELECT * FROM competitor_candidates WHERE passed_over = 1 AND status = 'dismissed' ORDER BY score DESC, found_at DESC LIMIT ?").all(limit) as unknown as Row[]).map(toCandidate);
 }
 
 export function getCandidate(db: Db, id: string): Candidate | null {

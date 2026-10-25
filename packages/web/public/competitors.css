@@ -47,4 +47,8 @@
 .competitors .candidate .t { font-weight: 600; }
 .competitors .candidate .summary { margin: 4px 0; overflow-wrap: anywhere; }
 .competitors .candidate .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+.competitors .passed-over { margin-top: 16px; }
+.competitors .passed-over[hidden] { display: none; }
+.competitors .passed-over > summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.competitors .passed-over > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .competitors .candidate a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, candidateFacts, candidateSummary, overlapText, sortCandidates } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -155,4 +155,13 @@ test("a candidate shows its facts, the judge's summary or the project's own, and
   assert.equal(overlapText({ judgement: { overlaps: [] } }), "");
   assert.deepEqual(sortCandidates([{ name: "b", score: 0.5 }, { name: "a", score: 0.5 }, { name: "c", score: 0.9 }]).map((item: { name: string }) => item.name), ["c", "a", "b"]);
   assert.deepEqual(sortCandidates(undefined), []);
+});
+
+test("a tracked project says whether a local copy is kept, and a candidate's scores sit next to the bars", () => {
+  assert.equal(trackedText("Mapper", { mirror: true }), "Mapper added to the competitor list. A local copy is kept so changes can be counted.");
+  assert.equal(trackedText("Mapper", { mirror: false, mirrorNote: "the repository is 900 MB, over the 391 MB limit for an automatic mirror" }), "Mapper added to the competitor list. No local copy yet: the repository is 900 MB, over the 391 MB limit for an automatic mirror.");
+  assert.equal(trackedText("Mapper", {}), "Mapper added to the competitor list.");
+  assert.equal(scoreText({ judgement: { competitor: 0.2, worthTracking: 0.9, needs: { competitor: 0.6, worthTracking: 0.4 } } }), "Competitor 0.20 of 0.60 needed, worth watching 0.90 of 0.40 needed.");
+  assert.equal(scoreText({ judgement: { competitor: 0.7, worthTracking: 0.6 } }), "Competitor 0.70, worth watching 0.60.");
+  assert.equal(scoreText({ judgement: null }), "");
 });

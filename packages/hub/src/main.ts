@@ -13,7 +13,7 @@ import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAl
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, jevDecider, loadDiscoveryConfig, minimaxJudge, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
+import { checkRemote, cloneMirror, githubRepoSizeKb, jevDecider, loadDiscoveryConfig, minimaxJudge, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
@@ -89,6 +89,13 @@ const competitors = new CompetitorSchedule(db, {
   sync: async (catalog, id, now, timeoutMs) => {
     try { return await syncCompetitorMirror(catalog, id, { mirrorRoot: readMirrorRoot(), now, timeoutMs }); }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "competitors file is not readable" }; }
+  },
+  clone: async (remote, folder) => {
+    try {
+      const sizeKb = await githubRepoSizeKb(remote, (url, init) => fetch(url, init));
+      const cloned = await cloneMirror(remote, readMirrorRoot(), folder, { sizeKb });
+      return cloned.ok ? { ok: true, head: cloned.head } : cloned;
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "competitors file is not readable" }; }
   },
   research: async (catalog, id, now) => {
     const paths = competitorPaths(catalog, id);

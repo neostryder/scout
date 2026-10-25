@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listCandidates, openCatalog } from "@scout/core";
-import { gatherGithub, jevDecider, jsonFrom, loadDiscoveryConfig, minimaxJudge, runDiscovery, type DiscoveryConfig, type FetchLike } from "../src/competitor-discovery.ts";
+import { listCandidates, listPassedOver, openCatalog } from "@scout/core";
+import { calibrateDiscovery, gatherGithub, jevDecider, jsonFrom, loadDiscoveryConfig, minimaxJudge, runDiscovery, type DiscoveryConfig, type FetchLike } from "../src/competitor-discovery.ts";
 
 const config: DiscoveryConfig = {
   products: [{ name: "Map Maker", summary: "Draws dungeon maps for game masters." }],
@@ -78,7 +78,7 @@ test("discovery.json needs products and searches, and a missing file means disco
   try {
     assert.equal(loadDiscoveryConfig(dir), null);
     writeFileSync(join(dir, "discovery.json"), JSON.stringify({ products: [{ name: "P", summary: "s" }], github: { queries: ["topic:x"], perQuery: 5 }, ignore: ["Me"], maxJudged: 9 }));
-    assert.deepEqual(loadDiscoveryConfig(dir), { products: [{ name: "P", summary: "s" }], github: { queries: ["topic:x"], pushedWithinDays: 365, perQuery: 5 }, minCompetitor: 0.6, minWorthTracking: 0.4, maxJudged: 9, ignore: ["me"] });
+    assert.deepEqual(loadDiscoveryConfig(dir), { products: [{ name: "P", summary: "s" }], npm: null, github: { queries: ["topic:x"], pushedWithinDays: 365, perQuery: 5 }, minCompetitor: 0.6, minWorthTracking: 0.4, maxJudged: 9, ignore: ["me"] });
     writeFileSync(join(dir, "discovery.json"), JSON.stringify({ products: [] }));
     assert.throws(() => loadDiscoveryConfig(dir), /at least one product/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -87,4 +87,58 @@ test("discovery.json needs products and searches, and a missing file means disco
 test("a model answer with no JSON is an error", () => {
   assert.throws(() => jsonFrom("no object here"), /no JSON object/);
   assert.deepEqual(jsonFrom("x {\"a\":1} y"), { a: 1 });
+});
+
+test("a project that is read and held back keeps its reasoning and the bars it was held to, and is not judged again", async () => {
+  const db = openCatalog(":memory:");
+  try {
+    const fetcher = async () => ({ ok: true, status: 200, json: async () => ({ items: [{ full_name: "acme/Sheets", html_url: "https://github.com/acme/Sheets", name: "Sheets", owner: { login: "acme" }, description: "A character sheet.", topics: ["rpg"], stargazers_count: 9, pushed_at: "2026-10-01T00:00:00Z" }] }) });
+    const config = { products: [{ name: "Forge", summary: "Tools." }], github: { queries: ["topic:example"], pushedWithinDays: 365, perQuery: 20 }, minCompetitor: 0.6, minWorthTracking: 0.4, maxJudged: 10, ignore: [] };
+    const judge = { summarize: async () => ({ summary: "A character sheet.", overlaps: [] }) };
+    const decider = { decide: async () => ({ competitor: 0.2, worthTracking: 0.9 }) };
+    const first = await runDiscovery(db, { config, fetcher, judge, decider, now: new Date("2026-10-25T00:00:00Z") });
+    assert.deepEqual([first.offered, first.rejected], [0, 1]);
+    const kept = listPassedOver(db);
+    assert.equal(kept.length, 1);
+    assert.equal(kept[0]?.judgement?.summary, "A character sheet.");
+    assert.deepEqual(kept[0]?.judgement?.needs, { competitor: 0.6, worthTracking: 0.4 });
+    assert.equal(kept[0]?.score, 0.41);
+    const second = await runDiscovery(db, { config, fetcher, judge, decider, now: new Date("2026-11-01T00:00:00Z") });
+    assert.equal(second.judged, 0);
+  } finally { db.close(); }
+});
+
+test("known competitors are scored without being stored, and a project GitHub does not answer for is skipped", async () => {
+  const db = openCatalog(":memory:");
+  try {
+    const fetcher = async (url: string) => url.endsWith("/acme/Known") ? { ok: true, status: 200, json: async () => ({ full_name: "acme/Known", html_url: "https://github.com/acme/Known", name: "Known", owner: { login: "acme" }, description: "Maps.", topics: [], stargazers_count: 3, pushed_at: null }) } : { ok: false, status: 404, json: async () => ({}) };
+    const config = { products: [{ name: "Forge", summary: "Tools." }], github: { queries: ["x"], pushedWithinDays: 365, perQuery: 20 }, minCompetitor: 0.6, minWorthTracking: 0.4, maxJudged: 10, ignore: [] };
+    const out = await calibrateDiscovery({ config, known: [{ name: "Known", remoteUrl: "https://github.com/acme/Known.git" }, { name: "Gone", remoteUrl: "https://github.com/acme/Gone" }, { name: "Elsewhere", remoteUrl: "https://example.test/x" }], fetcher, judge: { summarize: async () => ({ summary: "Maps.", overlaps: ["Forge"] }) }, decider: { decide: async () => ({ competitor: 0.5, worthTracking: 0.9 }) } });
+    assert.deepEqual(out.rows.map((row) => [row.name, row.offered, row.competitor]), [["Known", false, 0.5]]);
+    assert.deepEqual(out.skipped, ["Gone", "Elsewhere"]);
+    assert.equal(listPassedOver(db).length, 0);
+  } finally { db.close(); }
+});
+
+test("npm packages that name a GitHub repository are judged as that repository, once, and anything else is dropped", async () => {
+  const { githubRepoFrom, gatherNpm } = await import("../src/competitor-discovery.ts");
+  assert.equal(githubRepoFrom("git+https://github.com/acme/Tool.git"), "https://github.com/acme/Tool");
+  assert.equal(githubRepoFrom({ type: "git", url: "git@github.com:acme/Tool.git" }), "https://github.com/acme/Tool");
+  assert.equal(githubRepoFrom("https://gitlab.com/acme/Tool"), null);
+  assert.equal(githubRepoFrom(undefined), null);
+  const seen: string[] = [];
+  const fetcher: FetchLike = async (url) => {
+    seen.push(url);
+    if (url.startsWith("https://registry.npmjs.org/")) return { ok: true, status: 200, json: async () => ({ objects: [
+      { package: { name: "a", links: { repository: "git+https://github.com/acme/Tool.git" } } },
+      { package: { name: "b", repository: { url: "https://github.com/acme/Known.git" } } },
+      { package: { name: "c", links: { repository: "https://gitlab.com/x/y" } } },
+      { package: { name: "d" } },
+    ] }) };
+    return { ok: true, status: 200, json: async () => ({ full_name: "acme/Tool", html_url: "https://github.com/acme/Tool", name: "Tool", owner: { login: "acme" }, description: "Does things.", topics: [], stargazers_count: 2, pushed_at: null }) };
+  };
+  const found = await gatherNpm({ ...config, npm: { queries: ["keywords:foundry-vtt"], perQuery: 20 } }, fetcher, new Set(["github:acme/known"]));
+  assert.deepEqual(found.map((project) => project.key), ["github:acme/tool"]);
+  assert.deepEqual(seen.filter((url) => url.startsWith("https://api.github.com")), ["https://api.github.com/repos/acme/Tool"]);
+  assert.deepEqual(await gatherNpm(config, fetcher, new Set()), []);
 });

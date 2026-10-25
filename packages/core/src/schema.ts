@@ -642,7 +642,8 @@ CREATE TABLE IF NOT EXISTS competitor_candidates (
   judge_json  TEXT,
   status      TEXT NOT NULL CHECK (status IN ('new','tracked','dismissed')),
   found_at    TEXT NOT NULL,
-  decided_at  TEXT
+  decided_at  TEXT,
+  passed_over INTEGER NOT NULL DEFAULT 0
 );
 
 -- Entries that start a program from inside the Repositories tree. Only the matched path is stored, never the command line.
