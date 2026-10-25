@@ -4,7 +4,7 @@ Scout reads a great deal about your machines and can change some of them. Every 
 
 ## What listens
 
-The hub is the only listener, and it binds to 127.0.0.1 (port 4870 by default) in every mode. Nothing on your network can reach it directly. The outage watch and its watchdog add no listener.
+The hub is the only listener, and it binds to 127.0.0.1 (port 4870 by default) in every mode. Nothing on your network can reach it directly. The outage watch and its watchdog add no listener. They do make one outbound call: the heartbeat post to the `relay-heartbeat` Worker, an empty request whose bearer token comes from Bitwarden Secrets Manager. The token is never written to disk or logged.
 
 In local mode there is no sign-in. The hub answers only requests whose Host is `127.0.0.1`, `localhost`, or `[::1]`, which blocks DNS rebinding. Requests that change anything must carry a JSON content type, which a cross-site form cannot send, and any Origin they carry must be a loopback one. The page is served with a strict Content-Security-Policy that allows only the hub's own scripts and styles and forbids framing.
 

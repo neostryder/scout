@@ -142,6 +142,14 @@ test("starting after a long silence records a monitor gap and a short one does n
   assert.equal(listOutages(again.db).length, 0);
 });
 
+test("each heartbeat is posted to the relay, and a relay that throws never stops the file write", async (t) => {
+  let posts = 0;
+  const { dir, watch } = setup(t, { state: "up" }, { relay: { post: () => { posts += 1; throw new Error("relay broke"); } } });
+  watch.start();
+  assert.equal(posts, 1);
+  assert.equal(JSON.parse(readFileSync(join(dir, "heartbeat.json"), "utf8")).at, "2026-10-10T08:00:00.000Z");
+});
+
 test("the Discord post carries the notice, refuses a non-Discord address and never mentions anyone", async (t) => {
   let body = "";
   const ok = new Notifier({ webhook: () => WEBHOOK, fetch: (async (_url: string, init: { body: string }) => { body = init.body; return { ok: true, status: 204 }; }) as never, desktop: async () => {}, log: () => {} });

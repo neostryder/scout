@@ -323,6 +323,8 @@ node packages/cli/src/main.ts outages watch machine mac-mini
 
 The hub writes `.scout-data/heartbeat.json` every 30 seconds. The watchdog (`pnpm --filter @scout/hub watchdog`) reads it every 60 seconds, and when it is more than 180 seconds old it sends the Discord post and the desktop notification, then a recovery notice with the duration once the heartbeat moves again. It never touches the catalog and runs the same way on Windows, macOS, and Linux. Run it as a second login service (see [Run the hub at login](#run-the-hub-at-login)). `--stale <seconds>` and `--interval <seconds>` change the two thresholds.
 
+Each beat is also sent to the `relay-heartbeat` Cloudflare Worker, which can notice when this whole machine is down. The hub makes an empty `POST` to `https://relay-heartbeat.rpgm-tools.workers.dev/beat/scout` with the Bitwarden secret `SCOUT_HEARTBEAT_BEAT_TOKEN` as the bearer token, so the hub process needs the same `bws` login it uses for Cloudflare. The token is read once and held in memory. When a post fails (no network, no token, a refused token), the hub drops it and logs a line the first time, then another when the relay answers again. The next beat tries again; a missing token is looked up again after 5 minutes. The file and the watchdog do not depend on any of this. Start the hub with `--no-relay` to skip the post.
+
 When the hub starts and finds its last heartbeat more than 5 minutes old, it records a `monitor-gap` outage, "Scout was not running", that covers the silence. An outage of the hub machine itself shows up this way once the machine is back. While the whole hub machine is down, nothing can send a notice: the watchdog covers a hub process that hangs or stops.
 
 ## Resource meters

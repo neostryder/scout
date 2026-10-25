@@ -17,6 +17,8 @@ export interface HubWatchOptions {
   machines: () => WatchedMachine[];
   configPath: string;
   heartbeatPath: string;
+  /** Posts each heartbeat to the relay Worker as well as the file. Omit it and only the file is written. */
+  relay?: { post(): void };
   notifier?: Notifier;
   alerts?: HubAlerts;
   clock?: LiveClock;
@@ -143,6 +145,7 @@ export class HubWatch {
       writeFileSync(tmp, JSON.stringify({ at: new Date(this.clock.now()).toISOString(), pid: process.pid, startedAt: this.startedAt }), "utf8");
       renameSync(tmp, this.options.heartbeatPath);
     } catch { (this.options.log ?? console.error)("The watch heartbeat could not be written."); }
+    try { this.options.relay?.post(); } catch { /* the relay reports its own failures and must never stop a beat */ }
   }
 
   private beat(): void {

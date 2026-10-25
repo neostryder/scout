@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Start the hub on loopback. Usage: node packages/hub/src/main.ts [--port 4870] [--db path] [--production] [--no-jobs] [--no-control] [--schedule] [--no-schedule] [--no-models] [--schedule-models] [--live] [--no-live] [--no-cloudflare] [--cloudflare-secret KEY] [--no-watch] [--watch-interval SECONDS] [--no-scan-schedule] [--scan-interval HOURS] [--no-competitor-watch]
 // The outage watch runs wherever live reads run (--production or --live) and checks every machine, public hostname and service every 2 minutes; --no-watch turns it off.
+// Each 30-second heartbeat is also posted to the relay-heartbeat Worker with the bws secret SCOUT_HEARTBEAT_BEAT_TOKEN; --no-relay turns the post off.
 // Notices go to the Discord webhook in SCOUT_DISCORD_WEBHOOK, when set, and to a desktop notification on this machine.
 // Models are off unless SCOUT_AI_TOOLKIT is set (see models.ts). The discovery button and the release-note refresh route use one on request; --no-models removes it. Release-note summaries and vendor-page reading spend model quota on their own schedule only with --schedule-models.
 // --production answers only the public host in access.json and only requests that carry a valid Cloudflare Access
@@ -12,7 +13,7 @@ import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAl
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
+import { checkRemote, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
@@ -23,6 +24,7 @@ import { DescriptionRun } from "./descriptions.ts";
 import { configuredProjects, createProjectDescriptionSource } from "./descriptions-project.ts";
 import { healthOptionsFromArgs } from "./health.ts";
 import { HubWatch, WATCH_INTERVAL_MS } from "./watch.ts";
+import { RELAY_SECRET, RelayBeat } from "./relay.ts";
 import { MeterSchedule } from "./meters.ts";
 import { HubMeterAlerts } from "./meter-alerts.ts";
 import { Notifier } from "./notify.ts";
@@ -102,7 +104,7 @@ const backupSettings = backupHealthSettingsReader(resolve(root, ".scout-data/bac
 const backup = liveOn ? { read: () => readBackupHealthFile(backupSettings()), notifier: new Notifier(), log: (line: string) => console.error(line) } : undefined;
 const watchSeconds = Number(opt("--watch-interval") ?? WATCH_INTERVAL_MS / 1000);
 if (!Number.isInteger(watchSeconds) || watchSeconds < 30) throw new Error("watch interval must be an integer of at least 30 seconds");
-const watch = liveOn && !args.includes("--no-watch") ? new HubWatch(db, { intervalMs: watchSeconds * 1000, machines: () => watchMachines(loadMachines(resolve(root, "machines.json"))), configPath: resolve(root, ".scout-data/watch.json"), heartbeatPath: resolve(root, ".scout-data/heartbeat.json") }) : undefined;
+const watch = liveOn && !args.includes("--no-watch") ? new HubWatch(db, { intervalMs: watchSeconds * 1000, machines: () => watchMachines(loadMachines(resolve(root, "machines.json"))), configPath: resolve(root, ".scout-data/watch.json"), heartbeatPath: resolve(root, ".scout-data/heartbeat.json"), ...(args.includes("--no-relay") ? {} : { relay: new RelayBeat({ token: () => readSecret(RELAY_SECRET), log: (line) => console.error(line) }) }) }) : undefined;
 const cloudflareOn = liveOn && !args.includes("--no-cloudflare");
 const cloudflareSecret = opt("--cloudflare-secret");
 // The lookup errors name the failure and never a value, so the reason is safe to print.
