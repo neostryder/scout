@@ -13,11 +13,12 @@ import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAl
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
+import { checkRemote, jevDecider, loadDiscoveryConfig, minimaxJudge, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
 import { CompetitorSchedule } from "./competitor-schedule.ts";
+import { DiscoverySchedule } from "./discovery-schedule.ts";
 import { changelogSummarizer, createAiModelRunner, vendorVersionExtractor } from "./models.ts";
 import { summarizeChangelogs } from "@scout/research";
 import { DescriptionRun } from "./descriptions.ts";
@@ -52,6 +53,20 @@ const dbPath = resolve(opt("--db") ?? `${root}/.scout-data/catalog.db`);
 const db = openCatalog(dbPath);
 const scans = new ScanSchedule(db, { machinesPath: resolve(root, "machines.json"), dbPath, root, intervalMs: scanIntervalMs, log: (line) => console.error(line) });
 const competitorConfig = resolve(root, ".scout-data/competitors.json");
+// New competitors are searched for once a week. Public GitHub facts go to MiniMax for a summary and to Jev for the decision, so no Claude usage is spent. The searches and product list live in the gitignored discovery.json.
+const discovery = new DiscoverySchedule({
+  path: resolve(root, ".scout-data/discovery-state.json"),
+  notifier: new Notifier(),
+  log: (line) => console.error(line),
+  run: async () => {
+    const config = loadDiscoveryConfig(resolve(root, ".scout-data"));
+    if (!config) throw new Error("discovery.json is not in the data folder");
+    const tracked = new Set<string>();
+    for (const row of catalogRows("SELECT remote_url AS a, package_url AS b FROM competitors")) for (const value of [row.a, row.b]) if (value) tracked.add(value.toLowerCase());
+    return runDiscovery(db, { config, fetcher: (url, init) => fetch(url, init), judge: minimaxJudge(), decider: jevDecider(), tracked, log: (line) => console.error(line) });
+  },
+});
+function catalogRows(sql: string): { a: string | null; b: string | null }[] { return db.prepare(sql).all() as unknown as { a: string | null; b: string | null }[]; }
 const readMirrorRoot = (): string => parseCompetitorsFile(readFileSync(competitorConfig, "utf8")).mirrorRoot;
 const competitors = new CompetitorSchedule(db, {
   configPath: competitorConfig,
@@ -120,9 +135,10 @@ const scheduled = !args.includes("--no-schedule") && (access || args.includes("-
 if (scheduled) research.start();
 if (scheduled && !args.includes("--no-scan-schedule")) scans.start();
 if (scheduled && !args.includes("--no-competitor-watch")) competitors.start();
+if (scheduled && !args.includes("--no-discovery")) discovery.start();
 // Release-note summaries run a few minutes after start and then daily, a small batch each time, only where the schedule runs.
 const summaries = model && scheduled && modelsOnSchedule ? [setTimeout(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 600_000), setInterval(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 86_400_000)] : [];
-const server = createHub({ db, scans, competitors, recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(meterAlerts ? { meterAlerts } : {}), ...(backup ? { backup } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), updateWindowPath: resolve(root, ".scout-data/update-window.json"), updateWindowSchedule: !!scheduled, updateWindowNotifier: new Notifier(), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json"), coalesceMs: 2000 }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
+const server = createHub({ db, scans, competitors, discovery, recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(meterAlerts ? { meterAlerts } : {}), ...(backup ? { backup } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), updateWindowPath: resolve(root, ".scout-data/update-window.json"), updateWindowSchedule: !!scheduled, updateWindowNotifier: new Notifier(), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json"), coalesceMs: 2000 }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
 live?.start();
 cloudflareSchedule?.start();
 server.once("close", () => { research.stop(); scans.stop(); competitors.stop(); live?.stop(); cloudflareSchedule?.stop(); for (const timer of summaries) clearTimeout(timer); });

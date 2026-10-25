@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, listCompetitorRuns, listCompetitors, type Db, type RunState } from "@scout/core";
+import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, getCandidate, listCandidates, listCompetitorRuns, listCompetitors, setCandidateStatus, type Db, type RunState } from "@scout/core";
 import type { CompetitorSchedule } from "./competitor-schedule.ts";
+import type { DiscoverySchedule } from "./discovery-schedule.ts";
 
 type SendJson = (res: ServerResponse, status: number, value: unknown) => void;
 
@@ -52,7 +53,7 @@ function runNumber(value: string): number {
   return id;
 }
 
-export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, schedule: CompetitorSchedule | undefined): Promise<void> {
+export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, schedule: CompetitorSchedule | undefined, discovery?: DiscoverySchedule): Promise<void> {
   const path = url.pathname;
   const read = req.method === "GET" || req.method === "HEAD";
   if (path === "/api/competitors") {
@@ -64,6 +65,11 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
     if (!schedule) return json(res, 404, { error: "competitor watch is off" });
     try { return json(res, 200, schedule.gateSettings()); } catch (error) { return json(res, 400, { error: (error as Error).message }); }
   }
+  if (path === "/api/competitors/candidates") {
+    if (!read) return json(res, 405, { error: "method not allowed" });
+    return json(res, 200, { configured: discovery !== undefined, discovery: discovery?.status() ?? null, candidates: listCandidates(db) });
+  }
+  const candidatePath = /^\/api\/competitors\/candidates\/([^/]+)\/(track|dismiss)$/.exec(path);
   const runPath = /^\/api\/competitors\/runs\/(\d+)\/(claim|complete|fail)$/.exec(path);
   const updatePath = /^\/api\/competitors\/([^/]+)\/update$/.exec(path);
   const watchPath = /^\/api\/competitors\/([^/]+)\/watch$/.exec(path);
@@ -77,7 +83,7 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
   }
   const repoPath = /^\/api\/competitors\/([^/]+)\/repo$/.exec(path);
   const removePath = /^\/api\/competitors\/([^/]+)\/remove$/.exec(path);
-  const known = path === "/api/competitors/check" || path === "/api/competitors/gate" || runPath || updatePath || watchPath || repoPath || removePath;
+  const known = path === "/api/competitors/discover" || candidatePath || path === "/api/competitors/check" || path === "/api/competitors/gate" || runPath || updatePath || watchPath || repoPath || removePath;
   if (req.method !== "POST") return json(res, known ? 405 : 404, { error: known ? "method not allowed" : "no such route" });
   const body = await readBody(req, res, hostAllowed, json);
   if (!body) return;
@@ -90,6 +96,25 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
       if (id !== undefined && (typeof id !== "string" || id.length < 1 || id.length > 80)) throw new Error("id must be a string up to 80 characters");
       const result = schedule.runNow(typeof id === "string" ? id : undefined);
       return result.started ? json(res, 202, { started: true }) : json(res, 409, { error: result.reason });
+    }
+    if (path === "/api/competitors/discover") {
+      if (!discovery) return json(res, 404, { error: "competitor discovery is off" });
+      only(body, []);
+      const result = discovery.runNow();
+      return result.started ? json(res, 202, { started: true }) : json(res, 409, { error: result.reason });
+    }
+    if (candidatePath?.[1] && candidatePath[2]) {
+      only(body, []);
+      const id = decodeURIComponent(candidatePath[1]);
+      const candidate = getCandidate(db, id);
+      if (!candidate) return json(res, 404, { error: "no such candidate" });
+      if (candidate.status !== "new") return json(res, 409, { error: `this candidate is already ${candidate.status}` });
+      if (candidatePath[2] === "track") {
+        if (!schedule) return json(res, 404, { error: "competitor watch is off" });
+        await schedule.addCompetitor({ id: candidate.id, name: candidate.name, org: candidate.org, remoteUrl: candidate.repoUrl, packageUrl: candidate.url });
+        return json(res, 200, setCandidateStatus(db, id, "tracked", now));
+      }
+      return json(res, 200, setCandidateStatus(db, id, "dismissed", now));
     }
     if (path === "/api/competitors/gate") {
       if (!schedule) return json(res, 404, { error: "competitor watch is off" });

@@ -334,3 +334,60 @@ test("a row that has a watch source cannot be removed from the page", async (t) 
   fire(toggle!, "change", { checked: false });
   assert.equal(walk(page.root).some((el) => el.tag === "button" && el.attrs["data-remove"] === "nofork"), false);
 });
+
+const candidate = (over: Record<string, unknown> = {}) => ({ id: "github-acme-mapper", name: "Mapper", org: "acme", url: "https://github.com/acme/Mapper", repoUrl: "https://github.com/acme/Mapper.git", stars: 5, pushedAt: "2026-10-01T00:00:00Z", description: "Maps.", judgement: { summary: "Draws battle maps.", overlaps: ["Map Maker"], competitor: 0.9, worthTracking: 0.8 }, score: 0.87, status: "new", ...over });
+const panel = (candidates: any[], discovery: Record<string, unknown> = { running: false, lastRunAt: "2026-10-25T03:30:00.000Z", lastResult: { gathered: 9, offered: 1 }, lastError: null }) => (url: string) => (url.endsWith("/candidates") ? { configured: true, discovery, candidates } : ok([row()]));
+
+test("possible competitors list under the table, and Track asks first, then adds the project and refreshes", async (t) => {
+  let tracked = false;
+  const page = await open(t, (url) => {
+    if (url.endsWith("/track")) { tracked = true; return { state: "tracked" }; }
+    return panel(tracked ? [] : [candidate()])(url);
+  });
+  const text = allText(page.root);
+  assert.match(text, /Possible competitors/);
+  assert.match(text, /Draws battle maps\./);
+  assert.match(text, /Overlaps Map Maker/);
+  assert.match(text, /Last search 2026-10-25 03:30, read 9, offered 1/);
+  await click(button(page.root, "Track")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  assert.equal(dialog.open, true);
+  assert.equal(page.calls.some((call) => call.url.includes("/track")), false);
+  await click(button(dialog, "Track")!);
+  const post = page.calls.find((call) => call.url === "/api/competitors/candidates/github-acme-mapper/track");
+  assert.equal(post?.method, "POST");
+  assert.equal(dialog.open, false);
+  assert.match(allText(page.root), /Nothing is waiting for a decision/);
+  assert.match(allText(page.root), /Mapper added to the competitor list/);
+});
+
+test("Dismiss posts at once, and Look for new ones starts a search", async (t) => {
+  const page = await open(t, panel([candidate()]));
+  await click(button(page.root, "Look for new ones")!);
+  assert.equal(page.calls.find((call) => call.url === "/api/competitors/discover")?.method, "POST");
+  await click(walk(page.root).find((el) => el.attrs["data-dismiss"] === "github-acme-mapper")!);
+  assert.equal(page.calls.find((call) => call.url === "/api/competitors/candidates/github-acme-mapper/dismiss")?.method, "POST");
+});
+
+test("a candidate without a repository address cannot be tracked, only dismissed", async (t) => {
+  const page = await open(t, panel([candidate({ repoUrl: null })]));
+  assert.equal(walk(page.root).some((el) => el.attrs["data-track"]), false);
+  assert.ok(walk(page.root).find((el) => el.attrs["data-dismiss"]));
+});
+
+test("the panel stays hidden when discovery is off or the hub is too old to know it", async (t) => {
+  const off = await open(t, (url) => (url.endsWith("/candidates") ? { configured: false, discovery: null, candidates: [] } : ok([row()])));
+  assert.equal(walk(off.root).find((el) => el.tag === "section")?.hidden, true);
+  const old = await open(t, (url) => (url.endsWith("/candidates") ? { status: 404, ok: false, json: async () => ({}) } : ok([row()])));
+  assert.equal(walk(old.root).find((el) => el.tag === "section")?.hidden, true);
+  assert.match(allText(old.root), /Acme Tools/);
+});
+
+test("a failed Track keeps the dialog open and shows the hub's reason", async (t) => {
+  const page = await open(t, (url) => (url.endsWith("/track") ? { status: 409, ok: false, json: async () => ({ error: "this candidate is already tracked" }) } : panel([candidate()])(url)));
+  await click(button(page.root, "Track")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  await click(button(dialog, "Track")!);
+  assert.equal(dialog.open, true);
+  assert.match(allText(dialog), /already tracked/);
+});

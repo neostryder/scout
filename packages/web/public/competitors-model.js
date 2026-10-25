@@ -190,3 +190,42 @@ export function repoFromForm({ remoteUrl, folder, commit, version }) {
   }
   return repo;
 }
+
+export const TRACK_CONFIRM = "Add this project to the competitor list and read its newest version now, so later checks can tell what is new. Nothing is installed.";
+
+/** The sentence under the panel title: when the last search ran, what it found, and why it stopped early if it did. */
+export function discoveryText(discovery) {
+  if (!discovery) return "";
+  if (discovery.running) return "Looking for new competitors now.";
+  if (discovery.lastError && !discovery.lastResult) return `The last search did not run: ${discovery.lastError}`;
+  if (!discovery.lastRunAt) return "No search has run yet. The first one runs on its own, or use Look for new ones.";
+  const when = String(discovery.lastRunAt).replace("T", " ").slice(0, 16);
+  const result = discovery.lastResult;
+  const found = result ? `, read ${result.gathered}, offered ${result.offered}` : "";
+  return `Last search ${when}${found}.${discovery.lastError ? ` It stopped early: ${discovery.lastError}` : ""}`;
+}
+
+/** One line of facts about a candidate: its owner, popularity, and how recently it changed. */
+export function candidateFacts(candidate) {
+  const parts = [];
+  if (candidate?.org) parts.push(candidate.org);
+  if (Number.isFinite(candidate?.stars)) parts.push(`${candidate.stars} ${candidate.stars === 1 ? "star" : "stars"}`);
+  if (candidate?.pushedAt) parts.push(`updated ${String(candidate.pushedAt).slice(0, 10)}`);
+  return parts.join(", ");
+}
+
+/** What the project is, in the judge's words when it has any, else the project's own description. */
+export function candidateSummary(candidate) {
+  return String(candidate?.judgement?.summary || candidate?.description || "").trim();
+}
+
+/** The products of ours that a candidate overlaps, or an empty string. */
+export function overlapText(candidate) {
+  const overlaps = Array.isArray(candidate?.judgement?.overlaps) ? candidate.judgement.overlaps.filter(Boolean) : [];
+  return overlaps.length ? `Overlaps ${overlaps.join(", ")}` : "";
+}
+
+/** Strongest first, then name. A copy. */
+export function sortCandidates(candidates) {
+  return [...(candidates || [])].sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || String(a.name).toLowerCase().localeCompare(String(b.name).toLowerCase()));
+}

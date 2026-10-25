@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, candidateFacts, candidateSummary, overlapText, sortCandidates } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -133,4 +133,26 @@ test("the watch form builds the stored object or says what is missing", () => {
   assert.throws(() => watchFromForm({ kind: "json", url: "https://example.test/v.json", versionPath: "" }), /path to the version/);
   assert.throws(() => watchFromForm({ kind: "hash", url: "" }), /address/);
   assert.throws(() => watchFromForm({ kind: "nope", url: "https://example.test" }), /Choose what to watch/);
+});
+
+test("discovery status says when the last search ran, what it found, and why it stopped", () => {
+  assert.equal(discoveryText(null), "");
+  assert.match(discoveryText({ running: true }), /Looking for new competitors now/);
+  assert.match(discoveryText({ running: false, lastRunAt: null, lastResult: null, lastError: null }), /No search has run yet/);
+  assert.match(discoveryText({ running: false, lastRunAt: null, lastResult: null, lastError: "discovery.json is missing" }), /did not run: discovery\.json is missing/);
+  const done = { running: false, lastRunAt: "2026-10-25T03:30:12.000Z", lastResult: { gathered: 40, offered: 2 }, lastError: null };
+  assert.equal(discoveryText(done), "Last search 2026-10-25 03:30, read 40, offered 2.");
+  assert.match(discoveryText({ ...done, lastError: "rate limited" }), /stopped early: rate limited/);
+});
+
+test("a candidate shows its facts, the judge's summary or the project's own, and what it overlaps", () => {
+  const candidate = { name: "Mapper", org: "acme", stars: 1, pushedAt: "2026-10-01T00:00:00Z", description: "Maps.", judgement: { summary: "Draws battle maps.", overlaps: ["Map Maker", "Dice"] }, score: 0.8 };
+  assert.equal(candidateFacts(candidate), "acme, 1 star, updated 2026-10-01");
+  assert.equal(candidateFacts({ stars: 12 }), "12 stars");
+  assert.equal(candidateSummary(candidate), "Draws battle maps.");
+  assert.equal(candidateSummary({ description: " Maps. ", judgement: null }), "Maps.");
+  assert.equal(overlapText(candidate), "Overlaps Map Maker, Dice");
+  assert.equal(overlapText({ judgement: { overlaps: [] } }), "");
+  assert.deepEqual(sortCandidates([{ name: "b", score: 0.5 }, { name: "a", score: 0.5 }, { name: "c", score: 0.9 }]).map((item: { name: string }) => item.name), ["c", "a", "b"]);
+  assert.deepEqual(sortCandidates(undefined), []);
 });

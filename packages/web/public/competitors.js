@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { analyzedText, baselineSource, checkedText, commitsText, countLine, defaultNewOnly, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortCompetitors, statusText, syncedText, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { analyzedText, baselineSource, candidateFacts, candidateSummary, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
 const postJson = (value) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
@@ -21,6 +21,9 @@ function statusClass(row) {
 /** The Competitors view. Update and Check now post JSON the same way the other pages do, and the browser sends the origin. */
 export function createCompetitorsView(root) {
   let rows = [];
+  let candidates = [];
+  let discovery = null;
+  let discoverConfigured = false;
   let checkedAt = null;
   let configured = true;
   let error = "";
@@ -43,12 +46,16 @@ export function createCompetitorsView(root) {
   const newOnlyInput = h("input", { type: "checkbox", onchange: (event) => { chosen = true; newOnly = event.target.checked; paint(); } });
   const toolbar = h("div", { class: "search-bar" }, h("label", { class: "search-label" }, "Search", search), h("label", { class: "competitors-new" }, newOnlyInput, "New only"));
   const tableWrap = h("div", { class: "table-wrap" });
+  const discover = h("button", { type: "button", "data-discover": "", onclick: () => discoverNow() }, "Look for new ones");
+  const candidatesNote = h("p", { class: "competitors-status" });
+  const candidatesList = h("div", { class: "candidates" });
+  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, candidatesList);
   const dialog = h("dialog", { "aria-labelledby": "competitor-confirm-title" });
 
   root.classList.add("competitors");
   root.replaceChildren(
     h("header", { class: "competitors-head" }, h("div", {}, h("h1", {}, "Competitors"), checked), h("div", { class: "actions" }, settings, check)),
-    toolbar, status, count, tableWrap, dialog,
+    toolbar, status, count, tableWrap, candidatesPanel, dialog,
   );
 
   function noteRuns() {
@@ -101,7 +108,33 @@ export function createCompetitorsView(root) {
     return h("table", { "aria-label": "Competitors" }, h("thead", {}, h("tr", {}, heads.map((label) => h("th", { scope: "col" }, label)))), h("tbody", {}, shown.map(rowView)));
   }
 
+  function candidateView(candidate) {
+    const safe = safeUrl(candidate.url);
+    const facts = candidateFacts(candidate);
+    const overlap = overlapText(candidate);
+    return h("article", { class: "candidate", "data-candidate": candidate.id },
+      h("div", { class: "t" }, safe ? h("a", { href: safe, target: "_blank", rel: "noopener noreferrer" }, candidate.name) : candidate.name),
+      facts ? h("div", { class: "org" }, facts) : [],
+      h("p", { class: "summary" }, candidateSummary(candidate)),
+      overlap ? h("div", { class: "commits" }, overlap) : [],
+      h("div", { class: "actions" },
+        candidate.repoUrl ? h("button", { type: "button", class: "primary", "data-track": candidate.id, "aria-label": `Track ${candidate.name}`, onclick: (event) => askTrack(candidate, event.currentTarget) }, "Track") : [],
+        h("button", { type: "button", "data-dismiss": candidate.id, "aria-label": `Dismiss ${candidate.name}`, onclick: () => decide(candidate, "dismiss") }, "Dismiss")),
+    );
+  }
+
+  function paintCandidates() {
+    const show = loaded && configured && discoverConfigured;
+    candidatesPanel.hidden = !show;
+    if (!show) return;
+    discover.disabled = Boolean(discovery?.running);
+    candidatesNote.textContent = discoveryText(discovery);
+    const waiting = sortCandidates(candidates);
+    candidatesList.replaceChildren(...(waiting.length ? waiting.map(candidateView) : [h("p", { class: "empty" }, "Nothing is waiting for a decision.")]));
+  }
+
   function paint() {
+    paintCandidates();
     const fresh = rows.filter((row) => row.status === "new").length;
     const badge = document.getElementById("competitors-count");
     if (badge) badge.textContent = loaded && configured && fresh ? String(fresh) : "";
@@ -136,6 +169,7 @@ export function createCompetitorsView(root) {
       if (!chosen) newOnly = defaultNewOnly(rows);
       error = "";
       noteRuns();
+      await loadCandidates(mine);
     } catch (cause) {
       if (cause?.name === "AbortError" || mine !== controller) return;
       error = failureText(cause);
@@ -145,10 +179,82 @@ export function createCompetitorsView(root) {
     paint();
   }
 
+  /** The candidate list is a side panel: if the hub cannot give it, the competitor table still works. */
+  async function loadCandidates(mine) {
+    try {
+      const response = await fetch("/api/competitors/candidates", { signal: mine.signal });
+      if (!response.ok) throw new Error("no candidates");
+      const body = await readJson(response);
+      if (mine !== controller) return;
+      discoverConfigured = body.configured === true;
+      discovery = body.discovery || null;
+      candidates = Array.isArray(body.candidates) ? body.candidates : [];
+    } catch (cause) {
+      if (cause?.name === "AbortError") throw cause;
+      discoverConfigured = false;
+      candidates = [];
+    }
+  }
+
+  async function discoverNow() {
+    discover.disabled = true;
+    try {
+      const response = await fetch("/api/competitors/discover", JSON_POST);
+      const body = await readJson(response);
+      if (!response.ok) throw new Error(body.error || body.reason || `The hub answered ${response.status}.`);
+      notice = "Looking for new competitors. What it finds appears here.";
+      error = "";
+      if (visible) await load();
+      scheduleDiscovery();
+    } catch (cause) {
+      error = failureText(cause);
+      paint();
+    } finally { paintCandidates(); }
+  }
+
+  function scheduleDiscovery() {
+    clearTimeout(timer);
+    if (!visible || document.hidden || !discovery?.running) return;
+    timer = setTimeout(() => { if (visible && !document.hidden) load().then(scheduleDiscovery); }, 3000);
+  }
+
+  async function decide(candidate, action) {
+    try {
+      const response = await fetch(`/api/competitors/candidates/${encodeURIComponent(candidate.id)}/${action}`, JSON_POST);
+      const body = await readJson(response);
+      if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+      notice = action === "track" ? `${candidate.name} added to the competitor list.` : `${candidate.name} dismissed. It will not be offered again.`;
+      error = "";
+      if (dialog.open) dialog.close();
+      if (visible) await load();
+      return true;
+    } catch (cause) {
+      error = failureText(cause);
+      paint();
+      return false;
+    }
+  }
+
+  function askTrack(candidate, opener) {
+    const problem = h("p", { role: "alert" });
+    const submit = h("button", { type: "button", class: "primary", onclick: async () => {
+      submit.disabled = true;
+      problem.textContent = "";
+      if (!(await decide(candidate, "track"))) { problem.textContent = error; submit.disabled = false; }
+    } }, "Track");
+    dialog.replaceChildren(
+      h("h2", { id: "competitor-confirm-title" }, `Track ${candidate.name}`),
+      h("p", {}, TRACK_CONFIRM),
+      problem,
+      h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), submit),
+    );
+    dialog.showModal();
+  }
+
   function schedule() {
     clearTimeout(timer);
     if (!visible || document.hidden) return;
-    if (!rows.some((row) => row.run?.state === "pulling")) return;
+    if (!rows.some((row) => row.run?.state === "pulling")) { scheduleDiscovery(); return; }
     timer = setTimeout(() => { if (visible && !document.hidden) load().then(schedule); }, 2000);
   }
 

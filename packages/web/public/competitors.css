@@ -38,3 +38,13 @@
 @media (prefers-reduced-motion: reduce) {
   .competitors button, .competitors a { transition: none; }
 }
+
+.competitors .candidates-panel { margin-top: 28px; }
+.competitors .candidates-panel[hidden] { display: none; }
+.competitors .candidates-panel h2 { margin: 0 0 4px; font-size: 17px; }
+.competitors .candidates { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.competitors .candidate { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 4px; }
+.competitors .candidate .t { font-weight: 600; }
+.competitors .candidate .summary { margin: 4px 0; overflow-wrap: anywhere; }
+.competitors .candidate .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+.competitors .candidate a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
