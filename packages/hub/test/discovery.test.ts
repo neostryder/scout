@@ -1,11 +1,11 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openCatalog, saveCandidate, type CandidateJudgement, type CandidateSource, type OutageNotice } from "@scout/core";
+import { openCatalog, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type OutageNotice } from "@scout/core";
 import { CompetitorSchedule } from "../src/competitor-schedule.ts";
 import { DiscoverySchedule, DISCOVERY_INTERVAL_MS, type DiscoveryRunResult } from "../src/discovery-schedule.ts";
 import { createHub } from "../src/server.ts";
@@ -112,6 +112,59 @@ test("without a discovery schedule the candidate list says so and discover answe
   const db = openCatalog(":memory:");
   t.after(() => db.close());
   const call = await hub(t, { db });
-  assert.deepEqual((await call("/api/competitors/candidates")).body, { configured: false, discovery: null, candidates: [] });
+  assert.deepEqual((await call("/api/competitors/candidates")).body, { configured: false, discovery: null, candidates: [], passedOver: [] });
   assert.equal((await call("/api/competitors/discover", "POST", "{}")).status, 404);
+});
+
+test("tracking a candidate also mirrors it when a clone is available, and falls back to the remote when it is not", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-disc-mirror-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const configPath = join(dir, "competitors.json");
+  const mirrorRoot = join(dir, "m");
+  mkdirSync(mirrorRoot);
+  writeFileSync(configPath, JSON.stringify({ dossierRoot: join(dir, "d"), mirrorRoot, entries: [] }));
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  saveCandidate(db, source("Mapper"), judgement, 0.87, NOW);
+  saveCandidate(db, source("Huge"), judgement, 0.8, NOW);
+  const clone = async (remote: string, folder: string) => {
+    if (remote.includes("Huge")) return { ok: false as const, error: "the repository is 900 MB, over the 391 MB limit for an automatic mirror" };
+    mkdirSync(join(mirrorRoot, folder, ".git"), { recursive: true });
+    return { ok: true as const, head: "b".repeat(40) };
+  };
+  const competitors = new CompetitorSchedule(db, { configPath, clone, check: async () => ({ version: "2.1.0", prerelease: null, commit: "c".repeat(40), error: null }) });
+  const call = await hub(t, { db, competitors });
+  const mirrored = await call("/api/competitors/candidates/github-acme-mapper/track", "POST", "{}");
+  assert.equal(mirrored.body.mirror, true);
+  const huge = await call("/api/competitors/candidates/github-acme-huge/track", "POST", "{}");
+  assert.equal(huge.body.mirror, false);
+  assert.match(huge.body.mirrorNote, /over the 391 MB limit/);
+  const entries = JSON.parse(readFileSync(configPath, "utf8")).entries as { id: string; mirrorPath: string | null; baseline: { commit: string; version: string } }[];
+  const byId = Object.fromEntries(entries.map((e) => [e.id, e]));
+  assert.equal(byId["github-acme-mapper"]?.mirrorPath, join(mirrorRoot, "github-acme-mapper").replace(/\\/g, "/"));
+  assert.equal(byId["github-acme-mapper"]?.baseline.commit, "b".repeat(40));
+  assert.equal(byId["github-acme-mapper"]?.baseline.version, "2.1.0");
+  assert.equal(byId["github-acme-huge"]?.mirrorPath ?? null, null);
+  assert.equal(byId["github-acme-huge"]?.baseline.commit, "c".repeat(40));
+});
+
+test("a passed-over project is listed with its reasoning and can be tracked anyway, but not dismissed again", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-disc-passed-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const configPath = join(dir, "competitors.json");
+  writeFileSync(configPath, JSON.stringify({ dossierRoot: join(dir, "d"), mirrorRoot: join(dir, "m"), entries: [] }));
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  rememberPassedOver(db, source("Sheets"), { summary: "A character sheet.", overlaps: [], competitor: 0.2, worthTracking: 0.9, needs: { competitor: 0.6, worthTracking: 0.4 } }, 0.41, NOW);
+  const competitors = new CompetitorSchedule(db, { configPath, check: async () => ({ version: "1.0.0", prerelease: null, commit: "d".repeat(40), error: null }) });
+  const discovery = new DiscoverySchedule({ run: async () => result() });
+  const call = await hub(t, { db, competitors, discovery });
+  const listed = await call("/api/competitors/candidates");
+  assert.deepEqual(listed.body.candidates, []);
+  assert.deepEqual(listed.body.passedOver.map((c: { name: string; passedOver: boolean; judgement: { needs: { competitor: number } } }) => [c.name, c.passedOver, c.judgement.needs.competitor]), [["Sheets", true, 0.6]]);
+  assert.equal((await call("/api/competitors/candidates/github-acme-sheets/dismiss", "POST", "{}")).status, 409);
+  const rescued = await call("/api/competitors/candidates/github-acme-sheets/track", "POST", "{}");
+  assert.equal(rescued.status, 200);
+  assert.equal(rescued.body.status, "tracked");
+  assert.deepEqual((await call("/api/competitors/candidates")).body.passedOver, []);
 });

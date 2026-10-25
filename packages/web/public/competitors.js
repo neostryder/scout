@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { analyzedText, baselineSource, candidateFacts, candidateSummary, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { analyzedText, baselineSource, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
 const postJson = (value) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
@@ -22,6 +22,7 @@ function statusClass(row) {
 export function createCompetitorsView(root) {
   let rows = [];
   let candidates = [];
+  let passedOver = [];
   let discovery = null;
   let discoverConfigured = false;
   let checkedAt = null;
@@ -49,7 +50,10 @@ export function createCompetitorsView(root) {
   const discover = h("button", { type: "button", "data-discover": "", onclick: () => discoverNow() }, "Look for new ones");
   const candidatesNote = h("p", { class: "competitors-status" });
   const candidatesList = h("div", { class: "candidates" });
-  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, candidatesList);
+  const passedList = h("div", { class: "candidates" });
+  const passedTitle = h("summary", {}, "Passed over");
+  const passedPanel = h("details", { class: "passed-over" }, passedTitle, h("p", { class: "competitors-status" }, "Projects the last searches read and held back, strongest first. Track anyway adds one to the competitor list."), passedList);
+  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, candidatesList, passedPanel);
   const dialog = h("dialog", { "aria-labelledby": "competitor-confirm-title" });
 
   root.classList.add("competitors");
@@ -117,9 +121,10 @@ export function createCompetitorsView(root) {
       facts ? h("div", { class: "org" }, facts) : [],
       h("p", { class: "summary" }, candidateSummary(candidate)),
       overlap ? h("div", { class: "commits" }, overlap) : [],
+      scoreText(candidate) ? h("div", { class: "commits" }, scoreText(candidate)) : [],
       h("div", { class: "actions" },
-        candidate.repoUrl ? h("button", { type: "button", class: "primary", "data-track": candidate.id, "aria-label": `Track ${candidate.name}`, onclick: (event) => askTrack(candidate, event.currentTarget) }, "Track") : [],
-        h("button", { type: "button", "data-dismiss": candidate.id, "aria-label": `Dismiss ${candidate.name}`, onclick: () => decide(candidate, "dismiss") }, "Dismiss")),
+        candidate.repoUrl ? h("button", { type: "button", class: "primary", "data-track": candidate.id, "aria-label": `Track ${candidate.name}`, onclick: (event) => askTrack(candidate, event.currentTarget) }, candidate.passedOver ? "Track anyway" : "Track") : [],
+        candidate.passedOver ? [] : h("button", { type: "button", "data-dismiss": candidate.id, "aria-label": `Dismiss ${candidate.name}`, onclick: () => decide(candidate, "dismiss") }, "Dismiss")),
     );
   }
 
@@ -131,6 +136,9 @@ export function createCompetitorsView(root) {
     candidatesNote.textContent = discoveryText(discovery);
     const waiting = sortCandidates(candidates);
     candidatesList.replaceChildren(...(waiting.length ? waiting.map(candidateView) : [h("p", { class: "empty" }, "Nothing is waiting for a decision.")]));
+    passedPanel.hidden = passedOver.length === 0;
+    passedTitle.textContent = `Passed over (${passedOver.length})`;
+    passedList.replaceChildren(...passedOver.map(candidateView));
   }
 
   function paint() {
@@ -189,10 +197,12 @@ export function createCompetitorsView(root) {
       discoverConfigured = body.configured === true;
       discovery = body.discovery || null;
       candidates = Array.isArray(body.candidates) ? body.candidates : [];
+      passedOver = Array.isArray(body.passedOver) ? body.passedOver : [];
     } catch (cause) {
       if (cause?.name === "AbortError") throw cause;
       discoverConfigured = false;
       candidates = [];
+      passedOver = [];
     }
   }
 
@@ -223,7 +233,7 @@ export function createCompetitorsView(root) {
       const response = await fetch(`/api/competitors/candidates/${encodeURIComponent(candidate.id)}/${action}`, JSON_POST);
       const body = await readJson(response);
       if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
-      notice = action === "track" ? `${candidate.name} added to the competitor list.` : `${candidate.name} dismissed. It will not be offered again.`;
+      notice = action === "track" ? trackedText(candidate.name, body) : `${candidate.name} dismissed. It will not be offered again.`;
       error = "";
       if (dialog.open) dialog.close();
       if (visible) await load();

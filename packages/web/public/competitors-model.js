@@ -191,7 +191,24 @@ export function repoFromForm({ remoteUrl, folder, commit, version }) {
   return repo;
 }
 
-export const TRACK_CONFIRM = "Add this project to the competitor list and read its newest version now, so later checks can tell what is new. Nothing is installed.";
+export const TRACK_CONFIRM = "Add this project to the competitor list, read its newest version, and keep a local copy of its repository so later checks can count what changed. A very large repository is tracked without the copy. Nothing is installed.";
+
+/** What the hub says about the copy it tried to keep when a project was tracked. */
+export function trackedText(name, body) {
+  const base = `${name} added to the competitor list.`;
+  if (body?.mirror) return `${base} A local copy is kept so changes can be counted.`;
+  if (body?.mirrorNote) return `${base} No local copy yet: ${body.mirrorNote}.`;
+  return base;
+}
+
+/** The two scores the decision rested on, next to the bars they were held to. */
+export function scoreText(candidate) {
+  const judgement = candidate?.judgement;
+  if (!judgement || typeof judgement.competitor !== "number") return "";
+  const show = (value) => Number(value).toFixed(2);
+  const needs = judgement.needs;
+  return `Competitor ${show(judgement.competitor)}${needs ? ` of ${show(needs.competitor)} needed` : ""}, worth watching ${show(judgement.worthTracking)}${needs ? ` of ${show(needs.worthTracking)} needed` : ""}.`;
+}
 
 /** The sentence under the panel title: when the last search ran, what it found, and why it stopped early if it did. */
 export function discoveryText(discovery) {

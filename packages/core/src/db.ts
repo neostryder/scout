@@ -35,6 +35,7 @@ export function openCatalog(path: string, options: { busyTimeoutMs?: number } = 
   const hadFts = db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'packages_fts'").get() !== undefined;
   db.exec(SCHEMA_SQL);
   migrateCompetitors(db);
+  migrateCandidates(db);
   const descriptionColumns = db.prepare("PRAGMA table_info(descriptions)").all() as { name: string }[];
   if (!descriptionColumns.some((column) => column.name === "input_hash")) db.exec("ALTER TABLE descriptions ADD COLUMN input_hash TEXT");
   // An existing catalog gains the index here; index its rows once.
@@ -133,4 +134,12 @@ function migrateToV2(db: Db): void {
     const name = def.split(" ")[0] as string;
     if (!have.has(name)) db.exec(`ALTER TABLE packages ADD COLUMN ${def}`);
   }
+}
+
+// Projects the first discovery runs passed over were stored without their reasoning, so they could not be reviewed. They are dropped once so the next run reads them again and keeps what it concludes.
+function migrateCandidates(db: DatabaseSync): void {
+  const columns = db.prepare("PRAGMA table_info(competitor_candidates)").all() as { name: string }[];
+  if (columns.some((column) => column.name === "passed_over")) return;
+  db.exec("ALTER TABLE competitor_candidates ADD COLUMN passed_over INTEGER NOT NULL DEFAULT 0");
+  db.exec("DELETE FROM competitor_candidates WHERE status = 'dismissed' AND judge_json IS NULL");
 }
