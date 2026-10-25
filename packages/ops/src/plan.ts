@@ -9,6 +9,9 @@ export interface UpdatePlan {
 
 const ID = /^(?:@?[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)?)$/;
 const VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+// pacman names may carry + and @, and its versions an epoch such as 1:2.3-1.
+const PACMAN_ID = /^[A-Za-z0-9][A-Za-z0-9@._+-]*$/;
+const PACMAN_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+:~-]*$/;
 const versionMatch = (value: string): string | null => /^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(value) ? value : null;
 const parseBrew = (key: string, stdout: string): string | null => {
   const line = stdout.trim().split(/\r?\n/).find((part) => part.startsWith(`${key} `));
@@ -42,23 +45,30 @@ const parseUv = (key: string, stdout: string): string | null => {
   return versionMatch(match?.[1] ?? "");
 };
 
-// The Arch system entry runs Omarchy's own updater when it exists (snapshot, keyring, pacman, AUR, mise, migrations) and a plain
-// pacman and yay upgrade otherwise. Its reboot prompt reads the terminal, which is absent here, so it answers no and nothing restarts.
+// Arch cannot upgrade one package alone, so updating any package row runs the whole-system update: Omarchy's own updater when it
+// exists (snapshot, keyring, pacman, AUR, mise, migrations) and a plain pacman and yay upgrade otherwise. Its reboot prompt reads the
+// terminal, which is absent here, so it answers no; the runner restarts the machine afterward only when the running kernel was replaced
+// and the update ran in the quiet window (see rebootIfNeeded).
 const ARCH_UPDATE = "if command -v omarchy-update >/dev/null 2>&1; then omarchy-update -y </dev/null; else sudo -n pacman -Syu --noconfirm </dev/null && { ! command -v yay >/dev/null 2>&1 || yay -Sua --noconfirm </dev/null; }; fi";
-const ARCH_UPGRADED = "grep 'starting full system upgrade' /var/log/pacman.log | tail -n 1";
-const parseArch = (stdout: string): string | null => {
-  const match = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(stdout);
-  return match ? `${match[1]}.${match[2]}.${match[3]}.${match[4]}${match[5]}` : null;
+const parsePacman = (key: string, stdout: string): string | null => {
+  const line = stdout.trim().split(/\r?\n/).find((part) => part.startsWith(`${key} `));
+  const version = line ? line.slice(key.length + 1).trim() : "";
+  return PACMAN_VERSION.test(version) ? version : null;
 };
+/** True when the kernel the machine is running was replaced by an update: its module folder is gone. */
+export const ARCH_NEEDS_REBOOT = "[ ! -d \"/usr/lib/modules/$(uname -r)\" ]";
+/** Schedules a restart two minutes out so the job can finish and be read back first; `shutdown -c` cancels it. */
+export const ARCH_REBOOT = "sudo -n shutdown -r +2 'Scout: restarting to finish a kernel update'";
 
 export function planUpdate(install: PlanInstall, target: string, machine: PlanMachine | null, running = false): UpdatePlan {
-  const disruptive = install.kind === "app" || running || install.ecosystem === "arch-system";
+  const disruptive = install.kind === "app" || running || install.ecosystem === "pacman" || install.ecosystem === "aur";
+  const arch = install.ecosystem === "pacman" || install.ecosystem === "aur";
   const needsAdmin = install.details?.scope === "machine" || install.details?.needsAdmin === true || install.details?.requiresSudo === true;
   let refusal: string | null = null;
   let argv: string[] = [];
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
   if (!machine) refusal = "machine is not configured";
-  else if (!ID.test(install.key) || !VERSION.test(target)) refusal = "invalid package id or version";
+  else if (!(arch ? PACMAN_ID.test(install.key) && PACMAN_VERSION.test(target) : ID.test(install.key) && VERSION.test(target))) refusal = "invalid package id or version";
   // winget raises the Windows administrator prompt itself, so Scout can run it only where someone can answer: on this computer.
   else if (needsAdmin && !(["winget", "msstore"].includes(install.ecosystem) && machine.transport.type === "local")) refusal = "needs admin; Scout cannot elevate yet";
   else {
@@ -89,12 +99,9 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
         argv = ["uv", "tool", "upgrade", key];
         verify = { argv: ["uv", "tool", "list"], parse: (s) => parseUv(key, s) };
         break;
-      case "arch-system":
-        argv = ["/bin/sh", "-c", ARCH_UPDATE];
-        verify = { argv: ["/bin/sh", "-c", ARCH_UPGRADED], parse: parseArch };
-        break;
       case "pacman": case "aur":
-        refusal = "Arch updates the whole system together, so update the Arch system entry instead";
+        argv = ["/bin/sh", "-c", ARCH_UPDATE];
+        verify = { argv: ["pacman", "-Q", "--", key], parse: (s) => parsePacman(key, s) };
         break;
       default: refusal = `Scout has no updater for ${install.ecosystem} installs`;
     }

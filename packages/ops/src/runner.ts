@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { compareVersions, claimNext, failInterruptedJobs, jobById, listJobs, recordStep, runArgv, setJobAttention, setJobPhase, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type ExecHooks, type ExecResult, type Job, type Transport } from "@scout/core";
-import { planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } from "./plan.ts";
+import { compareVersions, claimNext, quietWindow, failInterruptedJobs, jobById, listJobs, recordStep, runArgv, setJobAttention, setJobPhase, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type ExecHooks, type ExecResult, type Job, type Transport } from "@scout/core";
+import { ARCH_NEEDS_REBOOT, ARCH_REBOOT, planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } from "./plan.ts";
 import { findHubMachine, setHubMachine, downloadFileName, downloadHttps, type ConfirmedDownload, type DownloadPlan } from "@scout/core";
 import { dependencyRefusal, softConfirmation, updateBreaks, type SoftConfirmation, type UpdateBreaks } from "./guard.ts";
 import { progressReader, unstaged } from "./progress.ts";
@@ -245,6 +245,15 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
     const before = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
     const installed = plan.verify.parse(before.stdout);
     if (signal.aborted) throw new Error("stopped by user");
+    const archPackage = preview.preview.ecosystem === "pacman" || preview.preview.ecosystem === "aur";
+    if (archPackage && before.exitCode === 0 && installed !== null && job.to && installed !== job.from && (compareVersions(installed, job.to) ?? -1) >= 0) {
+      // Arch upgrades everything at once, so an earlier job in this batch already brought this package to its target.
+      recordStep(db, job.id, "preflight", "done", `already at ${installed}; an earlier update on this machine brought it there`);
+      db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(installed, new Date().toISOString(), job.installId);
+      recordStep(db, job.id, "verify", "done", cleanOutput(before.stdout));
+      setJobState(db, job.id, "done");
+      return;
+    }
     if (before.exitCode !== 0 || installed !== job.from) {
       recordStep(db, job.id, "preflight", "failed", cleanOutput(before.stdout + "\n" + before.stderr));
       fail("installed version changed since the plan");
@@ -322,6 +331,27 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
   }
 }
 
+/**
+ * After the last queued job on an Arch machine, restarts it when the update replaced the running kernel. It only does so inside the quiet
+ * window, and the restart is scheduled two minutes out so the finished jobs can be read back first. Nothing happens when anything else is
+ * still queued or running on the machine.
+ */
+export async function rebootIfNeeded(db: Db, machineId: string, jobId: number, deps: RunnerDeps, signal: AbortSignal, now = new Date()): Promise<"rebooting" | "not-needed" | "outside-window" | "busy" | "unavailable"> {
+  const machine = deps.machines.find((entry) => entry.id === machineId);
+  if (!machine) return "unavailable";
+  if (db.prepare("SELECT 1 FROM jobs WHERE machine_id = ? AND state IN ('queued','preflight','running') AND id != ? LIMIT 1").get(machineId, jobId)) return "busy";
+  const exec = deps.exec ?? runArgv;
+  const needed = await exec(machine.transport, ["/bin/sh", "-c", ARCH_NEEDS_REBOOT], deps.checkTimeoutMs ?? 120_000, signal);
+  if (needed.exitCode !== 0) return "not-needed";
+  if (!quietWindow(now).inWindow) {
+    recordStep(db, jobId, "reboot", "done", "the kernel was replaced; the machine restarts at the next quiet-window update, or when someone restarts it");
+    return "outside-window";
+  }
+  const scheduled = await exec(machine.transport, ["/bin/sh", "-c", ARCH_REBOOT], deps.checkTimeoutMs ?? 120_000, signal);
+  recordStep(db, jobId, "reboot", scheduled.exitCode === 0 ? "done" : "failed", scheduled.exitCode === 0 ? "the kernel was replaced; the machine restarts in two minutes" : cleanOutput(scheduled.stdout + "\n" + scheduled.stderr));
+  return scheduled.exitCode === 0 ? "rebooting" : "unavailable";
+}
+
 async function runDownloadJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSignal): Promise<void> {
   const exec = deps.exec ?? runArgv;
   let step = "resolve";
@@ -391,11 +421,16 @@ export class Runner {
     this.active.set(machineId, { id: job.id, controller });
     try {
       await runJob(this.db, job, this.deps, controller.signal);
-      if (jobById(this.db, job.id)?.state === "failed") stopBatch(this.db, job.batchId);
+      const finished = jobById(this.db, job.id);
+      if (finished?.state === "failed") stopBatch(this.db, job.batchId);
+      if (finished?.state === "done" && this.isArchPackage(job.installId)) await rebootIfNeeded(this.db, machineId, job.id, this.deps, controller.signal).catch(() => undefined);
     } finally {
       this.active.delete(machineId);
       void this.pump(machineId);
     }
+  }
+  private isArchPackage(installId: number): boolean {
+    return !!this.db.prepare("SELECT 1 FROM installs i JOIN packages p ON p.id = i.package_id WHERE i.id = ? AND p.ecosystem IN ('pacman','aur')").get(installId);
   }
   jobs(limit = 50): { jobs: Job[]; active: number } { return { jobs: listJobs(this.db, limit), active: this.active.size }; }
 }
