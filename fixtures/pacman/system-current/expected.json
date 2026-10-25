@@ -30,19 +30,6 @@
         "arch": "x86_64",
         "reason": "explicit"
       }
-    },
-    {
-      "ecosystem": "arch-system",
-      "key": "omarchy",
-      "name": "Arch system and apps",
-      "kind": "runtime",
-      "version": "2026.10.18.1917",
-      "location": "",
-      "description": "The Arch Linux packages, AUR packages, and Omarchy apps on this machine, updated together because Arch does not support partial upgrades.",
-      "details": {
-        "pending": 0,
-        "pendingPackages": []
-      }
     }
   ]
 }
