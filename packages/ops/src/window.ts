@@ -1,4 +1,4 @@
-import { dependencyGroups, dependencyPairs, meterHistory, orderByDependencies, quietHour, updatesView, WINDOW_HISTORY_MS, type Db, type QuietHour, type UpdateBump } from "@scout/core";
+import { dependencyGroups, dependencyPairs, orderByDependencies, quietWindow, updatesView, type Db, type QuietWindow, type UpdateBump } from "@scout/core";
 import { previewUpdate, type MachineConfig } from "./runner.ts";
 
 export interface WindowItem {
@@ -9,17 +9,16 @@ export type HeldKind = "blocked" | "admin" | "confirm";
 export interface HeldItem extends WindowItem { kind: HeldKind; reason: string }
 export interface MachineWindow {
   machineId: string;
-  quietHour: QuietHour;
   /** Safe to start now, in the order they should run. */
   now: WindowItem[];
-  /** Each of these closes or restarts something, or shares a dependency with something that does, so they wait for the quiet hour. */
+  /** Each of these closes or restarts something, or shares a dependency with something that does, so they wait for the quiet window. */
   atQuietHour: WindowItem[];
   /** Updates a person has to look at or approve first. */
   held: HeldItem[];
 }
-export interface UpdateWindows { generatedAt: string; machines: MachineWindow[] }
+export interface UpdateWindows { generatedAt: string; quiet: QuietWindow; machines: MachineWindow[] }
 
-/** Splits each machine's pending updates into a batch that is safe to start now, a batch for its quietest hours, and what needs a person, and orders both batches so what an install uses goes first. */
+/** Splits each machine's pending updates into a batch that is safe to start now, a batch for the quiet window, and what needs a person, and orders both batches so what an install uses goes first. */
 export function planWindows(db: Db, machines: MachineConfig[], now = new Date(), offsetMinutes = -now.getTimezoneOffset()): UpdateWindows {
   const rows = updatesView(db).filter((row) => row.job === null && (row.statuses.includes("updatable") || row.statuses.includes("blocked")));
   const byMachine = new Map<string, typeof rows>();
@@ -58,8 +57,7 @@ export function planWindows(db: Db, machines: MachineConfig[], now = new Date(),
       const preview = previews.get(id);
       return item(row, { running: preview?.running ?? row.usage.running, warnings: preview?.warnings ?? [] });
     });
-    const samples = meterHistory(db, machineId, new Date(now.getTime() - WINDOW_HISTORY_MS).toISOString(), 2_000);
-    out.push({ machineId, quietHour: quietHour(samples, now, offsetMinutes), now: pick(false), atQuietHour: pick(true), held: held.sort((a, b) => a.name.localeCompare(b.name)) });
+    out.push({ machineId, now: pick(false), atQuietHour: pick(true), held: held.sort((a, b) => a.name.localeCompare(b.name)) });
   }
-  return { generatedAt: now.toISOString(), machines: out };
+  return { generatedAt: now.toISOString(), quiet: quietWindow(now, offsetMinutes), machines: out };
 }

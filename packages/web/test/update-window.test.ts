@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { createMockHub } from "../dev/mock-hub.ts";
 
-const { hourRange, startLabel, quietHourNote, itemLine, heldLine, machineGroups, safeNowCount } = await import(new URL("../public/update-window-model.js", import.meta.url).href);
+const { windowRange, startLabel, quietWindowNote, autoRunNote, itemLine, heldLine, machineGroups, safeNowCount } = await import(new URL("../public/update-window-model.js", import.meta.url).href);
 
-const quiet = (extra = {}) => ({ hour: 3, length: 2, basis: "measured", meanCpuPct: 4.2, samples: 480, startsAt: "2026-10-26T03:00:00", inWindow: false, ...extra });
+const quiet = (extra = {}) => ({ startMinute: 210, lengthMinutes: 120, startsAt: "2026-10-26T03:30:00", endsAt: "2026-10-26T05:30:00", inWindow: false, ...extra });
 const item = (name: string, extra = {}) => ({ installId: 1, name, ecosystem: "brew", from: "1.0.0", to: "2.0.0", bump: "major", running: false, warnings: [], ...extra });
 
 test("the quiet window reads as a range, and wraps past midnight", () => {
-  assert.equal(hourRange(quiet()), "03:00 to 05:00");
-  assert.equal(hourRange(quiet({ hour: 23 })), "23:00 to 01:00");
+  assert.equal(windowRange(quiet()), "03:30 to 05:30");
+  assert.equal(windowRange(quiet({ startMinute: 1350 })), "22:30 to 00:30");
 });
 
 test("the next start is named by day in the viewer's clock", () => {
@@ -21,13 +21,20 @@ test("the next start is named by day in the viewer's clock", () => {
   assert.doesNotMatch(startLabel(quiet({ startsAt: new Date(2026, 9, 29, 3, 0).toISOString() }), now), /today|tomorrow/);
 });
 
-test("the note says whether the hour was measured or defaulted", () => {
+test("the note names the window and when it next starts", () => {
   const now = new Date(2026, 9, 25, 12, 0);
-  const measured = quietHourNote(quiet({ startsAt: new Date(2026, 9, 26, 3, 0).toISOString() }), now);
-  assert.match(measured, /03:00 to 05:00/);
-  assert.match(measured, /4\.2% CPU/);
-  assert.match(quietHourNote(quiet({ basis: "default", meanCpuPct: null }), now), /not enough load history/);
-  assert.match(quietHourNote(quiet({ inWindow: true }), now), /under way/);
+  const note = quietWindowNote(quiet({ startsAt: new Date(2026, 9, 26, 3, 30).toISOString() }), now);
+  assert.match(note, /03:30 to 05:30/);
+  assert.match(note, /next starts tomorrow/);
+  assert.match(quietWindowNote(quiet({ inWindow: true }), now), /under way/);
+});
+
+test("the automatic note says what it does, and when it last ran", () => {
+  assert.equal(autoRunNote(null, quiet()), "");
+  assert.match(autoRunNote({ enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null }, quiet()), /off.*03:30 to 05:30/);
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: null, lastQueued: 0, lastRunAt: null }, quiet()), /close or restart a running program.*not run yet/);
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 1, lastRunAt: "2026-10-25T10:31:00.000Z" }, quiet()), /queued 1 update on/);
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 3, lastRunAt: "2026-10-25T10:31:00.000Z" }, quiet()), /queued 3 updates on/);
 });
 
 test("lines show versions, with unknown for a missing one", () => {
@@ -38,8 +45,8 @@ test("lines show versions, with unknown for a missing one", () => {
 });
 
 test("each group carries the ids its button reviews, and empty groups are left out", () => {
-  const machine = { machineId: "mini", quietHour: quiet(), now: [item("a", { installId: 4 }), item("b", { installId: 5 })], atQuietHour: [item("c", { installId: 6, running: true })], held: [{ ...item("d", { installId: 7 }), kind: "confirm", reason: "needs a check first: eza" }] };
-  const groups = machineGroups(machine, new Date(2026, 9, 25, 12, 0));
+  const machine = { machineId: "mini", now: [item("a", { installId: 4 }), item("b", { installId: 5 })], atQuietHour: [item("c", { installId: 6, running: true })], held: [{ ...item("d", { installId: 7 }), kind: "confirm", reason: "needs a check first: eza" }] };
+  const groups = machineGroups(machine, quiet(), new Date(2026, 9, 25, 12, 0));
   assert.deepEqual(groups.map((group: any) => group.key), ["now", "quiet", "held"]);
   assert.deepEqual(groups[0].ids, [4, 5]);
   assert.equal(groups[0].button, "Review 2 updates");
@@ -48,13 +55,13 @@ test("each group carries the ids its button reviews, and empty groups are left o
   assert.match(groups[1].items[0], /running now/);
   assert.deepEqual(groups[2].ids, []);
   assert.equal(groups[2].button, null);
-  assert.deepEqual(machineGroups({ ...machine, now: [], atQuietHour: [], held: [] }), []);
-  assert.equal(machineGroups({ ...machine, now: [item("a")], atQuietHour: [], held: [] })[0]!.button, "Review 1 update");
+  assert.deepEqual(machineGroups({ ...machine, now: [], atQuietHour: [], held: [] }, quiet()), []);
+  assert.equal(machineGroups({ ...machine, now: [item("a")], atQuietHour: [], held: [] }, quiet())[0]!.button, "Review 1 update");
 });
 
 test("inside the quiet hours the second batch is offered without the hedge", () => {
-  const machine = { machineId: "mini", quietHour: quiet({ inWindow: true }), now: [], atQuietHour: [item("c")], held: [] };
-  const [group] = machineGroups(machine);
+  const machine = { machineId: "mini", now: [], atQuietHour: [item("c")], held: [] };
+  const [group] = machineGroups(machine, quiet({ inWindow: true }));
   assert.match(group!.heading, /under way/);
   assert.equal(group!.button, "Review 1 update");
 });
@@ -71,7 +78,12 @@ test("the mock hub serves the window plan and the new files", async () => {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const windows = await (await fetch(`${base}/api/updates/window`)).json();
     assert.equal(windows.machines.length, 4);
-    assert.ok(windows.machines.every((machine: any) => machine.quietHour.length === 2));
+    assert.equal(windows.quiet.lengthMinutes, 120);
+    assert.equal(windows.autoRun.enabled, false);
+    const set = await fetch(`${base}/api/updates/window/auto`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: true }) });
+    assert.equal((await set.json()).enabled, true);
+    assert.equal((await (await fetch(`${base}/api/updates/window`)).json()).autoRun.enabled, true);
+    assert.equal((await fetch(`${base}/api/updates/window/auto`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 400);
     assert.ok(windows.machines.some((machine: any) => machine.now.length > 0 && machine.atQuietHour.length > 0 && machine.held.length > 0));
     for (const file of ["update-window.js", "update-window-model.js"]) assert.equal((await fetch(`${base}/${file}`)).status, 200);
   } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }

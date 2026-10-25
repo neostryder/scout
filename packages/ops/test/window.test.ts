@@ -1,6 +1,6 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { openCatalog, recordDependencies, recordMeterReading, recordResearch, recordScan, upsertMachine, type Db } from "@scout/core";
+import { openCatalog, recordDependencies, recordResearch, recordScan, upsertMachine, type Db } from "@scout/core";
 import { planWindows } from "../src/window.ts";
 
 const T = "2026-10-20T00:00:00.000Z";
@@ -89,19 +89,13 @@ test("a library whose dependents are not updating needs a check and is held", (t
   assert.ok(!names(result.now).includes("llhttp"));
 });
 
-test("the quiet hour comes from the machine's own load once there is history", (t) => {
+test("the plan carries the fixed quiet window on the given clock", (t) => {
   const db = seed(t);
-  assert.equal(plan(db).quietHour.basis, "default");
-  const start = Date.parse("2026-10-13T00:00:00.000Z");
-  for (let step = 0; step < 7 * 96; step++) {
-    const at = new Date(start + step * 900_000);
-    const cpuPct = [1, 2].includes(at.getUTCHours()) ? 1 : 50;
-    recordMeterReading(db, "mini", { cpuPct, memUsedBytes: null, memTotalBytes: null, disks: [], gpus: [], netRxBytes: null, netTxBytes: null, processes: [] }, at.toISOString());
-  }
-  const quiet = plan(db).quietHour;
-  assert.equal(quiet.basis, "measured");
-  assert.equal(quiet.hour, 1);
-  assert.equal(quiet.startsAt, "2026-10-21T01:00:00.000Z");
+  const result = planWindows(db, machines, NOW, 0);
+  assert.equal(result.quiet.startsAt, "2026-10-21T03:30:00.000Z");
+  assert.equal(result.quiet.endsAt, "2026-10-21T05:30:00.000Z");
+  assert.equal(result.quiet.inWindow, false);
+  assert.equal(planWindows(db, machines, new Date("2026-10-20T04:00:00.000Z"), 0).quiet.inWindow, true);
 });
 
 test("an install with a job in flight and a machine with nothing pending are left out", (t) => {

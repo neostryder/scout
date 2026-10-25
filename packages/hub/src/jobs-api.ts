@@ -6,8 +6,8 @@ export function planResponse(db: Db, runner: Runner, installId: number, alsoInst
   return previewUpdate(db, installId, runner.deps.machines, { alsoUpdating })?.preview ?? null;
 }
 
-export function windowResponse(db: Db, runner: Runner, now = new Date()): unknown {
-  return planWindows(db, runner.deps.machines, now);
+export function windowResponse(db: Db, runner: Runner, windowRun: { status(): unknown } | null = null, now = new Date()): unknown {
+  return { ...planWindows(db, runner.deps.machines, now), autoRun: windowRun?.status() ?? null };
 }
 
 export function createJobsResponse(db: Db, runner: Runner, body: unknown): { status: number; body: unknown } {

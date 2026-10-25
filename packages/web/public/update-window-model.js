@@ -2,11 +2,14 @@
 
 const pad = (value) => String(value).padStart(2, "0");
 
-export function hourRange(quiet) {
-  return `${pad(quiet.hour)}:00 to ${pad((quiet.hour + quiet.length) % 24)}:00`;
+const clock = (minutes) => `${pad(Math.floor(minutes / 60) % 24)}:${pad(minutes % 60)}`;
+
+/** "03:30 to 05:30". */
+export function windowRange(quiet) {
+  return `${clock(quiet.startMinute)} to ${clock(quiet.startMinute + quiet.lengthMinutes)}`;
 }
 
-/** "now", "today at 3:00 AM", "tomorrow at 3:00 AM", or a weekday, in the viewer's clock. */
+/** "now", "today at 3:30 AM", "tomorrow at 3:30 AM", or a weekday, in the viewer's clock. */
 export function startLabel(quiet, now = new Date()) {
   if (quiet.inWindow) return "now";
   const start = new Date(quiet.startsAt);
@@ -16,11 +19,16 @@ export function startLabel(quiet, now = new Date()) {
   return `${day} at ${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
 
-export function quietHourNote(quiet, now = new Date()) {
-  const basis = quiet.basis === "measured"
-    ? `the least busy stretch in the last 7 days, averaging ${quiet.meanCpuPct}% CPU`
-    : "a night-time default, because there is not enough load history to measure yet";
-  return `Quiet hours ${hourRange(quiet)}: ${basis}. ${quiet.inWindow ? "They are under way." : `Next start ${startLabel(quiet, now)}.`}`;
+export function quietWindowNote(quiet, now = new Date()) {
+  return `The quiet window is ${windowRange(quiet)}. ${quiet.inWindow ? "It is under way." : `It next starts ${startLabel(quiet, now)}.`}`;
+}
+
+/** What the automatic switch does and when it last did it. */
+export function autoRunNote(autoRun, quiet) {
+  if (!autoRun) return "";
+  if (!autoRun.enabled) return `Automatic running is off. Turn it on and Scout queues the first two lists at the start of the quiet window, ${windowRange(quiet)}.`;
+  const last = autoRun.lastRunAt ? ` The last run queued ${autoRun.lastQueued} ${autoRun.lastQueued === 1 ? "update" : "updates"} on ${new Date(autoRun.lastRunAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.` : " It has not run yet.";
+  return `Automatic running is on. At the start of the quiet window Scout queues the first two lists, which includes updates that close or restart a running program.${last}`;
 }
 
 export function itemLine(item) {
@@ -33,14 +41,14 @@ export function heldLine(item) {
 }
 
 /** The groups one machine's panel shows, each with the install ids its button reviews. Empty groups are left out. */
-export function machineGroups(machine, now = new Date()) {
+export function machineGroups(machine, quiet, now = new Date()) {
   const groups = [];
   if (machine.now.length) {
     groups.push({ key: "now", heading: `Safe to start now (${machine.now.length})`, note: "They run in this order, so what a program uses is updated before the program.", items: machine.now.map(itemLine), ids: machine.now.map((item) => item.installId), button: `Review ${machine.now.length} ${machine.now.length === 1 ? "update" : "updates"}` });
   }
   if (machine.atQuietHour.length) {
-    const under = machine.quietHour.inWindow;
-    groups.push({ key: "quiet", heading: `${under ? "Quiet hours are under way" : `Better in the quiet hours, ${startLabel(machine.quietHour, now)}`} (${machine.atQuietHour.length})`, note: "These close or restart a running program, or share a library with one, so they go together.", items: machine.atQuietHour.map((item) => `${itemLine(item)}${item.running ? " (running now)" : ""}`), ids: machine.atQuietHour.map((item) => item.installId), button: under ? `Review ${machine.atQuietHour.length} ${machine.atQuietHour.length === 1 ? "update" : "updates"}` : "Review them now anyway" });
+    const under = quiet.inWindow;
+    groups.push({ key: "quiet", heading: `${under ? "The quiet window is under way" : `Better in the quiet window, ${startLabel(quiet, now)}`} (${machine.atQuietHour.length})`, note: "These close or restart a running program, or share a library with one, so they go together.", items: machine.atQuietHour.map((item) => `${itemLine(item)}${item.running ? " (running now)" : ""}`), ids: machine.atQuietHour.map((item) => item.installId), button: under ? `Review ${machine.atQuietHour.length} ${machine.atQuietHour.length === 1 ? "update" : "updates"}` : "Review them now anyway" });
   }
   if (machine.held.length) {
     groups.push({ key: "held", heading: `Needs you first (${machine.held.length})`, note: "Scout leaves these out of both batches.", items: machine.held.map(heldLine), ids: [], button: null });

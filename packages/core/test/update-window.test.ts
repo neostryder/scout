@@ -1,66 +1,31 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dependencyGroups, dependencyPairs, nextWindowStart, openCatalog, orderByDependencies, quietHour, recordDependencies, recordScan, upsertMachine, type CpuSample } from "../src/index.ts";
+import { dependencyGroups, dependencyPairs, openCatalog, orderByDependencies, quietWindow, recordDependencies, recordScan, upsertMachine } from "../src/index.ts";
 
 const T = "2026-10-20T00:00:00.000Z";
 const DAY = 86_400_000;
 
-/** Four samples an hour for `days` days, with `cpuAt(hour)` as the load. Times are UTC and the offset is zero. */
-function history(days: number, cpuAt: (hour: number) => number | null): CpuSample[] {
-  const start = Date.parse("2026-10-13T00:00:00.000Z");
-  const out: CpuSample[] = [];
-  for (let step = 0; step < days * 96; step++) {
-    const at = new Date(start + step * 900_000);
-    out.push({ at: at.toISOString(), cpuPct: cpuAt(at.getUTCHours()) });
-  }
-  return out;
-}
+const at = (iso: string, offsetMinutes = 0) => quietWindow(new Date(iso), offsetMinutes);
 
-test("the quiet hour is the start of the least busy two hours", () => {
-  const now = new Date("2026-10-20T12:00:00.000Z");
-  const result = quietHour(history(7, (hour) => (hour === 5 || hour === 6 ? 2 : 30 + hour)), now, 0);
-  assert.equal(result.hour, 5);
-  assert.equal(result.basis, "measured");
-  assert.equal(result.meanCpuPct, 2);
-  assert.equal(result.startsAt, "2026-10-21T05:00:00.000Z");
-  assert.equal(result.inWindow, false);
+test("the quiet window is 03:30 to 05:30 local time", () => {
+  assert.deepEqual(at("2026-10-20T12:00:00.000Z"), { startMinute: 210, lengthMinutes: 120, startsAt: "2026-10-21T03:30:00.000Z", endsAt: "2026-10-21T05:30:00.000Z", inWindow: false });
+  assert.deepEqual(at("2026-10-20T03:00:00.000Z"), { startMinute: 210, lengthMinutes: 120, startsAt: "2026-10-20T03:30:00.000Z", endsAt: "2026-10-20T05:30:00.000Z", inWindow: false });
 });
 
-test("a quiet window that wraps past midnight is found", () => {
-  const result = quietHour(history(7, (hour) => (hour === 23 || hour === 0 ? 1 : 40)), new Date("2026-10-20T12:00:00.000Z"), 0);
-  assert.equal(result.hour, 23);
+test("inside the window the start is the window under way, and the edges are exact", () => {
+  assert.equal(at("2026-10-20T03:30:00.000Z").inWindow, true);
+  assert.equal(at("2026-10-20T03:30:00.000Z").startsAt, "2026-10-20T03:30:00.000Z");
+  assert.equal(at("2026-10-20T04:30:45.000Z").startsAt, "2026-10-20T03:30:00.000Z");
+  assert.equal(at("2026-10-20T05:29:59.000Z").inWindow, true);
+  assert.deepEqual([at("2026-10-20T05:30:00.000Z").inWindow, at("2026-10-20T05:30:00.000Z").startsAt], [false, "2026-10-21T03:30:00.000Z"]);
 });
 
-test("the offset moves the window to the machine's local clock", () => {
-  const now = new Date("2026-10-20T12:00:00.000Z");
-  const result = quietHour(history(7, (hour) => (hour === 10 || hour === 11 ? 1 : 40)), now, -420);
-  assert.equal(result.hour, 3);
-  assert.equal(result.startsAt, "2026-10-21T10:00:00.000Z");
-});
-
-test("too little history falls back to the default night hour", () => {
-  const now = new Date("2026-10-20T12:00:00.000Z");
-  for (const samples of [[], history(7, () => null), history(7, () => 5).slice(0, 12)]) {
-    const result = quietHour(samples, now, 0);
-    assert.equal(result.basis, "default");
-    assert.equal(result.hour, 3);
-    assert.equal(result.meanCpuPct, null);
-  }
-});
-
-test("a tie goes to the hour nearest the default", () => {
-  const result = quietHour(history(7, () => 10), new Date("2026-10-20T12:00:00.000Z"), 0);
-  assert.equal(result.hour, 3);
-  assert.equal(result.basis, "measured");
-});
-
-test("inside the window the start is now, and outside it the next start", () => {
-  const at = (iso: string) => nextWindowStart(3, 2, new Date(iso), 0);
-  assert.deepEqual(at("2026-10-20T03:30:00.000Z"), { startsAt: "2026-10-20T03:30:00.000Z", inWindow: true });
-  assert.deepEqual(at("2026-10-20T04:59:00.000Z"), { startsAt: "2026-10-20T04:59:00.000Z", inWindow: true });
-  assert.deepEqual(at("2026-10-20T05:00:00.000Z"), { startsAt: "2026-10-21T03:00:00.000Z", inWindow: false });
-  assert.deepEqual(at("2026-10-20T02:10:30.000Z"), { startsAt: "2026-10-20T03:00:00.000Z", inWindow: false });
-  assert.equal(new Date(Date.parse("2026-10-20T00:00:00.000Z") + DAY).toISOString(), "2026-10-21T00:00:00.000Z");
+test("the offset moves the window to the local clock", () => {
+  const phoenix = at("2026-10-20T11:00:00.000Z", -420);
+  assert.equal(phoenix.inWindow, true);
+  assert.equal(phoenix.startsAt, "2026-10-20T10:30:00.000Z");
+  assert.equal(at("2026-10-20T20:00:00.000Z", -420).startsAt, "2026-10-21T10:30:00.000Z");
+  assert.equal(at("2026-10-20T12:00:00.000Z", 330).startsAt, "2026-10-20T22:00:00.000Z");
 });
 
 test("what an install uses is updated first, ties keep their order", () => {

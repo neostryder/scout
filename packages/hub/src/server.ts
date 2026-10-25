@@ -10,6 +10,7 @@ import { isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type Acces
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
 import { ControlRunner, Runner, runHealthCycle, subscribeServiceReads, type ControlRunnerDeps, type RunnerDeps } from "@scout/ops";
 import { createDownloadJobsResponse, createJobsResponse, jobResponse, planResponse, windowResponse } from "./jobs-api.ts";
+import { WindowRun } from "./update-window-schedule.ts";
 import { createDownloadKinds, createDownloadResolver, type DownloadsOptions } from "./downloads-api.ts";
 import { filtersApi } from "./filters-api.ts";
 import type { CloudflareSchedule } from "./cloudflare.ts";
@@ -64,6 +65,10 @@ export interface HubOptions {
    */
   access?: { config: AccessConfig; keys: KeySource; log?: (line: string) => void };
   jobs?: RunnerDeps;
+  /** JSON file for the update-window auto-run switch and its last run. Absent keeps them in memory. */
+  updateWindowPath?: string;
+  /** Starts the update-window timer, which queues the planned updates when the quiet window opens and the switch is on. */
+  updateWindowSchedule?: boolean;
   control?: ControlRunnerDeps | false;
   recipeProjects?: () => Project[];
   portsPath?: string;
@@ -131,10 +136,11 @@ async function serveStatic(webRoot: string, pathname: string, res: ServerRespons
 
 const MAX_BODY = 4096;
 
-async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, runner: Runner | null, research: ResearchSchedule | undefined, changelog: HubOptions["changelog"], discoverModel: ModelRunner | undefined, scans: ScanSchedule | undefined): Promise<void> {
+async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, runner: Runner | null, research: ResearchSchedule | undefined, changelog: HubOptions["changelog"], discoverModel: ModelRunner | undefined, scans: ScanSchedule | undefined, windowRun: WindowRun | null): Promise<void> {
   const m = /^\/api\/proposals\/(\d+)$/.exec(url.pathname);
   const jobId = /^\/api\/jobs\/(\d+)\/stop$/.exec(url.pathname);
   const creating = url.pathname === "/api/jobs";
+  const autoWindow = url.pathname === "/api/updates/window/auto";
   const scanning = url.pathname === "/api/scans/run";
   const refreshing = url.pathname === "/api/research/refresh";
   const refreshingChangelog = url.pathname === "/api/changelog/refresh";
@@ -142,7 +148,8 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
   if (scanning && !scans) return json(res, 404, { error: "no such route" });
   if (refreshing && !research) return json(res, 404, { error: "no such route" });
   if (!runner && (creating || jobId)) return json(res, 404, { error: "no such route" });
-  if (!m && !(runner && (jobId || creating)) && !refreshing && !refreshingChangelog && !discovering && !scanning) return json(res, 405, { error: "read only" });
+  if (autoWindow && !windowRun) return json(res, 404, { error: "no such route" });
+  if (!m && !autoWindow && !(runner && (jobId || creating)) && !refreshing && !refreshingChangelog && !discovering && !scanning) return json(res, 405, { error: "read only" });
   const origin = req.headers.origin;
   if (origin !== undefined && !hostAllowed(URL.canParse(origin) ? new URL(origin).host : undefined)) return json(res, 403, { error: "cross-origin request refused" });
   if (!(req.headers["content-type"] ?? "").startsWith("application/json")) return json(res, 415, { error: "content type must be application/json" });
@@ -176,6 +183,11 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
       const sources = (body as { sources?: unknown }).sources;
       if (sources !== undefined && (!Array.isArray(sources) || sources.some((source) => typeof source !== "string"))) throw new Error("sources must be an array of source names");
       return json(res, 200, await research.runNow(sources as string[] | undefined));
+    }
+    if (autoWindow && windowRun) {
+      const enabled = (JSON.parse(raw) as { enabled?: unknown } | null)?.enabled;
+      if (typeof enabled !== "boolean") throw new Error("enabled must be true or false");
+      return json(res, 200, windowRun.setEnabled(enabled));
     }
     if (m) return json(res, 200, decideProposalRequest(db, Number(m[1]), JSON.parse(raw)));
     if (jobId && runner) return runner.stop(Number(jobId[1])) ? json(res, 200, jobResponse(db, Number(jobId[1]))) : json(res, jobResponse(db, Number(jobId[1])) ? 409 : 404, { error: "job cannot be stopped" });
@@ -219,6 +231,8 @@ export function createHub(options: HubOptions): Server {
   const deps = options.jobs ? { ...options.jobs, get machines() { return options.jobs!.machines; } } : null;
   if (deps && !deps.resolveDownload) deps.resolveDownload = createDownloadResolver(db, deps, options.downloads);
   const runner = deps ? new Runner(db, deps) : null;
+  const windowRun = runner ? new WindowRun(db, runner, { ...(options.updateWindowPath ? { path: options.updateWindowPath } : {}), log: (line) => console.error(line) }) : null;
+  if (windowRun && options.updateWindowSchedule) windowRun.start();
   const protectedFile = protectedFileReader(options.control && options.control.protectedPath || options.protectedPath || ".scout-data/protected.json");
   let controlPort: number | undefined;
   const controlRunner = options.control === false ? null : new ControlRunner(db, { ...(options.protectedPath ? { protectedPath: options.protectedPath } : {}), ...(options.tunnelHostsPath ? { tunnelHostsPath: options.tunnelHostsPath } : {}), ...options.control, get machines() { return options.control ? options.control.machines : deps?.machines ?? []; }, stacksPath, context: { machineId: hubMachineId(), pid: process.pid, parentPid: process.ppid, ...(options.control ? options.control.context : {}) } });
@@ -261,7 +275,7 @@ export function createHub(options: HubOptions): Server {
     if (url.pathname === "/api/competitors" || url.pathname.startsWith("/api/competitors/")) {
       return competitorsApi(db, req, url, res, hostAllowed, json, options.competitors);
     }
-    if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel, options.scans);
+    if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel, options.scans, windowRun);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");
     try {
       if (url.pathname === "/api/changelog") {
@@ -282,7 +296,7 @@ export function createHub(options: HubOptions): Server {
         const plan = planResponse(db, runner, Number(url.searchParams.get("installId")), url.searchParams.get("alsoInstallIds"));
         return plan ? json(res, 200, plan) : json(res, 404, { error: "no such install or update" });
       }
-      if (runner && url.pathname === "/api/updates/window") return json(res, 200, windowResponse(db, runner));
+      if (runner && url.pathname === "/api/updates/window") return json(res, 200, windowResponse(db, runner, windowRun));
       if (downloadKinds && url.pathname === "/api/downloads/kinds") return json(res, 200, downloadKinds.snapshot());
       if (runner && url.pathname === "/api/downloads/plan") {
         const installId = Number(url.searchParams.get("installId"));
@@ -331,6 +345,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { alerts.stop(); options.scans?.stop(); options.competitors?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

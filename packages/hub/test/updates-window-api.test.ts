@@ -33,7 +33,8 @@ test("the window route lists each machine's pending updates in a safe batch", as
     assert.deepEqual(machine.now.map((item: { name: string }) => item.name), ["git"]);
     assert.deepEqual(machine.atQuietHour, []);
     assert.deepEqual(machine.held, []);
-    assert.equal(machine.quietHour.basis, "default");
+    assert.equal(data.quiet.lengthMinutes, 120);
+    assert.deepEqual(data.autoRun, { enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null });
     assert.ok(Number.isFinite(Date.parse(data.generatedAt)));
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
