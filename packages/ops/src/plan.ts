@@ -42,8 +42,17 @@ const parseUv = (key: string, stdout: string): string | null => {
   return versionMatch(match?.[1] ?? "");
 };
 
+// The Arch system entry runs Omarchy's own updater when it exists (snapshot, keyring, pacman, AUR, mise, migrations) and a plain
+// pacman and yay upgrade otherwise. Its reboot prompt reads the terminal, which is absent here, so it answers no and nothing restarts.
+const ARCH_UPDATE = "if command -v omarchy-update >/dev/null 2>&1; then omarchy-update -y </dev/null; else sudo -n pacman -Syu --noconfirm </dev/null && { ! command -v yay >/dev/null 2>&1 || yay -Sua --noconfirm </dev/null; }; fi";
+const ARCH_UPGRADED = "grep 'starting full system upgrade' /var/log/pacman.log | tail -n 1";
+const parseArch = (stdout: string): string | null => {
+  const match = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(stdout);
+  return match ? `${match[1]}.${match[2]}.${match[3]}.${match[4]}${match[5]}` : null;
+};
+
 export function planUpdate(install: PlanInstall, target: string, machine: PlanMachine | null, running = false): UpdatePlan {
-  const disruptive = install.kind === "app" || running;
+  const disruptive = install.kind === "app" || running || install.ecosystem === "arch-system";
   const needsAdmin = install.details?.scope === "machine" || install.details?.needsAdmin === true || install.details?.requiresSudo === true;
   let refusal: string | null = null;
   let argv: string[] = [];
@@ -79,6 +88,13 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
       case "uv-tool":
         argv = ["uv", "tool", "upgrade", key];
         verify = { argv: ["uv", "tool", "list"], parse: (s) => parseUv(key, s) };
+        break;
+      case "arch-system":
+        argv = ["/bin/sh", "-c", ARCH_UPDATE];
+        verify = { argv: ["/bin/sh", "-c", ARCH_UPGRADED], parse: parseArch };
+        break;
+      case "pacman": case "aur":
+        refusal = "Arch updates the whole system together, so update the Arch system entry instead";
         break;
       default: refusal = `Scout has no updater for ${install.ecosystem} installs`;
     }

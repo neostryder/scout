@@ -120,7 +120,7 @@ export function packagesDue(db: Db, ecosystems: string[], source: string, ttlMs:
 }
 
 /**
- * Answers the scan already carries: winget and the Microsoft Store report the version each install can upgrade to. These
+ * Answers the scan already carries: winget and the Microsoft Store report the version each install can upgrade to, and the Arch system entry carries the time of the scan when updates are pending. These
  * are rebuilt from the catalog on every scan under their own source name, so an upgrade that has since been applied
  * does not leave a stale answer behind.
  */
@@ -129,7 +129,7 @@ export function deriveScanAssertions(db: Db, now = new Date().toISOString()): { 
     .prepare(
       `SELECT p.id AS packageId, p.ecosystem, json_extract(i.details_json, '$.availableVersion') AS available
        FROM installs i JOIN packages p ON p.id = i.package_id
-       WHERE i.removed_at IS NULL AND p.ecosystem IN ('winget', 'msstore')
+       WHERE i.removed_at IS NULL AND p.ecosystem IN ('winget', 'msstore', 'arch-system')
          AND json_extract(i.details_json, '$.availableVersion') IS NOT NULL`,
     )
     .all() as unknown as { packageId: number; ecosystem: string; available: string }[];
@@ -142,7 +142,7 @@ export function deriveScanAssertions(db: Db, now = new Date().toISOString()): { 
   }
   db.exec("BEGIN IMMEDIATE");
   try {
-    db.exec("DELETE FROM assertions WHERE source IN ('winget-scan', 'msstore-scan')");
+    db.exec("DELETE FROM assertions WHERE source IN ('winget-scan', 'msstore-scan', 'arch-system-scan')");
     for (const b of best.values()) recordAssertion(db, { packageId: b.packageId, source: b.source, channel: "stable", version: b.version, installable: true }, now);
     db.exec("COMMIT");
   } catch (err) {

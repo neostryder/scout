@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "Name            : acl\nVersion         : 2.4.0-1\nDescription     : Access control list utilities, libraries and headers\nURL             : https://savannah.nongnu.org/projects/acl\nArchitecture    : x86_64\nInstall Reason  : Installed as a dependency for another package\n\nName            : chromium\nVersion         : 154.0.8037.97-1\nDescription     : A web browser built for speed, simplicity, and security\nURL             : https://www.chromium.org/Home\nArchitecture    : x86_64\nInstall Reason  : Explicitly installed\n\n---SCOUT-FOREIGN---\n---SCOUT-PENDING---\nchromium 154.0.8037.97-1 -> 155.0.8059.84-1\nacl 2.4.0-1 -> 2.4.1-1\nexit=0\n---SCOUT-AUR---\nexit=1\n---SCOUT-UPGRADED---\n[2026-10-18T19:17:35-0700] [PACMAN] starting full system upgrade\n---SCOUT-NOW---\n2026-10-25T10:59:14\n",
+    "stderr": ""
+  }
+}

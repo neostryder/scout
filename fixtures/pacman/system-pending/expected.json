@@ -1,0 +1,52 @@
+{
+  "sourceKind": "pacman",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "pacman",
+      "key": "acl",
+      "name": "acl",
+      "kind": "package",
+      "version": "2.4.0-1",
+      "location": "",
+      "description": "Access control list utilities, libraries and headers",
+      "homepage": "https://savannah.nongnu.org/projects/acl",
+      "details": {
+        "arch": "x86_64",
+        "reason": "dependency"
+      }
+    },
+    {
+      "ecosystem": "pacman",
+      "key": "chromium",
+      "name": "chromium",
+      "kind": "package",
+      "version": "154.0.8037.97-1",
+      "location": "",
+      "description": "A web browser built for speed, simplicity, and security",
+      "homepage": "https://www.chromium.org/Home",
+      "details": {
+        "arch": "x86_64",
+        "reason": "explicit"
+      }
+    },
+    {
+      "ecosystem": "arch-system",
+      "key": "omarchy",
+      "name": "Arch system and apps",
+      "kind": "runtime",
+      "version": "2026.10.18.1917",
+      "location": "",
+      "description": "The Arch Linux packages, AUR packages, and Omarchy apps on this machine, updated together because Arch does not support partial upgrades.",
+      "details": {
+        "pending": 2,
+        "pendingPackages": [
+          "chromium",
+          "acl"
+        ],
+        "availableVersion": "2026.10.25.1059"
+      }
+    }
+  ]
+}

@@ -84,3 +84,16 @@ test("packages are due when never checked or checked before the cache lapsed", (
   assert.deepEqual(packagesDue(db, ["brew"], "brew-api", 1 * hour, now).map((p) => p.key), ["git", "node", "wget", "jq"]);
   assert.equal(packagesDue(db, ["brew"], "brew-api", 24 * hour, now)[0]?.tap, "homebrew/core");
 });
+
+test("the Arch system entry is updatable only while updates are pending", () => {
+  const db = openCatalog(":memory:");
+  upsertMachine(db, { id: "faramir", name: "Faramir", os: "linux", kind: "host" });
+  const system = (availableVersion?: string) => ({ ecosystem: "arch-system", key: "omarchy", name: "Arch system and apps", kind: "runtime" as const, version: "2026.10.18.1917", location: "", details: { pending: availableVersion ? 67 : 0, ...(availableVersion ? { availableVersion } : {}) } });
+  recordScan(db, "faramir", { sourceKind: "pacman", location: "", status: "ok", installs: [system("2026.10.25.1059")] }, T);
+  assert.equal(deriveScanAssertions(db, T).assertions, 1);
+  const [row] = updatesView(db);
+  assert.deepEqual([row?.installed, row?.available, row?.availableSource, row?.updatable], ["2026.10.18.1917", "2026.10.25.1059", "arch-system-scan", true]);
+  recordScan(db, "faramir", { sourceKind: "pacman", location: "", status: "ok", installs: [system()] }, LATER);
+  assert.equal(deriveScanAssertions(db, LATER).assertions, 0);
+  assert.equal(updatesView(db).length, 0);
+});
