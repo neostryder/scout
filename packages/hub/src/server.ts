@@ -23,7 +23,7 @@ import type { CompetitorSchedule } from "./competitor-schedule.ts";
 import { readJson, servicesApi } from "./services-api.ts";
 import type { DescriptionRun } from "./descriptions.ts";
 import { HubRecipes } from "./recipes.ts";
-import type { Project } from "@scout/core";
+import type { OutageNotice, Project } from "@scout/core";
 import { HubAlerts, type HubAlertOptions } from "./alerts.ts";
 import { HealthSchedule, type HealthScheduleOptions } from "./health.ts";
 import type { MeterSchedule } from "./meters.ts";
@@ -69,6 +69,8 @@ export interface HubOptions {
   updateWindowPath?: string;
   /** Starts the update-window timer, which queues the planned updates when the quiet window opens and the switch is on. */
   updateWindowSchedule?: boolean;
+  /** Where the update-window run sends its finish and failure notices. */
+  updateWindowNotifier?: { send(notice: OutageNotice): Promise<unknown> };
   control?: ControlRunnerDeps | false;
   recipeProjects?: () => Project[];
   portsPath?: string;
@@ -231,7 +233,7 @@ export function createHub(options: HubOptions): Server {
   const deps = options.jobs ? { ...options.jobs, get machines() { return options.jobs!.machines; } } : null;
   if (deps && !deps.resolveDownload) deps.resolveDownload = createDownloadResolver(db, deps, options.downloads);
   const runner = deps ? new Runner(db, deps) : null;
-  const windowRun = runner ? new WindowRun(db, runner, { ...(options.updateWindowPath ? { path: options.updateWindowPath } : {}), log: (line) => console.error(line) }) : null;
+  const windowRun = runner ? new WindowRun(db, runner, { ...(options.updateWindowPath ? { path: options.updateWindowPath } : {}), ...(options.updateWindowNotifier ? { notifier: options.updateWindowNotifier } : {}), log: (line) => console.error(line) }) : null;
   if (windowRun && options.updateWindowSchedule) windowRun.start();
   const protectedFile = protectedFileReader(options.control && options.control.protectedPath || options.protectedPath || ".scout-data/protected.json");
   let controlPort: number | undefined;

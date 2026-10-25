@@ -1,10 +1,12 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { quietWindow, type Db } from "@scout/core";
+import { dependencyGroups, dependencyPairs, quietWindow, type Db, type OutageNotice } from "@scout/core";
 import { planWindows, type Runner } from "@scout/ops";
 import type { ScheduleClock } from "./schedule.ts";
 import { createJobsResponse } from "./jobs-api.ts";
 
 export const WINDOW_TICK_MS = 60_000;
+/** The most updates one automatic run queues for a machine; what is left waits for the next window. */
+export const WINDOW_CAP_PER_MACHINE = 15;
 
 export interface WindowRunState {
   enabled: boolean;
@@ -12,6 +14,12 @@ export interface WindowRunState {
   lastWindowStart: string | null;
   lastQueued: number;
   lastRunAt: string | null;
+  /** Updates the last run left for the next window because a machine was at its cap. */
+  lastDeferred: number;
+  /** Set when a failed job switched the run off, and cleared when it is switched on again. */
+  pausedReason: string | null;
+  /** The batches the last run queued, watched until their jobs finish. */
+  batchIds: string[];
 }
 
 export interface WindowRunOptions {
@@ -21,6 +29,10 @@ export interface WindowRunOptions {
   offsetMinutes?: () => number;
   log?: (line: string) => void;
   tickMs?: number;
+  /** Most updates queued per machine in one run. */
+  cap?: number;
+  /** Sends the finish and failure notices. Without it the run only logs. */
+  notifier?: { send(notice: OutageNotice): Promise<unknown> };
 }
 
 const CLOCK: ScheduleClock = {
@@ -33,7 +45,7 @@ const CLOCK: ScheduleClock = {
   clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
 };
 
-const EMPTY: WindowRunState = { enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null };
+const EMPTY: WindowRunState = { enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null, lastDeferred: 0, pausedReason: null, batchIds: [] };
 
 function readState(path: string | undefined): WindowRunState {
   if (!path || !existsSync(path)) return { ...EMPTY };
@@ -44,11 +56,28 @@ function readState(path: string | undefined): WindowRunState {
       lastWindowStart: typeof raw.lastWindowStart === "string" ? raw.lastWindowStart : null,
       lastQueued: Number.isSafeInteger(raw.lastQueued) ? raw.lastQueued! : 0,
       lastRunAt: typeof raw.lastRunAt === "string" ? raw.lastRunAt : null,
+      lastDeferred: Number.isSafeInteger(raw.lastDeferred) ? raw.lastDeferred! : 0,
+      pausedReason: typeof raw.pausedReason === "string" ? raw.pausedReason : null,
+      batchIds: Array.isArray(raw.batchIds) ? raw.batchIds.filter((id): id is string => typeof id === "string") : [],
     };
   } catch { return { ...EMPTY }; }
 }
 
-/** Queues each machine's planned updates once when the quiet window opens, only while the switch is on. A window the hub was down for is skipped, never made up later. */
+/** Picks at most `cap` of the ordered installs, keeping each dependency group whole so a library never runs without what uses it. The first group always goes, even past the cap, so a large group cannot starve. */
+export function capInstalls(db: Db, ids: number[], cap: number): { chosen: number[]; deferred: number } {
+  if (ids.length <= cap) return { chosen: ids, deferred: 0 };
+  const groupOf = new Map<number, number[]>();
+  for (const group of dependencyGroups(ids, dependencyPairs(db, ids))) for (const id of group) groupOf.set(id, group);
+  const chosen = new Set<number>();
+  for (const id of ids) {
+    const group = groupOf.get(id)!;
+    if (chosen.has(id)) continue;
+    if (chosen.size === 0 || chosen.size + group.length <= cap) for (const member of group) chosen.add(member);
+  }
+  return { chosen: ids.filter((id) => chosen.has(id)), deferred: ids.length - chosen.size };
+}
+
+/** Queues each machine's planned updates once when the quiet window opens, only while the switch is on. A window the hub was down for is skipped, never made up later. A failed job switches the run off, and a finished run sends a notice. */
 export class WindowRun {
   private db: Db;
   private runner: Runner;
@@ -69,7 +98,7 @@ export class WindowRun {
   status(): WindowRunState { return { ...this.state }; }
 
   setEnabled(enabled: boolean): WindowRunState {
-    this.state = { ...this.state, enabled };
+    this.state = { ...this.state, enabled, ...(enabled ? { pausedReason: null, batchIds: [] } : {}) };
     this.save();
     if (enabled && this.started) this.tick();
     return this.status();
@@ -90,31 +119,72 @@ export class WindowRun {
 
   /** Acts when the window is open, the switch is on, and this window has not run yet. Returns the number of jobs queued. */
   tick(): number {
+    this.review();
     if (!this.state.enabled) return 0;
     const now = new Date(this.clock.now());
     const offset = this.options.offsetMinutes?.() ?? -now.getTimezoneOffset();
     const window = quietWindow(now, offset);
     if (!window.inWindow || this.state.lastWindowStart === window.startsAt) return 0;
+    if (this.state.batchIds.length > 0) {
+      this.options.log?.("update window: the last run is still going, so this window is skipped");
+      this.state = { ...this.state, lastWindowStart: window.startsAt };
+      this.save();
+      return 0;
+    }
     // The window is marked first, so a failure part way never queues the same updates twice.
-    this.state = { ...this.state, lastWindowStart: window.startsAt, lastQueued: 0, lastRunAt: now.toISOString() };
+    this.state = { ...this.state, lastWindowStart: window.startsAt, lastQueued: 0, lastDeferred: 0, lastRunAt: now.toISOString() };
     this.save();
     let queued = 0;
+    let deferred = 0;
+    const batchIds: string[] = [];
+    const cap = this.options.cap ?? WINDOW_CAP_PER_MACHINE;
     try {
       for (const machine of planWindows(this.db, this.runner.deps.machines, now, offset).machines) {
-        const installIds = [...machine.now, ...machine.atQuietHour].map((item) => item.installId);
-        if (installIds.length === 0) continue;
+        const wanted = [...machine.now, ...machine.atQuietHour].map((item) => item.installId);
+        if (wanted.length === 0) continue;
+        const { chosen: installIds, deferred: left } = capInstalls(this.db, wanted, cap);
+        deferred += left;
+        if (left > 0) this.options.log?.(`update window: ${machine.machineId} has ${wanted.length} updates, so ${left} wait for the next window`);
         const result = createJobsResponse(this.db, this.runner, { installIds, confirm: true, allowDisruptive: true });
-        const body = result.body as { jobs?: unknown[]; refused?: { installId: number; reason: string }[] };
+        const body = result.body as { batchId?: string | null; jobs?: unknown[]; refused?: { installId: number; reason: string }[] };
         queued += body.jobs?.length ?? 0;
+        if (body.batchId) batchIds.push(body.batchId);
         for (const entry of body.refused ?? []) this.options.log?.(`update window: ${machine.machineId} install ${entry.installId} left out: ${entry.reason}`);
       }
     } catch (error) {
       this.options.log?.(`update window: ${error instanceof Error ? error.message : "run failed"}`);
     }
-    this.state = { ...this.state, lastQueued: queued };
+    this.state = { ...this.state, lastQueued: queued, lastDeferred: deferred, batchIds };
     this.save();
     this.options.log?.(`update window: queued ${queued} update${queued === 1 ? "" : "s"}`);
     return queued;
+  }
+
+  /** Watches the last run's jobs: the first failure switches the run off and says so, and a clean finish sends a summary. */
+  private review(): void {
+    const ids = this.state.batchIds;
+    if (ids.length === 0) return;
+    const marks = ids.map(() => "?").join(", ");
+    const jobs = this.db.prepare(`SELECT j.state, j.message, j.machine_id AS machine, COALESCE(p.name, 'an install') AS name FROM jobs j LEFT JOIN installs i ON i.id = j.install_id LEFT JOIN packages p ON p.id = i.package_id WHERE j.batch_id IN (${marks}) ORDER BY j.id`).all(...ids) as { state: string; message: string | null; machine: string; name: string }[];
+    const count = (state: string): number => jobs.filter((job) => job.state === state).length;
+    const failed = jobs.find((job) => job.state === "failed");
+    if (failed && this.state.pausedReason === null) {
+      const reason = `${failed.name} failed on ${failed.machine}${failed.message ? `: ${failed.message}` : ""}`;
+      this.state = { ...this.state, enabled: false, pausedReason: reason };
+      this.save();
+      this.options.log?.(`update window: paused because ${reason}`);
+      this.notify({ title: "Scout paused the automatic update run", body: `${reason}. ${count("failed")} failed so far and ${count("done")} finished. Turn the run back on in the update planner after a look at the Jobs page.`, severity: "high" });
+    }
+    if (jobs.some((job) => ["queued", "preflight", "running"].includes(job.state))) return;
+    this.state = { ...this.state, batchIds: [] };
+    this.save();
+    const summary = `${count("done")} finished, ${count("failed")} failed, ${count("stopped")} stopped`;
+    this.options.log?.(`update window: run complete (${summary})`);
+    if (!failed) this.notify({ title: "Scout finished the automatic update run", body: `${summary}${this.state.lastDeferred > 0 ? `; ${this.state.lastDeferred} more wait for the next window` : ""}.`, severity: "info" });
+  }
+
+  private notify(notice: OutageNotice): void {
+    void this.options.notifier?.send(notice).catch((error: unknown) => this.options.log?.(`update window: notice not sent: ${error instanceof Error ? error.message : "failed"}`));
   }
 
   private save(): void {

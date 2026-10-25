@@ -46,7 +46,7 @@ function compare(a: Row, b: Row, key: string, dir: string) {
   const primary = order ? order.indexOf(av) - order.indexOf(bv) : ["installed", "available", "version"].includes(key) ? versionCompare(av || "", bv || "") : typeof av === "number" ? av - bv : String(av ?? "").localeCompare(String(bv ?? ""), undefined, { sensitivity: "base" });
   return primary ? primary * (dir === "desc" ? -1 : 1) : a.name.localeCompare(b.name) || a.machineId.localeCompare(b.machineId);
 }
-const autoRun = { enabled: false, lastWindowStart: null as string | null, lastQueued: 0, lastRunAt: null as string | null };
+const autoRun = { enabled: false, lastWindowStart: null as string | null, lastQueued: 0, lastRunAt: null as string | null, lastDeferred: 0, pausedReason: null as string | null, batchIds: [] as string[] };
 export function updateWindows() {
   const now = new Date();
   const start = new Date(now); start.setHours(3, 30, 0, 0); if (start.getTime() <= now.getTime()) start.setDate(start.getDate() + 1);

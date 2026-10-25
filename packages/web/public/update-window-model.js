@@ -24,11 +24,15 @@ export function quietWindowNote(quiet, now = new Date()) {
 }
 
 /** What the automatic switch does and when it last did it. */
+const RUN_CAP = 15;
+
 export function autoRunNote(autoRun, quiet) {
   if (!autoRun) return "";
+  if (!autoRun.enabled && autoRun.pausedReason) return `Automatic running paused itself after a failure: ${autoRun.pausedReason}. Look at the Jobs page, then turn it back on to resume.`;
   if (!autoRun.enabled) return `Automatic running is off. Turn it on and Scout queues the first two lists at the start of the quiet window, ${windowRange(quiet)}.`;
   const last = autoRun.lastRunAt ? ` The last run queued ${autoRun.lastQueued} ${autoRun.lastQueued === 1 ? "update" : "updates"} on ${new Date(autoRun.lastRunAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.` : " It has not run yet.";
-  return `Automatic running is on. At the start of the quiet window Scout queues the first two lists, which includes updates that close or restart a running program.${last}`;
+  const left = autoRun.lastDeferred > 0 ? ` ${autoRun.lastDeferred} ${autoRun.lastDeferred === 1 ? "update was" : "updates were"} left for the next window because a machine had more than ${RUN_CAP} to run.` : "";
+  return `Automatic running is on. At the start of the quiet window Scout queues up to ${RUN_CAP} updates per machine from the first two lists, which includes updates that close or restart a running program. A failed update switches it off.${last}${left}`;
 }
 
 export function itemLine(item) {

@@ -32,9 +32,11 @@ test("the note names the window and when it next starts", () => {
 test("the automatic note says what it does, and when it last ran", () => {
   assert.equal(autoRunNote(null, quiet()), "");
   assert.match(autoRunNote({ enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null }, quiet()), /off.*03:30 to 05:30/);
-  assert.match(autoRunNote({ enabled: true, lastWindowStart: null, lastQueued: 0, lastRunAt: null }, quiet()), /close or restart a running program.*not run yet/);
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: null, lastQueued: 0, lastRunAt: null }, quiet()), /up to 15 updates per machine.*close or restart a running program.*not run yet/);
   assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 1, lastRunAt: "2026-10-25T10:31:00.000Z" }, quiet()), /queued 1 update on/);
   assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 3, lastRunAt: "2026-10-25T10:31:00.000Z" }, quiet()), /queued 3 updates on/);
+  assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 15, lastRunAt: "2026-10-25T10:31:00.000Z", lastDeferred: 43 }, quiet()), /43 updates were left for the next window/);
+  assert.match(autoRunNote({ enabled: false, lastWindowStart: "x", lastQueued: 1, lastRunAt: null, pausedReason: "git failed on mini" }, quiet()), /paused itself after a failure: git failed on mini.*turn it back on/);
 });
 
 test("lines show versions, with unknown for a missing one", () => {
