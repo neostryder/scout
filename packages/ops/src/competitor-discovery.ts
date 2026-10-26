@@ -26,6 +26,9 @@ export interface DiscoveryConfig {
 
 export interface Judge { summarize(project: CandidateSource, products: DiscoveryProduct[]): Promise<{ summary: string; overlaps: string[] }> }
 /** `decisions` are the owner's own Track and Dismiss choices on the projects most like this one. */
+/** A second opinion on worth tracking that is stored and compared but never acts. Resolves to null when it cannot answer. */
+export type Shadow = (project: CandidateSource, summary: string) => Promise<number | null>;
+
 export interface Decider { decide(project: CandidateSource, summary: string, products: DiscoveryProduct[], decisions?: OwnerDecision[]): Promise<{ competitor: number; worthTracking: number }> }
 
 const DECISIONS_PER_SIDE = 4;
@@ -34,7 +37,7 @@ export function nearestDecisions(summary: string, topics: string[], decisions: O
   return nearestWithCloseness(summary, topics, decisions, perSide).map((item) => item.decision);
 }
 
-export interface DiscoveryResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null; /** Projects held back because they read like dismissed ones. */ held: number; /** Names of the offered projects, in the order they were found. */ offeredNames: string[] }
+export interface DiscoveryResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null; /** Projects held back because they read like dismissed ones. */ held: number; /** Projects the shadow answered for, and how many of those it and Jev's worth-watching bar called worth tracking. */ shadowRead: number; shadowLaya: number; shadowJev: number; /** Names of the offered projects, in the order they were found. */ offeredNames: string[] }
 
 export const DISCOVERY_FILE = "discovery.json";
 const MAX_ERRORS_IN_A_ROW = 3;
@@ -156,11 +159,13 @@ export async function runDiscovery(db: Db, input: {
   tracked?: Set<string>;
   /** Reads a page through FireCrawl. Without it the `web` pages in the configuration are not read. */
   scrape?: Scrape;
+  /** Asked after Jev for each judged project; its answer is stored and compared, never used to offer. */
+  shadow?: Shadow;
 }): Promise<DiscoveryResult> {
   const { config, fetcher, judge, decider } = input;
   const now = input.now ?? new Date();
   const log = input.log ?? (() => {});
-  const result: DiscoveryResult = { gathered: 0, judged: 0, offered: 0, rejected: 0, errors: 0, error: null, held: 0, offeredNames: [] };
+  const result: DiscoveryResult = { gathered: 0, judged: 0, offered: 0, rejected: 0, errors: 0, error: null, held: 0, shadowRead: 0, shadowLaya: 0, shadowJev: 0, offeredNames: [] };
   const known = knownCandidateKeys(db);
   const fromGithub = await gatherGithub(config, fetcher, now, log);
   // Anything already judged or found by the repository search needs no lookup.
@@ -189,6 +194,13 @@ export async function runDiscovery(db: Db, input: {
       const stamp = now.toISOString();
       const judgement: CandidateJudgement = { summary: read.summary, overlaps: read.overlaps, competitor: decision.competitor, worthTracking: decision.worthTracking, needs: { competitor: config.minCompetitor, worthTracking: config.minWorthTracking } };
       const score = Math.round((decision.competitor * 0.7 + decision.worthTracking * 0.3) * 100) / 100;
+      const layaSays = input.shadow ? await input.shadow(project, read.summary).catch(() => null) : null;
+      if (layaSays !== null) {
+        judgement.shadow = { laya: layaSays };
+        result.shadowRead += 1;
+        if (layaSays >= 0.5) result.shadowLaya += 1;
+        if (decision.worthTracking >= config.minWorthTracking) result.shadowJev += 1;
+      }
       const held = historyHold(near, learned.length);
       if (held) judgement.heldByHistory = held;
       if (!held && decision.competitor >= config.minCompetitor && decision.worthTracking >= config.minWorthTracking) {
@@ -313,6 +325,32 @@ export function jevDecider(options: { post?: PostLike; readKey?: KeyReader } = {
       };
       return { competitor: read("competitor"), worthTracking: read("worthTracking") };
     },
+  };
+}
+
+const LAYA_URL = "http://127.0.0.1:8010/v1/systemone";
+const LAYA_MODEL = "laya:scout_worth_tracking";
+const LAYA_QUESTIONS = {
+  worth_tracking: {
+    type: "noul",
+    instructions: "Is this repository worth tracking as a competitor or near-neighbor of RPGM Tools, a suite of tabletop role-playing game tools (character and world builders, a Foundry-style virtual tabletop ecosystem, content packs, and related apps)? Judge it the way its maintainer would when deciding whether to follow its releases.",
+    criteria: {
+      true: "A distinct tool, app or platform for running, building or managing tabletop role-playing games that serves the same audience as RPGM Tools.",
+      false: "A single game-system module, theme, macro pack, library, or unrelated project; or something that does not address the same audience or purpose.",
+    },
+  },
+};
+
+/** The local Laya adapter trained on the owner's own Track and Dismiss decisions. Public repository facts only. A Laya that is down or slow gives null and the run carries on. */
+export function layaShadow(options: { post?: PostLike; url?: string } = {}): Shadow {
+  const post = options.post ?? defaultPost;
+  return async (project, summary) => {
+    try {
+      const response = await post(options.url ?? LAYA_URL, { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(30_000), body: JSON.stringify({ model: LAYA_MODEL, state: { name: project.name, org: project.org, description: project.description.slice(0, 500), topics: project.topics.slice(0, 15), summary }, questions: LAYA_QUESTIONS }) });
+      if (!response.ok) return null;
+      const value = ((await response.json()) as { answers?: Record<string, { noul?: unknown }> }).answers?.["worth_tracking"]?.noul;
+      return typeof value === "number" && value >= 0 && value <= 1 ? value : null;
+    } catch { return null; }
   };
 }
 

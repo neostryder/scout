@@ -31,6 +31,8 @@ export interface CandidateJudgement {
   heldByHistory?: string;
   /** What the hold said, kept when the owner put the project back in the offered list, so a wrong hold can be counted. */
   releasedFromHold?: string;
+  /** What the local Laya adapter said about worth tracking, kept beside Jev's answer so the two can be compared. It never changes what is offered. */
+  shadow?: { laya: number };
 }
 
 export interface Candidate extends CandidateSource {
@@ -178,6 +180,39 @@ export function holdStats(db: Db): HoldStats {
     for (const count of row.found_at === latest ? [all, last] : [all]) { count.held += 1; if (rescued) count.rescued += 1; }
   }
   return { lastRun: latest ? { at: latest, ...last } : null, all };
+}
+
+export interface ShadowStats {
+  /** Projects that have a Laya answer stored. */
+  read: number;
+  /** Of those, how many Laya put at 0.5 or above, and how many Jev's worth-watching answer cleared its bar. */
+  layaYes: number;
+  jevYes: number;
+  /** Of those, how many the owner decided (Track, or Dismiss on an offered project), and how many each model called the same way he did. */
+  decided: number;
+  layaRight: number;
+  jevRight: number;
+}
+
+/** Laya against Jev on the same projects: how often each says yes, and how often each matches the owner's own Track or Dismiss. */
+export function shadowStats(db: Db): ShadowStats {
+  const rows = db.prepare("SELECT status, passed_over, judge_json FROM competitor_candidates WHERE judge_json LIKE '%\"shadow\"%'").all() as unknown as { status: string; passed_over: number; judge_json: string }[];
+  const stats: ShadowStats = { read: 0, layaYes: 0, jevYes: 0, decided: 0, layaRight: 0, jevRight: 0 };
+  for (const row of rows) {
+    const judgement = JSON.parse(row.judge_json) as CandidateJudgement;
+    if (typeof judgement.shadow?.laya !== "number") continue;
+    const laya = judgement.shadow.laya >= 0.5;
+    const jev = judgement.worthTracking >= (judgement.needs?.worthTracking ?? 0.5);
+    stats.read += 1;
+    if (laya) stats.layaYes += 1;
+    if (jev) stats.jevYes += 1;
+    const label = row.status === "tracked" ? true : row.status === "dismissed" && row.passed_over === 0 ? false : null;
+    if (label === null) continue;
+    stats.decided += 1;
+    if (laya === label) stats.layaRight += 1;
+    if (jev === label) stats.jevRight += 1;
+  }
+  return stats;
 }
 
 /** Returns the registry file text with one competitor added. The id must be unused. */

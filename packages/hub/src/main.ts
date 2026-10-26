@@ -13,7 +13,7 @@ import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAl
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, cloneMirror, firecrawlScraper, githubRepoSizeKb, jevDecider, loadDiscoveryConfig, minimaxJudge, minimaxSemantic, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
+import { checkRemote, cloneMirror, firecrawlScraper, githubRepoSizeKb, jevDecider, layaShadow, loadDiscoveryConfig, minimaxJudge, minimaxSemantic, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
@@ -64,7 +64,7 @@ const discovery = new DiscoverySchedule({
     const tracked = new Set<string>();
     for (const row of catalogRows("SELECT remote_url AS a, package_url AS b FROM competitors")) for (const value of [row.a, row.b]) if (value) tracked.add(value.toLowerCase());
     const scrape = config.web ? firecrawlScraper({ post: (url, init) => fetch(url, init), bases: config.web.firecrawl }) : undefined;
-    return runDiscovery(db, { config, fetcher: (url, init) => fetch(url, init), judge: minimaxJudge(), decider: jevDecider(), tracked, ...(scrape ? { scrape } : {}), log: (line) => console.error(line) });
+    return runDiscovery(db, { config, fetcher: (url, init) => fetch(url, init), judge: minimaxJudge(), decider: jevDecider(), shadow: layaShadow({ post: (url, init) => fetch(url, init) }), tracked, ...(scrape ? { scrape } : {}), log: (line) => console.error(line) });
   },
 });
 function catalogRows(sql: string): { a: string | null; b: string | null }[] { return db.prepare(sql).all() as unknown as { a: string | null; b: string | null }[]; }

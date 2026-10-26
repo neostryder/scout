@@ -112,7 +112,7 @@ test("without a discovery schedule the candidate list says so and discover answe
   const db = openCatalog(":memory:");
   t.after(() => db.close());
   const call = await hub(t, { db });
-  assert.deepEqual((await call("/api/competitors/candidates")).body, { configured: false, discovery: null, candidates: [], passedOver: [], holds: { lastRun: null, all: { held: 0, rescued: 0 } } });
+  assert.deepEqual((await call("/api/competitors/candidates")).body, { configured: false, discovery: null, candidates: [], passedOver: [], holds: { lastRun: null, all: { held: 0, rescued: 0 } }, shadow: { read: 0, layaYes: 0, jevYes: 0, decided: 0, layaRight: 0, jevRight: 0 } });
   assert.equal((await call("/api/competitors/discover", "POST", "{}")).status, 404);
 });
 
@@ -264,4 +264,11 @@ test("the weekly digest names what was offered, counts what history held back, a
   const heldOnly = digestNotice(result({ offered: 0, held: 3 }));
   assert.equal(heldOnly?.title, "Scout held back possible competitors");
   assert.match(heldOnly?.body ?? "", /^3 projects were held back because they read like ones you dismissed\./);
+});
+
+test("the weekly digest adds one line comparing Laya with Jev only when Laya answered", () => {
+  const without = digestNotice(result({ offered: 1, offeredNames: ["Atlas"] }));
+  assert.doesNotMatch(without?.body ?? "", /Laya/);
+  const withShadow = digestNotice(result({ offered: 1, offeredNames: ["Atlas"], shadowRead: 8, shadowLaya: 3, shadowJev: 4 }));
+  assert.match(withShadow?.body ?? "", /Laya, running beside Jev, called 3 of 8 worth tracking, and Jev called 4\./);
 });

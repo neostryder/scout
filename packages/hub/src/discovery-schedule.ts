@@ -6,7 +6,7 @@ export const DISCOVERY_INTERVAL_MS = 7 * 86_400_000;
 export const DISCOVERY_START_DELAY_MS = 30 * 60_000;
 export const DISCOVERY_TICK_MS = 3_600_000;
 
-export interface DiscoveryRunResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null; held?: number; offeredNames?: string[] }
+export interface DiscoveryRunResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null; held?: number; shadowRead?: number; shadowLaya?: number; shadowJev?: number; offeredNames?: string[] }
 
 export interface DiscoveryState {
   lastRunAt: string | null;
@@ -66,6 +66,7 @@ export function digestNotice(result: DiscoveryRunResult): OutageNotice | null {
   if (result.offered > 0) parts.push(`${result.offered} new ${result.offered === 1 ? "project" : "projects"} to review${shown ? `: ${shown}${more}` : ""}.`);
   if (held > 0) parts.push(`${held} ${held === 1 ? "project was" : "projects were"} held back because ${held === 1 ? "it reads" : "they read"} like ones you dismissed. Release any that were wrong on the Competitors page.`);
   parts.push(`The search read ${result.gathered} and judged ${result.judged}.`);
+  if ((result.shadowRead ?? 0) > 0) parts.push(`Laya, running beside Jev, called ${result.shadowLaya ?? 0} of ${result.shadowRead} worth tracking, and Jev called ${result.shadowJev ?? 0}.`);
   return { title: result.offered > 0 ? "Scout found possible competitors" : "Scout held back possible competitors", body: parts.join(" "), severity: "info" };
 }
 
