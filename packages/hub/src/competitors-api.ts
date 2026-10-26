@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, dossierStub, getCandidate, holdStats, listCandidates, listOwnerDecisions, listPassedOver, listCompetitorRuns, listCompetitors, nearestWithCloseness, releaseHeld, setCandidateStatus, type Candidate, type Db, type RunState } from "@scout/core";
+import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, dossierStub, getCandidate, holdStats, shadowStats, listCandidates, listOwnerDecisions, listPassedOver, listCompetitorRuns, listCompetitors, nearestWithCloseness, releaseHeld, setCandidateStatus, type Candidate, type Db, type RunState } from "@scout/core";
 import type { CompetitorSchedule } from "./competitor-schedule.ts";
 import type { DiscoverySchedule } from "./discovery-schedule.ts";
 
@@ -81,7 +81,7 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
   }
   if (path === "/api/competitors/candidates") {
     if (!read) return json(res, 405, { error: "method not allowed" });
-    return json(res, 200, { configured: discovery !== undefined, discovery: discovery?.status() ?? null, candidates: withExamples(db, listCandidates(db)), passedOver: withExamples(db, listPassedOver(db)), holds: holdStats(db) });
+    return json(res, 200, { configured: discovery !== undefined, discovery: discovery?.status() ?? null, candidates: withExamples(db, listCandidates(db)), passedOver: withExamples(db, listPassedOver(db)), holds: holdStats(db), shadow: shadowStats(db) });
   }
   const candidatePath = /^\/api\/competitors\/candidates\/([^/]+)\/(track|dismiss|release)$/.exec(path);
   const dossierPath = /^\/api\/competitors\/([^/]+)\/dossier$/.exec(path);

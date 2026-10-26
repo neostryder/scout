@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { candidateId, listCandidates, listPassedOver, openCatalog, rememberPassedOver, saveCandidate, setCandidateStatus } from "@scout/core";
-import { calibrateDiscovery, gatherGithub, jevDecider, jsonFrom, loadDiscoveryConfig, minimaxJudge, nearestDecisions, runDiscovery, type DiscoveryConfig, type FetchLike } from "../src/competitor-discovery.ts";
+import { candidateId, listCandidates, listPassedOver, openCatalog, rememberPassedOver, saveCandidate, setCandidateStatus, shadowStats } from "@scout/core";
+import { calibrateDiscovery, gatherGithub, jevDecider, jsonFrom, layaShadow, loadDiscoveryConfig, minimaxJudge, nearestDecisions, runDiscovery, type DiscoveryConfig, type FetchLike } from "../src/competitor-discovery.ts";
 
 const config: DiscoveryConfig = {
   products: [{ name: "Map Maker", summary: "Draws dungeon maps for game masters." }],
@@ -228,4 +228,39 @@ test("pages read through FireCrawl are judged like repositories, kept with no re
   assert.deepEqual([second.judged, second.offered], [0, 0]);
   const without = await runDiscovery(openCatalog(":memory:"), { config: withWeb, fetcher: search(), judge, decider });
   assert.equal(without.gathered, 0);
+});
+
+test("a shadow answer is stored beside Jev's, counted in the run, compared with the owner's choices, and never changes what is offered", async () => {
+  const db = openCatalog(":memory:");
+  const judge = { summarize: async (p: { name: string }) => ({ summary: `${p.name} makes maps.`, overlaps: ["Map Maker"] }) };
+  const decider = { decide: async (p: { name: string }) => p.name === "Mapper" ? { competitor: 0.9, worthTracking: 0.8 } : p.name === "Demo" ? { competitor: 0.9, worthTracking: 0.1 } : { competitor: 0.2, worthTracking: 0.9 } };
+  const asked: string[] = [];
+  const shadow = async (p: { name: string }) => { asked.push(p.name); if (p.name === "Mapper") return 0.9; if (p.name === "Demo") return null; return 0.2; };
+  const result = await runDiscovery(db, { config, fetcher: search(repo("Mapper"), repo("Demo"), repo("Dice")), judge, decider, shadow });
+  assert.deepEqual(asked, ["Mapper", "Demo", "Dice"]);
+  assert.deepEqual([result.offered, result.rejected, result.shadowRead, result.shadowLaya, result.shadowJev], [1, 2, 2, 1, 2]);
+  const [offered] = listCandidates(db);
+  assert.deepEqual([offered?.name, offered?.judgement?.shadow], ["Mapper", { laya: 0.9 }]);
+  assert.equal(listPassedOver(db).find((item) => item.name === "Demo")?.judgement?.shadow, undefined);
+  assert.deepEqual(shadowStats(db), { read: 2, layaYes: 1, jevYes: 2, decided: 0, layaRight: 0, jevRight: 0 });
+  setCandidateStatus(db, offered!.id, "tracked", "2026-10-26T00:00:00.000Z");
+  const dice = listPassedOver(db).find((item) => item.name === "Dice")!;
+  assert.deepEqual(shadowStats(db), { read: 2, layaYes: 1, jevYes: 2, decided: 1, layaRight: 1, jevRight: 1 });
+  assert.equal(dice.status, "dismissed");
+  const down = await runDiscovery(openCatalog(":memory:"), { config, fetcher: search(repo("Mapper")), judge, decider, shadow: async () => { throw new Error("laya is down"); } });
+  assert.deepEqual([down.offered, down.shadowRead], [1, 0]);
+});
+
+test("the Laya shadow sends the adapter model and public facts, reads the worth-tracking answer, and gives null when Laya cannot answer", async () => {
+  const sent: { url: string; body: any }[] = [];
+  const ok = layaShadow({ post: async (url, init) => { sent.push({ url, body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ answers: { worth_tracking: { noul: 0.38 } } }) }; } });
+  const project = { key: "github:a/b", source: "github" as const, name: "Atlas", org: "acme", url: "https://github.com/a/b", repoUrl: null, description: "d".repeat(900), topics: ["rpg"], stars: 5, pushedAt: null };
+  assert.equal(await ok(project, "Maps."), 0.38);
+  assert.equal(sent[0]?.body.model, "laya:scout_worth_tracking");
+  assert.deepEqual(Object.keys(sent[0]?.body.state), ["name", "org", "description", "topics", "summary"]);
+  assert.equal(sent[0]?.body.state.description.length, 500);
+  assert.equal(sent[0]?.body.questions.worth_tracking.type, "noul");
+  assert.equal(await layaShadow({ post: async () => ({ ok: false, status: 500, json: async () => ({}) }) })(project, "x"), null);
+  assert.equal(await layaShadow({ post: async () => { throw new Error("refused"); } })(project, "x"), null);
+  assert.equal(await layaShadow({ post: async () => ({ ok: true, status: 200, json: async () => ({ answers: { worth_tracking: { noul: 7 } } }) }) })(project, "x"), null);
 });
