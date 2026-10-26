@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, examplesText, filterRows, flagOptions, GATE_FIELDS, gateChange, heldText, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, examplesText, filterRows, flagOptions, GATE_FIELDS, gateChange, heldText, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, TRACK_PAGE_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 import { searchCompetitors, searchNote } from "./competitors-search.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
@@ -151,7 +151,7 @@ export function createCompetitorsView(root) {
       heldText(candidate) ? h("div", { class: "commits" }, heldText(candidate)) : [],
       examplesText(candidate) ? h("div", { class: "commits", "data-examples": candidate.id }, examplesText(candidate)) : [],
       h("div", { class: "actions" },
-        candidate.repoUrl ? h("button", { type: "button", class: "primary", "data-track": candidate.id, "aria-label": `Track ${candidate.name}`, onclick: (event) => askTrack(candidate, event.currentTarget) }, candidate.passedOver ? "Track anyway" : "Track") : [],
+        candidate.repoUrl || candidate.source === "web" ? h("button", { type: "button", class: "primary", "data-track": candidate.id, "aria-label": `Track ${candidate.name}`, onclick: (event) => askTrack(candidate, event.currentTarget) }, candidate.passedOver ? "Track anyway" : "Track") : [],
         candidate.passedOver ? [] : h("button", { type: "button", "data-dismiss": candidate.id, "aria-label": `Dismiss ${candidate.name}`, onclick: () => decide(candidate, "dismiss") }, "Dismiss")),
     );
   }
@@ -342,7 +342,7 @@ export function createCompetitorsView(root) {
     } }, "Track");
     dialog.replaceChildren(
       h("h2", { id: "competitor-confirm-title" }, `Track ${candidate.name}`),
-      h("p", {}, TRACK_CONFIRM),
+      h("p", {}, candidate.repoUrl ? TRACK_CONFIRM : TRACK_PAGE_CONFIRM),
       problem,
       h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), submit),
     );

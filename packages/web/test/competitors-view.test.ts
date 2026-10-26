@@ -377,6 +377,14 @@ test("a candidate without a repository address cannot be tracked, only dismissed
   assert.ok(walk(page.root).find((el) => el.attrs["data-dismiss"]));
 });
 
+test("a page found on the web can be tracked, and its confirmation says there is no repository to copy", async (t) => {
+  const page = await open(t, panel([candidate({ id: "web-pagemaker", source: "web", repoUrl: null, url: "https://pagemaker.example.com/" })]));
+  await click(button(page.root, "Track")!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  assert.match(allText(dialog), /It has no repository, so no local copy is kept/);
+  assert.doesNotMatch(allText(dialog), /keep a local copy of its repository/);
+});
+
 test("the panel stays hidden when discovery is off or the hub is too old to know it", async (t) => {
   const off = await open(t, (url) => (url.endsWith("/candidates") ? { configured: false, discovery: null, candidates: [] } : ok([row()])));
   assert.equal(walk(off.root).find((el) => el.tag === "section")?.hidden, true);

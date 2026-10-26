@@ -78,9 +78,14 @@ test("discovery.json needs products and searches, and a missing file means disco
   try {
     assert.equal(loadDiscoveryConfig(dir), null);
     writeFileSync(join(dir, "discovery.json"), JSON.stringify({ products: [{ name: "P", summary: "s" }], github: { queries: ["topic:x"], perQuery: 5 }, ignore: ["Me"], maxJudged: 9 }));
-    assert.deepEqual(loadDiscoveryConfig(dir), { products: [{ name: "P", summary: "s" }], npm: null, github: { queries: ["topic:x"], pushedWithinDays: 365, perQuery: 5 }, minCompetitor: 0.6, minWorthTracking: 0.4, maxJudged: 9, ignore: ["me"] });
+    assert.deepEqual(loadDiscoveryConfig(dir), { products: [{ name: "P", summary: "s" }], npm: null, web: null, github: { queries: ["topic:x"], pushedWithinDays: 365, perQuery: 5 }, minCompetitor: 0.6, minWorthTracking: 0.4, maxJudged: 9, ignore: ["me"] });
     writeFileSync(join(dir, "discovery.json"), JSON.stringify({ products: [] }));
     assert.throws(() => loadDiscoveryConfig(dir), /at least one product/);
+    const base = { products: [{ name: "P", summary: "s" }], github: { queries: ["topic:x"] } };
+    writeFileSync(join(dir, "discovery.json"), JSON.stringify({ ...base, web: { firecrawl: ["http://127.0.0.1:3002"], perRun: 6, pages: [{ url: "https://itch.io/games/tag-angband", pattern: "itch", limit: 4 }, { url: "not a url" }, { url: "https://foundryvtt.com/packages/tag/ai-tools" }] } }));
+    assert.deepEqual(loadDiscoveryConfig(dir)?.web, { firecrawl: ["http://127.0.0.1:3002"], perRun: 6, pages: [{ url: "https://itch.io/games/tag-angband", pattern: "itch", limit: 4 }, { url: "https://foundryvtt.com/packages/tag/ai-tools", pattern: null, limit: 10 }] });
+    writeFileSync(join(dir, "discovery.json"), JSON.stringify({ ...base, web: { pages: [{ url: "https://itch.io/" }] } }));
+    assert.throws(() => loadDiscoveryConfig(dir), /needs web.firecrawl/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -203,4 +208,24 @@ test("a project that reads like earlier dismissals is held back by history even 
   assert.match(passed[0]!.judgement!.heldByHistory ?? "", /Reads like Fx\d+, which was dismissed/);
   const offered = await run("Helper", "Assistant that runs sessions for game masters.");
   assert.deepEqual([offered.offered, offered.rejected], [1, 0]);
+});
+
+test("pages read through FireCrawl are judged like repositories, kept with no repository address, and not judged twice", async () => {
+  const db = openCatalog(":memory:");
+  const scrape = async (url: string, want: "links" | "markdown") => want === "links"
+    ? { title: "", description: "", markdown: "", links: ["https://pagemaker.example.com/", "https://github.com/acme/mapper"] }
+    : { title: "Page Maker | Example", description: "Makes pages for game masters.", markdown: "Pages.", links: [] as string[] };
+  const judge = { summarize: async (p: { name: string }) => ({ summary: `${p.name} makes maps.`, overlaps: ["Map Maker"] }) };
+  const decider = { decide: async () => ({ competitor: 0.9, worthTracking: 0.8 }) };
+  const withWeb = { ...config, web: { firecrawl: ["http://fc"], perRun: 5, pages: [{ url: "https://listing.example.com/", pattern: null, limit: 5 }] } };
+  const input = { config: withWeb, fetcher: search(), judge, decider, scrape };
+  const first = await runDiscovery(db, { ...input, fetcher: async (url: string) => url.includes("/repos/acme/mapper") ? { ok: true, status: 200, json: async () => repo("mapper", "acme") } : { ok: true, status: 200, json: async () => ({ items: [] }) } });
+  assert.deepEqual([first.gathered, first.judged, first.offered], [2, 2, 2]);
+  const page = listCandidates(db).find((item) => item.source === "web");
+  assert.deepEqual([page?.key, page?.name, page?.org, page?.repoUrl, page?.url], ["web:pagemaker.example.com", "Page Maker", "pagemaker.example.com", null, "https://pagemaker.example.com/"]);
+  assert.equal(page?.description, "Makes pages for game masters. Pages.");
+  const second = await runDiscovery(db, { ...input, fetcher: async (url: string) => url.includes("/repos/") ? { ok: true, status: 200, json: async () => repo("mapper", "acme") } : { ok: true, status: 200, json: async () => ({ items: [] }) } });
+  assert.deepEqual([second.judged, second.offered], [0, 0]);
+  const without = await runDiscovery(openCatalog(":memory:"), { config: withWeb, fetcher: search(), judge, decider });
+  assert.equal(without.gathered, 0);
 });

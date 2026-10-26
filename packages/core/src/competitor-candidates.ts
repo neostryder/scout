@@ -4,9 +4,10 @@ export type CandidateStatus = "new" | "tracked" | "dismissed";
 
 /** What the discovery run reads about one project before any model sees it. */
 export interface CandidateSource {
-  /** Stable per source, such as "github:owner/repo". */
+  /** Stable per source, such as "github:owner/repo" or "web:host/path". */
   key: string;
-  source: "github";
+  /** A "web" project is a page read through FireCrawl, so it has no repository address. */
+  source: "github" | "web";
   name: string;
   org: string | null;
   url: string;
@@ -48,7 +49,7 @@ interface Row {
 }
 
 const toCandidate = (row: Row): Candidate => ({
-  id: row.id, key: row.source_key, source: "github", name: row.name, org: row.org, url: row.url, repoUrl: row.repo_url,
+  id: row.id, key: row.source_key, source: row.source === "web" ? "web" : "github", name: row.name, org: row.org, url: row.url, repoUrl: row.repo_url,
   description: row.description, topics: JSON.parse(row.topics_json) as string[], stars: row.stars, pushedAt: row.pushed_at,
   status: row.status as CandidateStatus, score: row.score, passedOver: row.passed_over === 1, judgement: row.judge_json ? JSON.parse(row.judge_json) as CandidateJudgement : null,
   foundAt: row.found_at, decidedAt: row.decided_at,
