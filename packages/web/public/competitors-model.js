@@ -253,6 +253,9 @@ export function repoFromForm({ remoteUrl, folder, commit, version }) {
 
 export const TRACK_CONFIRM = "Add this project to the competitor list, read its newest version, and keep a local copy of its repository so later checks can count what changed, and start a dossier page for it. Nothing is installed.";
 
+/** A page found on the web has no repository, so there is nothing to mirror. */
+export const TRACK_PAGE_CONFIRM = "Add this page to the competitor list and start a dossier page for it. It has no repository, so no local copy is kept; a watch source can be set from its row later. Nothing is installed.";
+
 /** What the hub says about the copy it tried to keep when a project was tracked. */
 export function trackedText(name, body) {
   const base = `${name} added to the competitor list.`;

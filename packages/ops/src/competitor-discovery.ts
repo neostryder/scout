@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { historyHold, knownCandidateKeys, listOwnerDecisions, nearestWithCloseness, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type Db, type OwnerDecision } from "@scout/core";
 import { readSecret } from "./secrets.ts";
+import { gatherWeb, type Scrape, type WebConfig } from "./competitor-web.ts";
 
 export interface DiscoveryProduct { name: string; summary: string }
 
@@ -11,6 +12,8 @@ export interface DiscoveryConfig {
   github: { queries: string[]; pushedWithinDays: number; perQuery: number };
   /** Package searches on npm. A package that names a GitHub repository is judged as that repository, so both sources land in one list. */
   npm?: { queries: string[]; perQuery: number } | null;
+  /** Listing pages read through the self-hosted FireCrawl, for sources that are not GitHub or npm. */
+  web?: WebConfig | null;
   /** Jev's competitor probability a project needs to be offered. */
   minCompetitor: number;
   /** Jev's worth-tracking probability a project needs to be offered. */
@@ -65,9 +68,18 @@ export function loadDiscoveryConfig(dataDir = ".scout-data"): DiscoveryConfig | 
   if (queries.length === 0) throw new Error(`${DISCOVERY_FILE} needs github.queries, such as "topic:foundry-vtt"`);
   const npm = (file["npm"] && typeof file["npm"] === "object" ? file["npm"] : {}) as Record<string, unknown>;
   const npmQueries = strings(npm["queries"]);
+  const web = (file["web"] && typeof file["web"] === "object" ? file["web"] : {}) as Record<string, unknown>;
+  const pages = (Array.isArray(web["pages"]) ? web["pages"] : []).flatMap((item): WebConfig["pages"] => {
+    const row = item as Record<string, unknown> | null;
+    if (!row || typeof row["url"] !== "string" || !/^https?:\/\//i.test(row["url"])) return [];
+    return [{ url: row["url"], pattern: typeof row["pattern"] === "string" && row["pattern"] !== "" ? row["pattern"] : null, limit: count(row["limit"], 10, 50) }];
+  });
+  const firecrawl = strings(web["firecrawl"]);
+  if (pages.length > 0 && firecrawl.length === 0) throw new Error(`${DISCOVERY_FILE} needs web.firecrawl, the address of the self-hosted FireCrawl, when it lists web.pages`);
   return {
     products,
     npm: npmQueries.length > 0 ? { queries: npmQueries, perQuery: count(npm["perQuery"], 20, 50) } : null,
+    web: pages.length > 0 ? { firecrawl, pages, perRun: count(web["perRun"], 10, 40) } : null,
     github: { queries, pushedWithinDays: count(github["pushedWithinDays"], 365, 3650), perQuery: count(github["perQuery"], 20, 50) },
     minCompetitor: fraction(file["minCompetitor"], 0.6),
     minWorthTracking: fraction(file["minWorthTracking"], 0.4),
@@ -142,6 +154,8 @@ export async function runDiscovery(db: Db, input: {
   config: DiscoveryConfig; fetcher: FetchLike; judge: Judge; decider: Decider; now?: Date; log?: (line: string) => void;
   /** Repository and package addresses already tracked, lowercase. */
   tracked?: Set<string>;
+  /** Reads a page through FireCrawl. Without it the `web` pages in the configuration are not read. */
+  scrape?: Scrape;
 }): Promise<DiscoveryResult> {
   const { config, fetcher, judge, decider } = input;
   const now = input.now ?? new Date();
@@ -150,13 +164,17 @@ export async function runDiscovery(db: Db, input: {
   const known = knownCandidateKeys(db);
   const fromGithub = await gatherGithub(config, fetcher, now, log);
   // Anything already judged or found by the repository search needs no lookup.
-  const gathered = [...fromGithub, ...await gatherNpm(config, fetcher, new Set([...known, ...fromGithub.map((project) => project.key)]), log)];
+  const fromNpm = await gatherNpm(config, fetcher, new Set([...known, ...fromGithub.map((project) => project.key)]), log);
+  const seen = new Set([...known, ...fromGithub.map((project) => project.key), ...fromNpm.map((project) => project.key)]);
+  const fromWeb = config.web && input.scrape ? await gatherWeb(config.web, { scrape: input.scrape, repoOf: githubRepoFrom, lookupRepo: (repo) => fetchRepoFacts(repo, fetcher) }, seen, log) : [];
+  const gathered = [...fromGithub, ...fromNpm, ...fromWeb];
   result.gathered = gathered.length;
   const tracked = input.tracked ?? new Set<string>();
   const fresh = gathered.filter((project) => {
     if (known.has(project.key) || tracked.has(project.url.toLowerCase()) || tracked.has((project.repoUrl ?? "").toLowerCase())) return false;
-    const [owner = ""] = project.key.replace("github:", "").split("/");
-    return !config.ignore.includes(owner) && !config.ignore.includes(project.key.replace("github:", ""));
+    const name = project.key.replace(/^(github|web):/, "");
+    const [owner = ""] = name.split("/");
+    return !config.ignore.includes(owner) && !config.ignore.includes(name);
   }).slice(0, config.maxJudged);
   let inARow = 0;
   // Read once per run: what the owner tracked and dismissed so far teaches the judge what counts here.
