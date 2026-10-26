@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openCatalog, rememberPassedOver, saveCandidate, setCandidateStatus, type CandidateJudgement, type CandidateSource, type OutageNotice } from "@scout/core";
 import { CompetitorSchedule } from "../src/competitor-schedule.ts";
-import { DiscoverySchedule, DISCOVERY_INTERVAL_MS, type DiscoveryRunResult } from "../src/discovery-schedule.ts";
+import { DiscoverySchedule, DISCOVERY_INTERVAL_MS, digestNotice, type DiscoveryRunResult } from "../src/discovery-schedule.ts";
 import { createHub } from "../src/server.ts";
 
 const NOW = "2026-10-25T00:00:00.000Z";
@@ -252,4 +252,16 @@ test("a project held back by history can be released into the offered list, the 
   assert.equal((await call("/api/competitors/nothing-here/dossier")).status, 404);
   db.prepare("UPDATE competitors SET dossier_dir = ? WHERE id = ?").run("C:/elsewhere/secret", "github-acme-sheets");
   assert.equal((await call("/api/competitors/github-acme-sheets/dossier")).status, 404);
+});
+
+test("the weekly digest names what was offered, counts what history held back, and stays quiet when there is nothing", () => {
+  assert.equal(digestNotice(result({ offered: 0, held: 0 })), null);
+  const both = digestNotice(result({ offered: 2, offeredNames: ["Atlas", "Mapper"], held: 1, gathered: 9, judged: 7 }));
+  assert.equal(both?.title, "Scout found possible competitors");
+  assert.equal(both?.body, "2 new projects to review: Atlas, Mapper. 1 project was held back because it reads like ones you dismissed. Release any that were wrong on the Competitors page. The search read 9 and judged 7.");
+  const many = digestNotice(result({ offered: 7, offeredNames: ["A", "B", "C", "D", "E", "F", "G"], held: 0 }));
+  assert.match(many?.body ?? "", /to review: A, B, C, D, E, and 2 more\./);
+  const heldOnly = digestNotice(result({ offered: 0, held: 3 }));
+  assert.equal(heldOnly?.title, "Scout held back possible competitors");
+  assert.match(heldOnly?.body ?? "", /^3 projects were held back because they read like ones you dismissed\./);
 });

@@ -34,7 +34,7 @@ export function nearestDecisions(summary: string, topics: string[], decisions: O
   return nearestWithCloseness(summary, topics, decisions, perSide).map((item) => item.decision);
 }
 
-export interface DiscoveryResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null }
+export interface DiscoveryResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null; /** Projects held back because they read like dismissed ones. */ held: number; /** Names of the offered projects, in the order they were found. */ offeredNames: string[] }
 
 export const DISCOVERY_FILE = "discovery.json";
 const MAX_ERRORS_IN_A_ROW = 3;
@@ -160,7 +160,7 @@ export async function runDiscovery(db: Db, input: {
   const { config, fetcher, judge, decider } = input;
   const now = input.now ?? new Date();
   const log = input.log ?? (() => {});
-  const result: DiscoveryResult = { gathered: 0, judged: 0, offered: 0, rejected: 0, errors: 0, error: null };
+  const result: DiscoveryResult = { gathered: 0, judged: 0, offered: 0, rejected: 0, errors: 0, error: null, held: 0, offeredNames: [] };
   const known = knownCandidateKeys(db);
   const fromGithub = await gatherGithub(config, fetcher, now, log);
   // Anything already judged or found by the repository search needs no lookup.
@@ -192,10 +192,11 @@ export async function runDiscovery(db: Db, input: {
       const held = historyHold(near, learned.length);
       if (held) judgement.heldByHistory = held;
       if (!held && decision.competitor >= config.minCompetitor && decision.worthTracking >= config.minWorthTracking) {
-        if (saveCandidate(db, project, judgement, score, stamp)) result.offered += 1;
+        if (saveCandidate(db, project, judgement, score, stamp)) { result.offered += 1; result.offeredNames.push(project.name); }
       } else {
         rememberPassedOver(db, project, judgement, score, stamp);
         result.rejected += 1;
+        if (held) result.held += 1;
       }
     } catch (error) {
       result.errors += 1;
