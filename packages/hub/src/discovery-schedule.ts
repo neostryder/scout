@@ -6,7 +6,7 @@ export const DISCOVERY_INTERVAL_MS = 7 * 86_400_000;
 export const DISCOVERY_START_DELAY_MS = 30 * 60_000;
 export const DISCOVERY_TICK_MS = 3_600_000;
 
-export interface DiscoveryRunResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null }
+export interface DiscoveryRunResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null; held?: number; offeredNames?: string[] }
 
 export interface DiscoveryState {
   lastRunAt: string | null;
@@ -51,6 +51,22 @@ function readState(path: string | undefined): DiscoveryState {
       lastError: typeof raw.lastError === "string" ? raw.lastError : null,
     };
   } catch { return { ...EMPTY }; }
+}
+
+const DIGEST_NAMES = 5;
+
+/** One short summary per search: what was offered and by name, and how many look-alikes of dismissed projects were held back. Nothing to say, nothing sent. */
+export function digestNotice(result: DiscoveryRunResult): OutageNotice | null {
+  const held = result.held ?? 0;
+  if (result.offered === 0 && held === 0) return null;
+  const names = result.offeredNames ?? [];
+  const shown = names.slice(0, DIGEST_NAMES).join(", ");
+  const more = names.length > DIGEST_NAMES ? `, and ${names.length - DIGEST_NAMES} more` : "";
+  const parts: string[] = [];
+  if (result.offered > 0) parts.push(`${result.offered} new ${result.offered === 1 ? "project" : "projects"} to review${shown ? `: ${shown}${more}` : ""}.`);
+  if (held > 0) parts.push(`${held} ${held === 1 ? "project was" : "projects were"} held back because ${held === 1 ? "it reads" : "they read"} like ones you dismissed. Release any that were wrong on the Competitors page.`);
+  parts.push(`The search read ${result.gathered} and judged ${result.judged}.`);
+  return { title: result.offered > 0 ? "Scout found possible competitors" : "Scout held back possible competitors", body: parts.join(" "), severity: "info" };
 }
 
 /** Looks for new competitors about once a week. Each pass is cheap and bounded, and everything it finds waits as a candidate until it is accepted. */
@@ -104,7 +120,8 @@ export class DiscoverySchedule {
       const result = await this.options.run();
       this.state = { lastRunAt: at, lastResult: result, lastError: result.error };
       this.save();
-      if (result.offered > 0) this.notify({ title: "Scout found possible competitors", body: `${result.offered} new ${result.offered === 1 ? "project" : "projects"} to review on the Competitors page.`, severity: "info" });
+      const digest = digestNotice(result);
+      if (digest) this.notify(digest);
       if (result.error) this.notify({ title: "Scout stopped looking for competitors early", body: result.error, severity: "high" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "discovery failed";
