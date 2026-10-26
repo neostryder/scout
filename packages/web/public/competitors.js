@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, examplesText, filterRows, flagOptions, GATE_FIELDS, gateChange, heldText, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, TRACK_PAGE_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, examplesText, filterRows, flagOptions, GATE_FIELDS, gateChange, heldText, holdText, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, TRACK_PAGE_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 import { searchCompetitors, searchNote } from "./competitors-search.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
@@ -25,6 +25,7 @@ export function createCompetitorsView(root) {
   let candidates = [];
   let passedOver = [];
   let discovery = null;
+  let holds = null;
   let discoverConfigured = false;
   let checkedAt = null;
   let configured = true;
@@ -67,11 +68,12 @@ export function createCompetitorsView(root) {
   const tableWrap = h("div", { class: "table-wrap" });
   const discover = h("button", { type: "button", "data-discover": "", onclick: () => discoverNow() }, "Look for new ones");
   const candidatesNote = h("p", { class: "competitors-status" });
+  const holdNote = h("p", { class: "competitors-status", "data-holds": "" });
   const candidatesList = h("div", { class: "candidates" });
   const passedList = h("div", { class: "candidates" });
   const passedTitle = h("summary", {}, "Passed over");
   const passedPanel = h("details", { class: "passed-over" }, passedTitle, h("p", { class: "competitors-status" }, "Projects the last searches read and held back, strongest first. Track anyway adds one to the competitor list."), passedList);
-  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, candidatesList, passedPanel);
+  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, holdNote, candidatesList, passedPanel);
   const dialog = h("dialog", { "aria-labelledby": "competitor-confirm-title" });
 
   root.classList.add("competitors");
@@ -87,10 +89,12 @@ export function createCompetitorsView(root) {
   }
 
   function links(row) {
-    return [["Package", row.packageUrl], ["Repository", row.remoteUrl]].flatMap(([label, href]) => {
+    const out = [["Package", row.packageUrl], ["Repository", row.remoteUrl]].flatMap(([label, href]) => {
       const safe = safeUrl(href);
       return safe ? [h("a", { href: safe, target: "_blank", rel: "noopener noreferrer" }, label)] : [];
     });
+    if (row.dossierDir) out.push(h("button", { type: "button", class: "link-button", "data-dossier": row.id, "aria-label": `Open dossier for ${row.name}`, onclick: (event) => askDossier(row, event.currentTarget) }, "Open dossier"));
+    return out;
   }
 
   function watchButton(row) {
@@ -152,6 +156,7 @@ export function createCompetitorsView(root) {
       examplesText(candidate) ? h("div", { class: "commits", "data-examples": candidate.id }, examplesText(candidate)) : [],
       h("div", { class: "actions" },
         candidate.repoUrl || candidate.source === "web" ? h("button", { type: "button", class: "primary", "data-track": candidate.id, "aria-label": `Track ${candidate.name}`, onclick: (event) => askTrack(candidate, event.currentTarget) }, candidate.passedOver ? "Track anyway" : "Track") : [],
+        candidate.passedOver && candidate.judgement?.heldByHistory ? h("button", { type: "button", "data-release": candidate.id, "aria-label": `Release ${candidate.name} to the offered list`, onclick: () => decide(candidate, "release") }, "Release") : [],
         candidate.passedOver ? [] : h("button", { type: "button", "data-dismiss": candidate.id, "aria-label": `Dismiss ${candidate.name}`, onclick: () => decide(candidate, "dismiss") }, "Dismiss")),
     );
   }
@@ -162,6 +167,8 @@ export function createCompetitorsView(root) {
     if (!show) return;
     discover.disabled = Boolean(discovery?.running);
     candidatesNote.textContent = discoveryText(discovery);
+    holdNote.textContent = holdText(holds);
+    holdNote.hidden = holdNote.textContent === "";
     const waiting = sortCandidates(candidates);
     candidatesList.replaceChildren(...(waiting.length ? waiting.map(candidateView) : [h("p", { class: "empty" }, "Nothing is waiting for a decision.")]));
     passedPanel.hidden = passedOver.length === 0;
@@ -284,6 +291,7 @@ export function createCompetitorsView(root) {
       if (mine !== controller) return;
       discoverConfigured = body.configured === true;
       discovery = body.discovery || null;
+      holds = body.holds || null;
       candidates = Array.isArray(body.candidates) ? body.candidates : [];
       passedOver = Array.isArray(body.passedOver) ? body.passedOver : [];
     } catch (cause) {
@@ -321,7 +329,7 @@ export function createCompetitorsView(root) {
       const response = await fetch(`/api/competitors/candidates/${encodeURIComponent(candidate.id)}/${action}`, JSON_POST);
       const body = await readJson(response);
       if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
-      notice = action === "track" ? trackedText(candidate.name, body) : `${candidate.name} dismissed. It will not be offered again.`;
+      notice = action === "track" ? trackedText(candidate.name, body) : action === "release" ? `${candidate.name} released. It is in the list above for you to Track or Dismiss.` : `${candidate.name} dismissed. It will not be offered again.`;
       error = "";
       if (dialog.open) dialog.close();
       if (visible) await load();
@@ -553,6 +561,26 @@ export function createCompetitorsView(root) {
       h("div", { class: "actions" }, h("button", { type: "button", onclick: () => closeDialog(opener) }, "Cancel"), submit),
     );
     dialog.showModal();
+  }
+
+  async function askDossier(row, opener) {
+    const body = h("div", { class: "dossier-body" }, h("p", { class: "competitors-status" }, "Reading the dossier..."));
+    dialog.replaceChildren(
+      h("h2", { id: "competitor-confirm-title" }, `Dossier: ${row.name}`),
+      body,
+      h("div", { class: "actions" }, h("button", { type: "button", class: "primary", onclick: () => closeDialog(opener) }, "Close")),
+    );
+    dialog.showModal();
+    try {
+      const response = await fetch(`/api/competitors/${encodeURIComponent(row.id)}/dossier`);
+      const result = await readJson(response);
+      if (!response.ok) throw new Error(result.error || `The hub answered ${response.status}.`);
+      const files = Array.isArray(result.files) ? result.files : [];
+      body.replaceChildren(
+        h("p", { class: "competitors-status" }, `${result.folder}${files.length ? `: ${files.join(", ")}` : ""}`),
+        result.overview ? h("pre", { class: "dossier-text" }, result.overview) : h("p", { class: "empty" }, "The folder has no pages yet."),
+      );
+    } catch (cause) { body.replaceChildren(h("p", { role: "alert" }, failureText(cause))); }
   }
 
   function askRemove(row, opener) {

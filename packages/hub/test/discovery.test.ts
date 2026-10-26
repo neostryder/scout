@@ -112,7 +112,7 @@ test("without a discovery schedule the candidate list says so and discover answe
   const db = openCatalog(":memory:");
   t.after(() => db.close());
   const call = await hub(t, { db });
-  assert.deepEqual((await call("/api/competitors/candidates")).body, { configured: false, discovery: null, candidates: [], passedOver: [] });
+  assert.deepEqual((await call("/api/competitors/candidates")).body, { configured: false, discovery: null, candidates: [], passedOver: [], holds: { lastRun: null, all: { held: 0, rescued: 0 } } });
   assert.equal((await call("/api/competitors/discover", "POST", "{}")).status, 404);
 });
 
@@ -217,4 +217,39 @@ test("a dossier page that already exists is never overwritten", async (t) => {
   const call = await hub(t, { db, competitors, discovery: new DiscoverySchedule({ run: async () => result() }) });
   assert.equal((await call("/api/competitors/candidates/github-acme-mapper/track", "POST", "{}")).status, 200);
   assert.equal(readFileSync(join(dossierRoot, "acme - Mapper", "00_Overview.md"), "utf8"), "hand written");
+});
+
+test("a project held back by history can be released into the offered list, the hold gauge counts it, and a tracked project's dossier can be read", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-disc-release-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const configPath = join(dir, "competitors.json");
+  const dossierRoot = join(dir, "d");
+  writeFileSync(configPath, JSON.stringify({ dossierRoot, mirrorRoot: join(dir, "m"), entries: [] }));
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  rememberPassedOver(db, source("Sheets"), { ...judgement, heldByHistory: "Reads like Sparkles, which was dismissed (60% alike)" }, 0.8, NOW);
+  rememberPassedOver(db, source("Dice"), { ...judgement, heldByHistory: "Reads like Sparkles, which was dismissed (50% alike)" }, 0.8, NOW);
+  rememberPassedOver(db, source("Plain"), judgement, 0.3, NOW);
+  const competitors = new CompetitorSchedule(db, { configPath, check: async () => ({ version: "2.1.0", prerelease: null, commit: "c".repeat(40), error: null }) });
+  const call = await hub(t, { db, competitors, discovery: new DiscoverySchedule({ run: async () => result() }) });
+  assert.deepEqual((await call("/api/competitors/candidates")).body.holds, { lastRun: { at: NOW, held: 2, rescued: 0 }, all: { held: 2, rescued: 0 } });
+  assert.equal((await call("/api/competitors/candidates/github-acme-plain/release", "POST", "{}")).status, 409);
+  assert.equal((await call("/api/competitors/candidates/github-acme-nothing/release", "POST", "{}")).status, 404);
+  const released = await call("/api/competitors/candidates/github-acme-sheets/release", "POST", "{}");
+  assert.equal(released.status, 200);
+  assert.deepEqual([released.body.status, released.body.passedOver, released.body.judgement.heldByHistory, released.body.judgement.releasedFromHold], ["new", false, undefined, "Reads like Sparkles, which was dismissed (60% alike)"]);
+  const listed = (await call("/api/competitors/candidates")).body;
+  assert.deepEqual(listed.candidates.map((item: { name: string }) => item.name), ["Sheets"]);
+  assert.deepEqual(listed.passedOver.map((item: { name: string }) => item.name).sort(), ["Dice", "Plain"]);
+  assert.deepEqual(listed.holds.all, { held: 2, rescued: 1 });
+  assert.equal((await call("/api/competitors/candidates/github-acme-sheets/release", "POST", "{}")).status, 409);
+
+  assert.equal((await call("/api/competitors/candidates/github-acme-sheets/track", "POST", "{}")).body.dossier, true);
+  const dossier = await call("/api/competitors/github-acme-sheets/dossier");
+  assert.equal(dossier.status, 200);
+  assert.deepEqual([dossier.body.folder, dossier.body.files], ["acme - Sheets", ["00_Overview.md"]]);
+  assert.match(dossier.body.overview, /^# Sheets$/m);
+  assert.equal((await call("/api/competitors/nothing-here/dossier")).status, 404);
+  db.prepare("UPDATE competitors SET dossier_dir = ? WHERE id = ?").run("C:/elsewhere/secret", "github-acme-sheets");
+  assert.equal((await call("/api/competitors/github-acme-sheets/dossier")).status, 404);
 });
