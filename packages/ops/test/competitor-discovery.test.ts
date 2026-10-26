@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listCandidates, listPassedOver, openCatalog } from "@scout/core";
-import { calibrateDiscovery, gatherGithub, jevDecider, jsonFrom, loadDiscoveryConfig, minimaxJudge, runDiscovery, type DiscoveryConfig, type FetchLike } from "../src/competitor-discovery.ts";
+import { candidateId, listCandidates, listPassedOver, openCatalog, rememberPassedOver, saveCandidate, setCandidateStatus } from "@scout/core";
+import { calibrateDiscovery, gatherGithub, jevDecider, jsonFrom, loadDiscoveryConfig, minimaxJudge, nearestDecisions, runDiscovery, type DiscoveryConfig, type FetchLike } from "../src/competitor-discovery.ts";
 
 const config: DiscoveryConfig = {
   products: [{ name: "Map Maker", summary: "Draws dungeon maps for game masters." }],
@@ -141,4 +141,45 @@ test("npm packages that name a GitHub repository are judged as that repository, 
   assert.deepEqual(found.map((project) => project.key), ["github:acme/tool"]);
   assert.deepEqual(seen.filter((url) => url.startsWith("https://api.github.com")), ["https://api.github.com/repos/acme/Tool"]);
   assert.deepEqual(await gatherNpm(config, fetcher, new Set()), []);
+});
+
+test("the owner's decisions nearest in wording come first, a few from each side", () => {
+  const decisions = [
+    { verdict: "tracked" as const, summary: "An assistant that runs tabletop sessions for game masters.", topics: ["ai", "gm"] },
+    { verdict: "tracked" as const, summary: "A map editor.", topics: ["maps"] },
+    { verdict: "dismissed" as const, summary: "A rules system for a fantasy setting.", topics: ["system"] },
+    { verdict: "dismissed" as const, summary: "Particle effects for tabletop scenes.", topics: ["effects"] },
+  ];
+  const near = nearestDecisions("An assistant for game masters running tabletop sessions.", ["ai"], decisions, 1);
+  assert.deepEqual(near.map((item) => item.verdict), ["tracked", "dismissed"]);
+  assert.equal(near[0]?.summary, decisions[0]!.summary);
+  assert.equal(near[1]?.summary, decisions[3]!.summary);
+  assert.deepEqual(nearestDecisions("x", [], [], 4), []);
+});
+
+test("a run hands the decider the owner's earlier Track and Dismiss choices, and never the ones it held back itself", async () => {
+  const db = openCatalog(":memory:");
+  const source = (name: string) => ({ key: `github:someone/${name}`, source: "github" as const, name, org: "someone", url: `https://github.com/someone/${name}`, repoUrl: null, description: "", topics: ["vtt"], stars: 1, pushedAt: null });
+  const judgement = (summary: string) => ({ summary, overlaps: [], competitor: 0.9, worthTracking: 0.9 });
+  saveCandidate(db, source("Taken"), judgement("Helps game masters run tabletop sessions."), 0.9, "2026-10-01T00:00:00Z");
+  setCandidateStatus(db, candidateId("github:someone/Taken"), "tracked", "2026-10-02T00:00:00Z");
+  saveCandidate(db, source("Binned"), judgement("Particle effects for scenes."), 0.9, "2026-10-01T00:00:00Z");
+  setCandidateStatus(db, candidateId("github:someone/Binned"), "dismissed", "2026-10-02T00:00:00Z");
+  rememberPassedOver(db, source("Skipped"), judgement("Held back by the run itself."), 0.3, "2026-10-01T00:00:00Z");
+  const given: string[][] = [];
+  const decider = { decide: async (_p: unknown, _s: string, _products: unknown, decisions?: { verdict: string; summary: string }[]) => { given.push((decisions ?? []).map((item) => `${item.verdict}:${item.summary}`)); return { competitor: 0.9, worthTracking: 0.9 }; } };
+  await runDiscovery(db, { config, fetcher: search(repo("Fresh")), judge: { summarize: async () => ({ summary: "A session helper for game masters.", overlaps: [] }) }, decider });
+  assert.deepEqual(given, [["tracked:Helps game masters run tabletop sessions.", "dismissed:Particle effects for scenes."]]);
+});
+
+test("Jev gets the owner's decisions in its state only when there are some", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const project = { key: "github:a/b", source: "github" as const, name: "b", org: "a", url: "https://github.com/a/b", repoUrl: null, description: "", topics: [], stars: 1, pushedAt: null };
+  const answers = { competitor: { type: "noul", noul: 0.8 }, worthTracking: { type: "noul", noul: 0.5 } };
+  const decider = jevDecider({ readKey: async () => "k", post: async (_url, init) => { bodies.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => ({ answers }) }; } });
+  await decider.decide(project, "s", config.products);
+  await decider.decide(project, "s", config.products, [{ verdict: "dismissed", summary: "Effects.", topics: ["fx"] }]);
+  assert.equal((bodies[0]!["state"] as Record<string, unknown>)["ownerDecisions"], undefined);
+  assert.deepEqual((bodies[1]!["state"] as Record<string, unknown>)["ownerDecisions"], [{ verdict: "dismissed", summary: "Effects.", topics: ["fx"] }]);
+  assert.match(JSON.stringify(bodies[1]!["questions"]), /ownerDecisions/);
 });
