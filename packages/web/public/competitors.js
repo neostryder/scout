@@ -1,5 +1,6 @@
 import { h, safeUrl } from "./lib.js";
-import { analyzedText, baselineSource, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, filterCompetitors, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, filterRows, flagOptions, GATE_FIELDS, gateChange, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { searchCompetitors, searchNote } from "./competitors-search.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
 const postJson = (value) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
@@ -30,8 +31,18 @@ export function createCompetitorsView(root) {
   let error = "";
   let notice = "";
   let loaded = false;
-  let query = "";
+  let whyById = new Map();
+  let query = new URLSearchParams(location.search).get("q") || "";
   let newOnly = false;
+  let statusChoice = "";
+  let flag = "";
+  let batch = "";
+  let research = "";
+  let sortColumn = "";
+  let sortDirection = "asc";
+  let meaning = null;
+  let meaningTimer = null;
+  let meaningFailed = "";
   let chosen = false;
   let announced = null;
   let visible = false;
@@ -43,9 +54,16 @@ export function createCompetitorsView(root) {
   const settings = h("button", { type: "button", onclick: (event) => askGate(event.currentTarget) }, "Update rules");
   const status = h("p", { class: "competitors-status", role: "status", "aria-live": "polite" });
   const count = h("p", { class: "count" });
-  const search = h("input", { type: "search", placeholder: "Name or organization", "aria-label": "Search competitors", autocomplete: "off", oninput: (event) => { query = event.target.value; paint(); } });
+  const search = h("input", { type: "search", placeholder: 'Words, "a phrase", -skip, org:name', "aria-label": "Search competitors", autocomplete: "off", value: query, oninput: (event) => { query = event.target.value; meaning = null; meaningFailed = ""; writeQuery(); paint(); }, onkeydown: (event) => { if (event.key === "Escape" && query) { event.preventDefault(); query = ""; search.value = ""; meaning = null; writeQuery(); paint(); } } });
   const newOnlyInput = h("input", { type: "checkbox", onchange: (event) => { chosen = true; newOnly = event.target.checked; paint(); } });
+  const statusFilter = h("select", { "aria-label": "Filter by status", onchange: (event) => { statusChoice = event.target.value; paint(); } }, h("option", { value: "" }, "Any status"), h("option", { value: "new" }, "New version"), h("option", { value: "current" }, "Up to date"), h("option", { value: "unknown" }, "Not checked"));
+  const researchFilter = h("select", { "aria-label": "Filter by research", onchange: (event) => { research = event.target.value; paint(); } }, h("option", { value: "" }, "Any research"), h("option", { value: "open" }, "Queued or in progress"), h("option", { value: "failed" }, "Failed"), h("option", { value: "none" }, "None"));
+  const flagFilter = h("select", { "aria-label": "Filter by product", onchange: (event) => { flag = event.target.value; paint(); } });
+  const batchFilter = h("select", { "aria-label": "Filter by research batch", onchange: (event) => { batch = event.target.value; paint(); } });
+  const clearFilters = h("button", { type: "button", onclick: () => { newOnly = false; chosen = true; statusChoice = ""; flag = ""; batch = ""; research = ""; paint(); } }, "Clear filters");
   const toolbar = h("div", { class: "search-bar" }, h("label", { class: "search-label" }, "Search", search), h("label", { class: "competitors-new" }, newOnlyInput, "New only"));
+  const filters = h("div", { class: "competitor-filters" }, statusFilter, researchFilter, flagFilter, batchFilter, clearFilters);
+  const searchStatus = h("p", { class: "competitors-status", role: "status", "aria-live": "polite" });
   const tableWrap = h("div", { class: "table-wrap" });
   const discover = h("button", { type: "button", "data-discover": "", onclick: () => discoverNow() }, "Look for new ones");
   const candidatesNote = h("p", { class: "competitors-status" });
@@ -59,7 +77,7 @@ export function createCompetitorsView(root) {
   root.classList.add("competitors");
   root.replaceChildren(
     h("header", { class: "competitors-head" }, h("div", {}, h("h1", {}, "Competitors"), checked), h("div", { class: "actions" }, settings, check)),
-    toolbar, status, count, tableWrap, candidatesPanel, dialog,
+    toolbar, filters, searchStatus, status, count, tableWrap, candidatesPanel, dialog,
   );
 
   function noteRuns() {
@@ -94,11 +112,13 @@ export function createCompetitorsView(root) {
     const latest = latestParts(row.latest);
     const commits = commitsText(row);
     const waiting = pendingText(row.pending);
+    const reason = whyById.get(row.id);
     const trigger = triggerText(row.run);
     const flags = Array.isArray(row.flags) ? row.flags : [];
     const now = new Date().toISOString();
     return h("tr", {},
-      h("td", { class: "name", "data-label": "Competitor" }, h("div", { class: "t" }, row.name), row.org ? h("div", { class: "org" }, row.org) : [], flags.length ? h("div", { class: "flags" }, flags.map((flag) => h("span", { class: "tag" }, flag))) : [], h("div", { class: "commits" }, isWatched(row) ? watchText(row.watch) : syncedText(row.sync, now)), h("div", { class: "links" }, links(row))),
+      h("td", { class: "name", "data-label": "Competitor" }, h("div", { class: "t" }, row.name), row.org ? h("div", { class: "org" }, row.org) : [], flags.length ? h("div", { class: "flags" }, flags.map((flag) => h("span", { class: "tag" }, flag))) : [], h("div", { class: "commits" }, isWatched(row) ? watchText(row.watch) : syncedText(row.sync, now)), reason ? h("div", { class: "why" }, reason) : [], h("div", { class: "links" }, links(row))),
+      h("td", { "data-label": "Added", title: row.batch ? `Found by the search of ${batchLabel(row.batch)}` : "Part of the original list" }, addedText(row)),
       h("td", { "data-label": "Last analyzed", title: baselineSource(row.baseline) }, analyzedText(row.baseline)),
       h("td", { "data-label": "Latest" }, latest.version || (latest.error ? "" : "None"), latest.prerelease ? h("div", { class: "muted" }, latest.prerelease) : [], latest.error ? h("div", { class: "muted" }, latest.error) : []),
       h("td", { "data-label": "Status" }, h("span", { class: statusClass(row) }, statusText(row)), commits ? h("div", { class: "commits" }, commits) : [], waiting ? h("div", { class: "commits" }, waiting) : []),
@@ -107,9 +127,15 @@ export function createCompetitorsView(root) {
     );
   }
 
+  function sortHead(label, column) {
+    const active = sortColumn === column;
+    const next = active && sortDirection === "asc" ? "desc" : "asc";
+    return h("th", { scope: "col", "aria-sort": active ? (sortDirection === "asc" ? "ascending" : "descending") : "none" },
+      h("button", { type: "button", class: "sort-button", "data-sort": column, onclick: () => { sortColumn = column; sortDirection = next; paint(); } }, label, active ? (sortDirection === "asc" ? " \u2191" : " \u2193") : ""));
+  }
+
   function table(shown) {
-    const heads = ["Competitor", "Last analyzed", "Latest", "Status", "Research", "Update"];
-    return h("table", { "aria-label": "Competitors" }, h("thead", {}, h("tr", {}, heads.map((label) => h("th", { scope: "col" }, label)))), h("tbody", {}, shown.map(rowView)));
+    return h("table", { "aria-label": "Competitors" }, h("thead", {}, h("tr", {}, sortHead("Competitor", "competitor"), sortHead("Added", "added"), sortHead("Last analyzed", "analyzed"), h("th", { scope: "col" }, "Latest"), sortHead("Status", "status"), h("th", { scope: "col" }, "Research"), h("th", { scope: "col" }, "Update"))), h("tbody", {}, shown.map(rowView)));
   }
 
   function candidateView(candidate) {
@@ -141,6 +167,53 @@ export function createCompetitorsView(root) {
     passedList.replaceChildren(...passedOver.map(candidateView));
   }
 
+  function batchLabel(value) {
+    if (value === BATCH_ORIGINAL) return "Original list";
+    const at = new Date(value);
+    return Number.isNaN(at.getTime()) ? String(value) : at.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  /** The product and batch menus list only what is in the list now, and keep the choice when it is still there. */
+  function paintFilterOptions() {
+    const flags = flagOptions(rows);
+    const batches = batchOptions(rows);
+    if (flag && !flags.includes(flag)) flag = "";
+    if (batch && !batches.some((item) => item.value === batch)) batch = "";
+    flagFilter.replaceChildren(h("option", { value: "" }, "Any product"), ...flags.map((value) => h("option", { value }, value)));
+    batchFilter.replaceChildren(h("option", { value: "" }, "Any research batch"), ...batches.map((item) => h("option", { value: item.value }, item.value === BATCH_ORIGINAL ? `Original list (${item.count})` : `Found ${batchLabel(item.value)} (${item.count})`)));
+    flagFilter.value = flag;
+    batchFilter.value = batch;
+    statusFilter.value = statusChoice;
+    researchFilter.value = research;
+  }
+
+  /** The hub ranks competitors by meaning when spelling found nothing. One request per query, after a short wait so typing finishes first. */
+  function askMeaning() {
+    const asked = query;
+    clearTimeout(meaningTimer);
+    meaningTimer = setTimeout(async () => {
+      try {
+        const response = await fetch("/api/competitors/semantic", postJson({ query: asked }));
+        const body = await readJson(response);
+        if (!response.ok) throw new Error(body.error || `The hub answered ${response.status}.`);
+        if (asked !== query) return;
+        meaning = { query: asked, ids: Array.isArray(body.ids) ? body.ids : [] };
+      } catch (cause) {
+        if (asked !== query) return;
+        meaningFailed = failureText(cause);
+      }
+      paint();
+    }, 500);
+  }
+
+  function writeQuery() {
+    try {
+      const params = new URLSearchParams(location.search);
+      if (query) params.set("q", query); else params.delete("q");
+      history.replaceState(history.state, "", params.toString() ? `?${params}` : location.pathname);
+    } catch { /* the address bar is a convenience */ }
+  }
+
   function paint() {
     paintCandidates();
     const fresh = rows.filter((row) => row.status === "new").length;
@@ -152,12 +225,24 @@ export function createCompetitorsView(root) {
     count.hidden = !loaded || !configured;
     count.textContent = loaded && configured ? countLine(rows) : "";
     newOnlyInput.checked = newOnly;
+    filters.hidden = !loaded || !configured;
+    searchStatus.hidden = true;
+    clearFilters.hidden = !(newOnly || statusChoice || flag || batch || research);
     const live = error || (!loaded ? "Reading competitors." : !configured ? NOT_CONFIGURED : notice);
     status.textContent = live;
     status.hidden = !live;
     if (!loaded || !configured || (error && !rows.length)) { tableWrap.replaceChildren(); return; }
     if (!rows.length) { tableWrap.replaceChildren(h("p", { class: "empty" }, "No competitors are listed.")); return; }
-    const shown = filterCompetitors(sortCompetitors(rows), { query, newOnly });
+    paintFilterOptions();
+    const base = filterRows(rows, { newOnly, status: statusChoice, flag, batch, research });
+    const found = searchCompetitors(base, query, { meaningIds: meaning && meaning.query === query ? meaning.ids : undefined });
+    whyById = found.why;
+    const ranked = found.tier === "close" || found.tier === "meaning";
+    const shown = ranked ? found.rows : sortColumn ? sortBy(found.rows, sortColumn, sortDirection) : sortCompetitors(found.rows);
+    searchStatus.textContent = meaningFailed && found.needsMeaning ? `Nothing matches. Similar-meaning search is not available: ${meaningFailed}` : searchNote(found, shown.length, base.length);
+    searchStatus.hidden = !searchStatus.textContent;
+    count.textContent = `${shown.length === rows.length ? "" : `Showing ${shown.length} of ${rows.length}. `}${countLine(rows)}`;
+    if (found.needsMeaning && !meaning && !meaningFailed) askMeaning();
     tableWrap.replaceChildren(shown.length ? table(shown) : h("p", { class: "empty" }, "Nothing matches."));
   }
 
@@ -491,6 +576,14 @@ export function createCompetitorsView(root) {
     );
     dialog.showModal();
   }
+
+  document.addEventListener("keydown", (event) => {
+    if (!visible || event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+    event.preventDefault();
+    search.focus();
+  });
 
   document.addEventListener("visibilitychange", () => { if (visible && !document.hidden) load().then(schedule); });
 

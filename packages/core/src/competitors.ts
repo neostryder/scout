@@ -47,6 +47,11 @@ export interface CompetitorRow {
   flags: string[];
   mirrorPresent: boolean;
   dossierReviewed: string | null;
+  addedAt: string | null;
+  batch: string | null;
+  /** What the project is, in the words of the discovery search that found it, and its topics. Empty for a competitor the search did not find. */
+  about: string | null;
+  topics: string[];
   baseline: { version: string | null; commit: string | null; at: string | null; source: string | null };
   latest: { version: string | null; prerelease: string | null; commit: string | null; checkedAt: string | null; error: string | null };
   status: CompetitorStatus;
@@ -80,6 +85,9 @@ export interface CompetitorIdentity {
   followUpstream?: boolean;
   /** A version source for an entry with no repository. */
   watch?: CompetitorWatch | null;
+  /** When it joined the list (an ISO date or time), and the discovery run that found it (that run's timestamp). An entry from the original list has neither run nor, usually, a date. */
+  addedAt?: string | null;
+  batch?: string | null;
 }
 
 export interface CompetitorsFile {
@@ -165,6 +173,8 @@ interface StoredCompetitor {
   syncError: string | null;
   syncHead: string | null;
   pendingJson: string | null;
+  addedAt: string | null;
+  batch: string | null;
 }
 
 interface StoredRun {
@@ -190,7 +200,7 @@ const COMPETITOR_COLUMNS = `id, name, org, remote_url AS remoteUrl, mirror_path 
   baseline_version AS baselineVersion, baseline_commit AS baselineCommit, baseline_at AS baselineAt, baseline_source AS baselineSource,
   latest_version AS latestVersion, latest_prerelease AS latestPrerelease, latest_commit AS latestCommit,
   latest_checked_at AS latestCheckedAt, latest_error AS latestError, notified_version AS notifiedVersion,
-  synced_at AS syncedAt, sync_error AS syncError, sync_head AS syncHead, pending_json AS pendingJson`;
+  synced_at AS syncedAt, sync_error AS syncError, sync_head AS syncHead, pending_json AS pendingJson, added_at AS addedAt, batch`;
 
 const RUN_COLUMNS = `id, competitor_id AS competitorId, state, from_version AS fromVersion, from_commit AS fromCommit,
   to_version AS toVersion, to_commit AS toCommit, requested_at AS requestedAt, updated_at AS updatedAt,
@@ -436,6 +446,10 @@ function mapRow(row: StoredCompetitor, run: StoredRun | undefined, now: string):
     flags: flagsFromJson(row.flagsJson),
     mirrorPresent: mirrorPresent(row.mirrorPath),
     dossierReviewed: row.dossierReviewed,
+    addedAt: row.addedAt,
+    batch: row.batch,
+    about: null,
+    topics: [],
     baseline: { version: row.baselineVersion, commit: row.baselineCommit, at: row.baselineAt, source: row.baselineSource },
     latest: { version: row.latestVersion, prerelease: row.latestPrerelease, commit: row.latestCommit, checkedAt: row.latestCheckedAt, error: row.latestError },
     status: derived.status,
@@ -494,9 +508,19 @@ export function parseCompetitorsFile(text: string): CompetitorsFile {
       gate: gateOverrides(row["gate"]),
       followUpstream: row["followUpstream"] === true,
       watch: row["watch"] === undefined || row["watch"] === null ? null : checkWatch(row["watch"]).watch,
+      addedAt: textOrNull(row["addedAt"]),
+      batch: textOrNull(row["batch"]),
     });
   }
   return { dossierRoot: file["dossierRoot"], mirrorRoot: file["mirrorRoot"], gate: gateOverrides(file["gate"]), entries };
+}
+
+/** A competitor tracked from a discovery candidate shares that candidate's id, so its date added is the day it was tracked and its batch is the run that found it. The original list has no run; its date falls back to the day it was first baselined. Fields the registry already carries are kept. */
+export function backfillCompetitorOrigins(db: Db): void {
+  db.exec(`UPDATE competitors SET
+      added_at = COALESCE(added_at, (SELECT decided_at FROM competitor_candidates c WHERE c.id = competitors.id AND c.status = 'tracked'), baseline_at),
+      batch = COALESCE(batch, (SELECT found_at FROM competitor_candidates c WHERE c.id = competitors.id AND c.status = 'tracked'))
+    WHERE added_at IS NULL OR batch IS NULL`);
 }
 
 export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
@@ -504,10 +528,11 @@ export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
     const ids = new Set(entries.map((entry) => entry.id));
     const insert = db.prepare(`INSERT INTO competitors (
       id, name, org, remote_url, mirror_path, package_url, dossier_dir, dossier_reviewed, flags_json,
-      baseline_version, baseline_commit, baseline_at, baseline_source, follow_upstream, watch_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      baseline_version, baseline_commit, baseline_at, baseline_source, follow_upstream, watch_json, added_at, batch
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const update = db.prepare(`UPDATE competitors SET name = ?, org = ?, remote_url = ?, mirror_path = ?, package_url = ?,
-      dossier_dir = ?, dossier_reviewed = ?, flags_json = ?, follow_upstream = ?, watch_json = ? WHERE id = ?`);
+      dossier_dir = ?, dossier_reviewed = ?, flags_json = ?, follow_upstream = ?, watch_json = ?,
+      added_at = COALESCE(?, added_at), batch = COALESCE(?, batch) WHERE id = ?`);
     const fillBaseline = db.prepare(`UPDATE competitors SET baseline_version = ?, baseline_commit = ?, baseline_at = ?, baseline_source = ?
       WHERE id = ? AND baseline_version IS NULL AND baseline_commit IS NULL AND baseline_source IS NULL`);
     for (const entry of entries) {
@@ -516,12 +541,13 @@ export function syncCompetitors(db: Db, entries: CompetitorIdentity[]): void {
       const existing = db.prepare("SELECT id FROM competitors WHERE id = ?").get(entry.id);
       const baseline = entry.baseline;
       if (!existing) {
-        insert.run(entry.id, entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, baseline?.version ?? null, baseline?.commit ?? null, baseline?.at ?? null, baseline?.source ?? null, entry.followUpstream ? 1 : 0, watchJson);
+        insert.run(entry.id, entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, baseline?.version ?? null, baseline?.commit ?? null, baseline?.at ?? null, baseline?.source ?? null, entry.followUpstream ? 1 : 0, watchJson, entry.addedAt ?? null, entry.batch ?? null);
       } else {
-        update.run(entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, entry.followUpstream ? 1 : 0, watchJson, entry.id);
+        update.run(entry.name, entry.org, entry.remoteUrl, entry.mirrorPath, entry.packageUrl, entry.dossierDir, entry.dossierReviewed, flags, entry.followUpstream ? 1 : 0, watchJson, entry.addedAt ?? null, entry.batch ?? null, entry.id);
         if (baseline) fillBaseline.run(baseline.version, baseline.commit, baseline.at, baseline.source, entry.id);
       }
     }
+    backfillCompetitorOrigins(db);
     const stored = db.prepare("SELECT id FROM competitors").all() as { id: string }[];
     for (const row of stored) {
       if (ids.has(row.id)) continue;
@@ -538,7 +564,17 @@ export function listCompetitors(db: Db, now?: string): CompetitorRow[] {
   const runs = db.prepare(`SELECT ${RUN_COLUMNS} FROM competitor_runs WHERE id IN (SELECT MAX(id) FROM competitor_runs GROUP BY competitor_id)`).all() as unknown as StoredRun[];
   const byCompetitor = new Map(runs.map((run) => [run.competitorId, run]));
   const rank: Record<CompetitorStatus, number> = { new: 0, current: 1, unknown: 2 };
-  return rows.map((row) => mapRow(row, byCompetitor.get(row.id), at)).sort((a, b) => rank[a.status] - rank[b.status] || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const found = new Map((db.prepare("SELECT id, description, topics_json AS topicsJson, judge_json AS judgeJson FROM competitor_candidates WHERE status = 'tracked'").all() as { id: string; description: string; topicsJson: string; judgeJson: string | null }[]).map((item) => [item.id, item]));
+  const withOrigin = (row: CompetitorRow): CompetitorRow => {
+    const origin = found.get(row.id);
+    if (!origin) return row;
+    let summary = "";
+    try { summary = String((JSON.parse(origin.judgeJson ?? "{}") as { summary?: unknown }).summary ?? ""); } catch { summary = ""; }
+    let topics: string[] = [];
+    try { topics = (JSON.parse(origin.topicsJson) as unknown[]).filter((topic): topic is string => typeof topic === "string"); } catch { topics = []; }
+    return { ...row, about: (summary || origin.description).trim() || null, topics };
+  };
+  return rows.map((row) => withOrigin(mapRow(row, byCompetitor.get(row.id), at))).sort((a, b) => rank[a.status] - rank[b.status] || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
 export function listCompetitorRuns(db: Db, states: RunState[], now?: string): CompetitorRun[] {

@@ -173,13 +173,13 @@ export class CompetitorSchedule {
   }
 
   /** Adds a competitor to the registry. A repository address also gets a first baseline from one read of it, so the next check can tell what is new. */
-  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null }): Promise<{ mirror: boolean; note: string | null }> {
+  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null; batch?: string | null }): Promise<{ mirror: boolean; note: string | null }> {
     let baseline: { version: string | null; commit: string | null; at: string; source: string } | null = null;
     if (entry.remoteUrl && this.options.check) {
       const read = await this.options.check(entry.remoteUrl).catch(() => null);
       if (read && !read.error && (read.version || read.commit)) baseline = { version: read.version, commit: read.commit, at: this.iso().slice(0, 10), source: "tracked" };
     }
-    this.rewriteConfig((text) => applyAddChange(text, { ...entry, baseline }));
+    this.rewriteConfig((text) => applyAddChange(text, { ...entry, baseline, addedAt: this.iso() }));
     if (!entry.remoteUrl || !this.options.clone) return { mirror: false, note: null };
     // The clone is best effort: a project that cannot be mirrored is still tracked through its remote.
     try {

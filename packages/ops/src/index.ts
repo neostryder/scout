@@ -14,6 +14,7 @@ export * from "./competitor-git.ts";
 export * from "./competitor-analysis.ts";
 export * from "./competitor-watch.ts";
 export * from "./competitor-discovery.ts";
+export * from "./competitor-semantic.ts";
 export * from "./competitor-facts.ts";
 export * from "./progress.ts";
 export * from "./observe.ts";

@@ -112,7 +112,7 @@ export function setCandidateStatus(db: Db, id: string, status: Exclude<Candidate
 }
 
 /** Returns the registry file text with one competitor added. The id must be unused. */
-export function applyAddChange(text: string, entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null; baseline?: { version: string | null; commit: string | null; at: string; source: string } | null }): string {
+export function applyAddChange(text: string, entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null; baseline?: { version: string | null; commit: string | null; at: string; source: string } | null; addedAt?: string; batch?: string | null }): string {
   const file = JSON.parse(text) as { entries?: Record<string, unknown>[] };
   if (!file || !Array.isArray(file.entries)) throw new Error("competitors file must be an object with entries");
   if (file.entries.some((item) => item["id"] === entry.id)) throw new Error("this competitor is already tracked");
@@ -122,6 +122,7 @@ export function applyAddChange(text: string, entry: { id: string; name: string; 
   file.entries.push({
     id: entry.id, name: entry.name, org: entry.org, remoteUrl: entry.remoteUrl, mirrorPath: null, packageUrl: entry.packageUrl,
     dossierDir: null, dossierReviewed: null, flags: [], ...(entry.baseline ? { baseline: entry.baseline } : {}),
+    ...(entry.addedAt ? { addedAt: entry.addedAt } : {}), ...(entry.batch ? { batch: entry.batch } : {}),
   });
   return `${JSON.stringify(file, null, 2)}\n`;
 }

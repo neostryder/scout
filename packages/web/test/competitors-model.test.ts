@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates, filterRows, batchOptions, flagOptions, sortBy, addedText, BATCH_ORIGINAL, TRACK_CONFIRM } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -164,4 +164,50 @@ test("a tracked project says whether a local copy is kept, and a candidate's sco
   assert.equal(scoreText({ judgement: { competitor: 0.2, worthTracking: 0.9, needs: { competitor: 0.6, worthTracking: 0.4 } } }), "Competitor 0.20 of 0.60 needed, worth watching 0.90 of 0.40 needed.");
   assert.equal(scoreText({ judgement: { competitor: 0.7, worthTracking: 0.6 } }), "Competitor 0.70, worth watching 0.60.");
   assert.equal(scoreText({ judgement: null }), "");
+});
+
+test("filters keep status, product, research, and batch, and the original list has no batch", () => {
+  const rows = [
+    row({ id: "a", status: "new", flags: ["forge"], batch: "2026-10-25T20:00:00.000Z", run: { state: "queued" } }),
+    row({ id: "b", status: "current", flags: ["atlas", "forge"], batch: null }),
+    row({ id: "c", status: "unknown", flags: [], batch: "2026-10-25T19:00:00.000Z", run: { state: "failed" } }),
+  ];
+  const ids = (list: { id: string }[]) => list.map((item) => item.id);
+  assert.deepEqual(ids(filterRows(rows, {})), ["a", "b", "c"]);
+  assert.deepEqual(ids(filterRows(rows, { status: "current" })), ["b"]);
+  assert.deepEqual(ids(filterRows(rows, { flag: "forge" })), ["a", "b"]);
+  assert.deepEqual(ids(filterRows(rows, { research: "open" })), ["a"]);
+  assert.deepEqual(ids(filterRows(rows, { research: "failed" })), ["c"]);
+  assert.deepEqual(ids(filterRows(rows, { research: "none" })), ["b"]);
+  assert.deepEqual(ids(filterRows(rows, { batch: "2026-10-25T20:00:00.000Z" })), ["a"]);
+  assert.deepEqual(ids(filterRows(rows, { batch: BATCH_ORIGINAL })), ["b"]);
+  assert.deepEqual(ids(filterRows(rows, { newOnly: true, flag: "forge" })), ["a"]);
+  assert.deepEqual(ids(filterCompetitors(rows, { query: "acme", batch: BATCH_ORIGINAL })), ["b"]);
+  assert.deepEqual(batchOptions(rows), [{ value: "2026-10-25T20:00:00.000Z", count: 1 }, { value: "2026-10-25T19:00:00.000Z", count: 1 }, { value: BATCH_ORIGINAL, count: 1 }]);
+  assert.deepEqual(batchOptions([]), []);
+  assert.deepEqual(flagOptions(rows), ["atlas", "forge"]);
+});
+
+test("sorting by a column honors direction, puts empty dates last, and falls back to name", () => {
+  const rows = [
+    row({ id: "a", name: "Beta", addedAt: "2026-10-25T20:00:00.000Z", baseline: { at: "2026-05-01" }, status: "current" }),
+    row({ id: "b", name: "Alpha", addedAt: null, baseline: { at: null }, status: "new" }),
+    row({ id: "c", name: "Gamma", addedAt: "2026-10-20", baseline: { at: "2026-06-01" }, status: "unknown" }),
+    row({ id: "d", name: "Delta", addedAt: "2026-10-20", baseline: { at: "2026-06-01" }, status: "new" }),
+  ];
+  const names = (list: { name: string }[]) => list.map((item) => item.name);
+  assert.deepEqual(names(sortBy(rows, "competitor", "asc")), ["Alpha", "Beta", "Delta", "Gamma"]);
+  assert.deepEqual(names(sortBy(rows, "competitor", "desc")), ["Gamma", "Delta", "Beta", "Alpha"]);
+  assert.deepEqual(names(sortBy(rows, "added", "asc")), ["Delta", "Gamma", "Beta", "Alpha"]);
+  assert.deepEqual(names(sortBy(rows, "added", "desc")), ["Beta", "Delta", "Gamma", "Alpha"]);
+  assert.deepEqual(names(sortBy(rows, "analyzed", "desc")), ["Delta", "Gamma", "Beta", "Alpha"]);
+  assert.deepEqual(names(sortBy(rows, "status", "asc")), ["Alpha", "Delta", "Beta", "Gamma"]);
+  assert.deepEqual(names(sortBy(rows, "nonsense")), names(sortCompetitors(rows)));
+  assert.equal(rows[0]?.name, "Beta");
+  assert.equal(addedText(row({ addedAt: "2026-10-25T20:00:00.000Z" })), "2026-10-25");
+  assert.equal(addedText(row({ addedAt: null })), "Unknown");
+});
+
+test("the track confirmation no longer promises a skipped copy", () => {
+  assert.doesNotMatch(TRACK_CONFIRM, /large|without the copy/i);
 });
