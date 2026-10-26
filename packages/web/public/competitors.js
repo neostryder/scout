@@ -224,7 +224,7 @@ export function createCompetitorsView(root) {
     toolbar.hidden = !loaded || !configured;
     count.hidden = !loaded || !configured;
     count.textContent = loaded && configured ? countLine(rows) : "";
-    newOnlyInput.checked = newOnly;
+    newOnlyInput.checked = newOnly && (chosen || !query.trim());
     filters.hidden = !loaded || !configured;
     searchStatus.hidden = true;
     clearFilters.hidden = !(newOnly || statusChoice || flag || batch || research);
@@ -234,7 +234,8 @@ export function createCompetitorsView(root) {
     if (!loaded || !configured || (error && !rows.length)) { tableWrap.replaceChildren(); return; }
     if (!rows.length) { tableWrap.replaceChildren(h("p", { class: "empty" }, "No competitors are listed.")); return; }
     paintFilterOptions();
-    const base = filterRows(rows, { newOnly, status: statusChoice, flag, batch, research });
+    const onlyNew = newOnly && (chosen || !query.trim());
+    const base = filterRows(rows, { newOnly: onlyNew, status: statusChoice, flag, batch, research });
     const found = searchCompetitors(base, query, { meaningIds: meaning && meaning.query === query ? meaning.ids : undefined });
     whyById = found.why;
     const ranked = found.tier === "close" || found.tier === "meaning";
