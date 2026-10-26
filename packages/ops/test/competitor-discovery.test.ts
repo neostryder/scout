@@ -145,10 +145,10 @@ test("npm packages that name a GitHub repository are judged as that repository, 
 
 test("the owner's decisions nearest in wording come first, a few from each side", () => {
   const decisions = [
-    { verdict: "tracked" as const, summary: "An assistant that runs tabletop sessions for game masters.", topics: ["ai", "gm"] },
-    { verdict: "tracked" as const, summary: "A map editor.", topics: ["maps"] },
-    { verdict: "dismissed" as const, summary: "A rules system for a fantasy setting.", topics: ["system"] },
-    { verdict: "dismissed" as const, summary: "Particle effects for tabletop scenes.", topics: ["effects"] },
+    { verdict: "tracked" as const, id: "d1", name: "Past 1", summary: "An assistant that runs tabletop sessions for game masters.", topics: ["ai", "gm"] },
+    { verdict: "tracked" as const, id: "d2", name: "Past 2", summary: "A map editor.", topics: ["maps"] },
+    { verdict: "dismissed" as const, id: "d3", name: "Past 3", summary: "A rules system for a fantasy setting.", topics: ["system"] },
+    { verdict: "dismissed" as const, id: "d4", name: "Past 4", summary: "Particle effects for tabletop scenes.", topics: ["effects"] },
   ];
   const near = nearestDecisions("An assistant for game masters running tabletop sessions.", ["ai"], decisions, 1);
   assert.deepEqual(near.map((item) => item.verdict), ["tracked", "dismissed"]);
@@ -178,8 +178,29 @@ test("Jev gets the owner's decisions in its state only when there are some", asy
   const answers = { competitor: { type: "noul", noul: 0.8 }, worthTracking: { type: "noul", noul: 0.5 } };
   const decider = jevDecider({ readKey: async () => "k", post: async (_url, init) => { bodies.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => ({ answers }) }; } });
   await decider.decide(project, "s", config.products);
-  await decider.decide(project, "s", config.products, [{ verdict: "dismissed", summary: "Effects.", topics: ["fx"] }]);
+  await decider.decide(project, "s", config.products, [{ verdict: "dismissed", id: "fx", name: "Effects", summary: "Effects.", topics: ["fx"] }]);
   assert.equal((bodies[0]!["state"] as Record<string, unknown>)["ownerDecisions"], undefined);
   assert.deepEqual((bodies[1]!["state"] as Record<string, unknown>)["ownerDecisions"], [{ verdict: "dismissed", summary: "Effects.", topics: ["fx"] }]);
   assert.match(JSON.stringify(bodies[1]!["questions"]), /ownerDecisions/);
+});
+
+test("a project that reads like earlier dismissals is held back by history even when the scores pass, once there are enough decisions to learn from", async () => {
+  const db = openCatalog(":memory:");
+  const source = (name: string) => ({ key: `github:someone/${name}`, source: "github" as const, name, org: "someone", url: `https://github.com/someone/${name}`, repoUrl: null, description: "", topics: ["vtt"], stars: 1, pushedAt: null });
+  const judged = (summary: string) => ({ summary, overlaps: [], competitor: 0.9, worthTracking: 0.9 });
+  for (let n = 0; n < 12; n += 1) {
+    saveCandidate(db, source(`Fx${n}`), judged(`Particle effects and weather for tabletop scenes number${n}.`), 0.9, "2026-10-01T00:00:00Z");
+    setCandidateStatus(db, candidateId(`github:someone/Fx${n}`), "dismissed", "2026-10-02T00:00:00Z");
+    saveCandidate(db, source(`Gm${n}`), judged(`Assistant that runs sessions for game masters number${n}.`), 0.9, "2026-10-01T00:00:00Z");
+    setCandidateStatus(db, candidateId(`github:someone/Gm${n}`), "tracked", "2026-10-02T00:00:00Z");
+  }
+  const decider = { decide: async () => ({ competitor: 0.95, worthTracking: 0.95 }) };
+  const run = (name: string, summary: string) => runDiscovery(db, { config, fetcher: search(repo(name)), judge: { summarize: async () => ({ summary, overlaps: [] }) }, decider });
+  const held = await run("Snow", "Particle effects and weather for tabletop scenes.");
+  assert.deepEqual([held.offered, held.rejected], [0, 1]);
+  const passed = listPassedOver(db);
+  assert.equal(passed.length, 1);
+  assert.match(passed[0]!.judgement!.heldByHistory ?? "", /Reads like Fx\d+, which was dismissed/);
+  const offered = await run("Helper", "Assistant that runs sessions for game masters.");
+  assert.deepEqual([offered.offered, offered.rejected], [1, 0]);
 });

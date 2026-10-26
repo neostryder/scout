@@ -5,7 +5,7 @@ import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openCatalog, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type OutageNotice } from "@scout/core";
+import { openCatalog, rememberPassedOver, saveCandidate, setCandidateStatus, type CandidateJudgement, type CandidateSource, type OutageNotice } from "@scout/core";
 import { CompetitorSchedule } from "../src/competitor-schedule.ts";
 import { DiscoverySchedule, DISCOVERY_INTERVAL_MS, type DiscoveryRunResult } from "../src/discovery-schedule.ts";
 import { createHub } from "../src/server.ts";
@@ -167,4 +167,54 @@ test("a passed-over project is listed with its reasoning and can be tracked anyw
   assert.equal(rescued.status, 200);
   assert.equal(rescued.body.status, "tracked");
   assert.deepEqual((await call("/api/competitors/candidates")).body.passedOver, []);
+});
+
+test("the candidate list says which earlier choices each project reads like, and tracking starts a dossier page", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-disc-dossier-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const configPath = join(dir, "competitors.json");
+  const dossierRoot = join(dir, "d");
+  writeFileSync(configPath, JSON.stringify({ dossierRoot, mirrorRoot: join(dir, "m"), entries: [] }));
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  saveCandidate(db, source("Taken"), { ...judgement, summary: "Draws battle maps for game masters." }, 0.9, NOW);
+  setCandidateStatus(db, "github-acme-taken", "tracked", NOW);
+  saveCandidate(db, source("Binned"), { ...judgement, summary: "Particle effects for scenes." }, 0.9, NOW);
+  setCandidateStatus(db, "github-acme-binned", "dismissed", NOW);
+  saveCandidate(db, source("Mapper"), { ...judgement, summary: "Draws battle maps and dungeon maps for game masters." }, 0.87, NOW);
+  const competitors = new CompetitorSchedule(db, { configPath, check: async () => ({ version: "2.1.0", prerelease: null, commit: "c".repeat(40), error: null }) });
+  const call = await hub(t, { db, competitors, discovery: new DiscoverySchedule({ run: async () => result() }) });
+  const listed = await call("/api/competitors/candidates");
+  const mapper = listed.body.candidates[0] as { name: string; examples: { verdict: string; name: string; closeness: number }[] };
+  assert.equal(mapper.name, "Mapper");
+  assert.equal(mapper.examples[0]?.name, "Taken");
+  assert.equal(mapper.examples[0]?.verdict, "tracked");
+  assert.equal(mapper.examples.some((item) => item.name === "Mapper"), false);
+
+  const tracked = await call("/api/competitors/candidates/github-acme-mapper/track", "POST", "{}");
+  assert.equal(tracked.body.dossier, true);
+  const dir2 = join(dossierRoot, "acme - Mapper");
+  const page = readFileSync(join(dir2, "00_Overview.md"), "utf8");
+  assert.match(page, /^# Mapper$/m);
+  assert.match(page, /Reads like Taken, which was tracked/);
+  assert.match(page, /- \[ \] Run the research for this competitor/);
+  const entry = (JSON.parse(readFileSync(configPath, "utf8")).entries as { id: string; dossierDir: string }[]).find((item) => item.id === "github-acme-mapper");
+  assert.equal(entry?.dossierDir, dir2.replace(/\\/g, "/"));
+});
+
+test("a dossier page that already exists is never overwritten", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-disc-keep-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const configPath = join(dir, "competitors.json");
+  const dossierRoot = join(dir, "d");
+  mkdirSync(join(dossierRoot, "acme - Mapper"), { recursive: true });
+  writeFileSync(join(dossierRoot, "acme - Mapper", "00_Overview.md"), "hand written", "utf8");
+  writeFileSync(configPath, JSON.stringify({ dossierRoot, mirrorRoot: join(dir, "m"), entries: [] }));
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  saveCandidate(db, source("Mapper"), judgement, 0.87, NOW);
+  const competitors = new CompetitorSchedule(db, { configPath, check: async () => ({ version: "2.1.0", prerelease: null, commit: "c".repeat(40), error: null }) });
+  const call = await hub(t, { db, competitors, discovery: new DiscoverySchedule({ run: async () => result() }) });
+  assert.equal((await call("/api/competitors/candidates/github-acme-mapper/track", "POST", "{}")).status, 200);
+  assert.equal(readFileSync(join(dossierRoot, "acme - Mapper", "00_Overview.md"), "utf8"), "hand written");
 });
