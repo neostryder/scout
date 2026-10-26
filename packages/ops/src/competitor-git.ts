@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, realpathSync, rmSync, statSync } from "node:fs";
+import { existsSync, realpathSync, rmSync, statfsSync, statSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { compareVersions, competitorPaths, competitorRunRecord, failCompetitorRun, maxVersion, queueCompetitorRun, recordMirrorSync, redactUrlSecrets, type Db, type ResearchDelta } from "@scout/core";
 import { analyzeChange, categoryForPath, MANIFEST_FILES, type ChangeAnalysis, type ChangeInput } from "./competitor-analysis.ts";
@@ -456,8 +456,9 @@ function hostOf(remote: string | null): string | null {
   return scp?.[1]?.toLowerCase() ?? null;
 }
 
-export const CLONE_TIMEOUT_MS = 300_000;
-export const CLONE_MAX_KB = 400_000;
+export const CLONE_TIMEOUT_MS = 30 * 60_000;
+/** A clone is refused when it would leave the mirror drive with less free space than this. There is no limit on how big a repository may be. */
+export const CLONE_MIN_FREE_KB = 20 * 1024 * 1024;
 const MIRROR_FOLDER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 
 /** GitHub's own count of how big a repository is, in kilobytes, or null when it cannot be read. */
@@ -472,14 +473,21 @@ export async function githubRepoSizeKb(remote: string, fetcher: (url: string, in
   } catch { return null; }
 }
 
-/** Clones a public repository into a new folder directly under the mirror root and returns its head commit. A repository over the size limit is not cloned, and a failed or timed-out clone leaves no folder behind. */
-export async function cloneMirror(remote: string, mirrorRoot: string, folder: string, options: { run?: GitRunner; sizeKb?: number | null; maxKb?: number; timeoutMs?: number } = {}): Promise<{ ok: true; mirrorPath: string; head: string } | { ok: false; error: string }> {
+/** Free space on the drive holding a folder, in kilobytes, or null when it cannot be read. */
+export function freeDiskKb(folder: string): number | null {
+  try { const info = statfsSync(folder); return Math.floor((info.bavail * info.bsize) / 1024); } catch { return null; }
+}
+
+/** Clones a public repository into a new folder directly under the mirror root and returns its head commit. Any size is allowed unless `maxKb` is given; the clone is refused only when it would leave the drive under `minFreeKb`. A failed or timed-out clone leaves no folder behind. */
+export async function cloneMirror(remote: string, mirrorRoot: string, folder: string, options: { run?: GitRunner; sizeKb?: number | null; maxKb?: number; freeKb?: number | null; minFreeKb?: number; timeoutMs?: number } = {}): Promise<{ ok: true; mirrorPath: string; head: string } | { ok: false; error: string }> {
   const run = options.run ?? spawnGit;
   if (!supportedRemote(remote)) return { ok: false, error: "unsupported remote" };
   if (!MIRROR_FOLDER.test(folder) || folder.includes("..")) return { ok: false, error: "the mirror folder name can use letters, numbers, dots, dashes, and underscores" };
-  const maxKb = options.maxKb ?? CLONE_MAX_KB;
-  if (typeof options.sizeKb === "number" && options.sizeKb > maxKb) return { ok: false, error: `the repository is ${Math.round(options.sizeKb / 1024)} MB, over the ${Math.round(maxKb / 1024)} MB limit for an automatic mirror` };
+  if (typeof options.sizeKb === "number" && options.maxKb !== undefined && options.sizeKb > options.maxKb) return { ok: false, error: `the repository is ${Math.round(options.sizeKb / 1024)} MB, over the ${Math.round(options.maxKb / 1024)} MB limit for an automatic mirror` };
   if (!existsSync(mirrorRoot) || !statSync(mirrorRoot).isDirectory()) return { ok: false, error: "the mirror root folder does not exist" };
+  const free = options.freeKb === undefined ? freeDiskKb(mirrorRoot) : options.freeKb;
+  const minFree = options.minFreeKb ?? CLONE_MIN_FREE_KB;
+  if (free !== null && free - (options.sizeKb ?? 0) < minFree) return { ok: false, error: `the mirror drive has ${Math.round(free / 1048576)} GB free and a clone of ${Math.round((options.sizeKb ?? 0) / 1024)} MB would leave it under ${Math.round(minFree / 1048576)} GB` };
   const target = join(mirrorRoot, folder);
   if (existsSync(target)) return { ok: false, error: "a folder with that name is already in the mirror root" };
   const cloned = await run(["clone", "--quiet", "--", remote.trim(), target], { timeoutMs: options.timeoutMs ?? CLONE_TIMEOUT_MS });

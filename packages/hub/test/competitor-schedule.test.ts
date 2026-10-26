@@ -322,3 +322,53 @@ test("a check queues research when the mirror already has the new commit", async
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a tracked competitor with no mirror is cloned by the sync pass, keeps its baseline, and a failed clone waits hours before another try", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-comp-catchup-"));
+  const clock = new FakeClock();
+  const db = openCatalog(":memory:");
+  const tries: string[] = [];
+  const { mkdirSync, readFileSync } = await import("node:fs");
+  const configPath = join(dir, "competitors.json");
+  mkdirSync(join(dir, "mirrors"), { recursive: true });
+  writeFileSync(configPath, JSON.stringify({
+    dossierRoot: join(dir, "dossiers"),
+    mirrorRoot: join(dir, "mirrors"),
+    entries: [
+      { ...entry(dir, "big-tools", "Big Tools"), mirrorPath: null },
+      { ...entry(dir, "gone-tools", "Gone Tools"), mirrorPath: null },
+    ],
+  }));
+  const schedule = new CompetitorSchedule(db, {
+    configPath, clock, startupDelayMs: 0, syncStartupDelayMs: 0, syncPauseMs: 0, syncIntervalMs: 3_600_000,
+    check: async () => ({ version: null, prerelease: null, commit: null, error: "skipped" }),
+    sync: async (_db, id) => ({ ok: true, cwd: join(dir, "mirrors", id), head: "bbb222" }),
+    clone: async (_remote, folder) => {
+      tries.push(folder);
+      if (folder === "gone-tools") return { ok: false, error: "repository not found" };
+      mkdirSync(join(dir, "mirrors", folder, ".git"), { recursive: true });
+      return { ok: true, head: "c".repeat(40) };
+    },
+    log: () => {},
+  });
+  try {
+    schedule.start();
+    clock.advance(0);
+    await flush();
+    assert.deepEqual(tries, ["big-tools", "gone-tools"]);
+    const saved = JSON.parse(readFileSync(configPath, "utf8")) as { entries: { id: string; mirrorPath: string | null; baseline: { commit: string } }[] };
+    const big = saved.entries.find((item) => item.id === "big-tools");
+    assert.equal(big?.mirrorPath, join(dir, "mirrors", "big-tools").replaceAll("\\", "/"));
+    assert.equal(big?.baseline.commit, "aaa111");
+    clock.advance(3_600_000);
+    await flush();
+    assert.deepEqual(tries, ["big-tools", "gone-tools"]);
+    clock.advance(6 * 3_600_000);
+    await flush();
+    assert.deepEqual(tries, ["big-tools", "gone-tools", "gone-tools"]);
+  } finally {
+    schedule.stop();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -9,6 +9,7 @@ export const COMPETITOR_SYNC_INTERVAL_MS = 12 * 3_600_000;
 export const COMPETITOR_SYNC_PAUSE_MS = 2_000;
 export const COMPETITOR_SYNC_TIMEOUT_MS = 120_000;
 export const COMPETITOR_FULL_SYNC_MS = 7 * 24 * 3_600_000;
+export const COMPETITOR_CLONE_RETRY_MS = 6 * 3_600_000;
 
 export interface CompetitorCheckResult {
   version: string | null;
@@ -258,6 +259,8 @@ export class CompetitorSchedule {
     });
   }
 
+  private readonly cloneRetryAt = new Map<string, number>();
+
   private async syncAll(): Promise<void> {
     this.loadConfig();
     const nowMs = this.clock.now();
@@ -285,6 +288,28 @@ export class CompetitorSchedule {
         await this.maybeQueue(row.id);
       } catch (error) {
         try { recordMirrorSync(this.db, row.id, { error: this.plain(error) }); } catch { /* the row was removed while the mirror ran */ }
+      }
+    }
+    await this.mirrorMissing();
+  }
+
+  /** Clones every tracked competitor that has a repository address but no mirror yet, so none stays remote-only. A failed clone is retried after a few hours. */
+  private async mirrorMissing(): Promise<void> {
+    if (!this.options.clone) return;
+    const rows = this.db.prepare("SELECT id, remote_url AS remoteUrl, baseline_commit AS baselineCommit, baseline_version AS baselineVersion FROM competitors WHERE mirror_path IS NULL AND remote_url IS NOT NULL ORDER BY name, id").all() as { id: string; remoteUrl: string; baselineCommit: string | null; baselineVersion: string | null }[];
+    for (const row of rows) {
+      if (!this.started) return;
+      if ((this.cloneRetryAt.get(row.id) ?? 0) > this.clock.now()) continue;
+      this.cloneRetryAt.set(row.id, this.clock.now() + COMPETITOR_CLONE_RETRY_MS);
+      try {
+        const cloned = await this.options.clone(row.remoteUrl, row.id);
+        if (!cloned.ok) { this.log(`competitor mirror ${row.id}: ${cloned.error}`); continue; }
+        // The earlier baseline stays, so everything shipped since it was read still counts as new.
+        this.updateRepo(row.id, { remoteUrl: row.remoteUrl, folder: row.id, ...(row.baselineCommit ? {} : { baseline: { commit: cloned.head, ...(row.baselineVersion ? { version: row.baselineVersion } : {}) } }) });
+        this.cloneRetryAt.delete(row.id);
+        this.log(`competitor mirror ${row.id}: cloned`);
+      } catch (error) {
+        this.log(`competitor mirror ${row.id}: ${this.plain(error)}`);
       }
     }
   }
