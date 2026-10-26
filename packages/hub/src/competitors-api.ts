@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, dossierStub, getCandidate, listCandidates, listOwnerDecisions, listPassedOver, listCompetitorRuns, listCompetitors, nearestWithCloseness, setCandidateStatus, type Candidate, type Db, type RunState } from "@scout/core";
+import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, dossierStub, getCandidate, holdStats, listCandidates, listOwnerDecisions, listPassedOver, listCompetitorRuns, listCompetitors, nearestWithCloseness, releaseHeld, setCandidateStatus, type Candidate, type Db, type RunState } from "@scout/core";
 import type { CompetitorSchedule } from "./competitor-schedule.ts";
 import type { DiscoverySchedule } from "./discovery-schedule.ts";
 
@@ -81,9 +81,15 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
   }
   if (path === "/api/competitors/candidates") {
     if (!read) return json(res, 405, { error: "method not allowed" });
-    return json(res, 200, { configured: discovery !== undefined, discovery: discovery?.status() ?? null, candidates: withExamples(db, listCandidates(db)), passedOver: withExamples(db, listPassedOver(db)) });
+    return json(res, 200, { configured: discovery !== undefined, discovery: discovery?.status() ?? null, candidates: withExamples(db, listCandidates(db)), passedOver: withExamples(db, listPassedOver(db)), holds: holdStats(db) });
   }
-  const candidatePath = /^\/api\/competitors\/candidates\/([^/]+)\/(track|dismiss)$/.exec(path);
+  const candidatePath = /^\/api\/competitors\/candidates\/([^/]+)\/(track|dismiss|release)$/.exec(path);
+  const dossierPath = /^\/api\/competitors\/([^/]+)\/dossier$/.exec(path);
+  if (dossierPath?.[1]) {
+    if (!read) return json(res, 405, { error: "method not allowed" });
+    const dossier = schedule?.readDossier(decodeURIComponent(dossierPath[1])) ?? null;
+    return dossier ? json(res, 200, dossier) : json(res, 404, { error: "this competitor has no dossier folder to read" });
+  }
   const runPath = /^\/api\/competitors\/runs\/(\d+)\/(claim|complete|fail)$/.exec(path);
   const updatePath = /^\/api\/competitors\/([^/]+)\/update$/.exec(path);
   const watchPath = /^\/api\/competitors\/([^/]+)\/watch$/.exec(path);
@@ -131,6 +137,9 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
       const candidate = getCandidate(db, id);
       if (!candidate) return json(res, 404, { error: "no such candidate" });
       const rescue = candidatePath[2] === "track" && candidate.passedOver && candidate.status === "dismissed";
+      if (candidatePath[2] === "release") {
+        try { return json(res, 200, releaseHeld(db, id)); } catch (error) { return json(res, 409, { error: (error as Error).message }); }
+      }
       if (candidate.status !== "new" && !rescue) return json(res, 409, { error: `this candidate is already ${candidate.status}` });
       if (candidatePath[2] === "track") {
         if (!schedule) return json(res, 404, { error: "competitor watch is off" });

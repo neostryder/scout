@@ -113,7 +113,7 @@ test("a configured list shows the count, the new row, the links, and no mirror p
   assert.match(text, /1\.4\.0-rc\.1/);
   assert.equal(text.includes("Other"), false);
   assert.equal(text.includes("C:/secret"), false);
-  assert.equal(text.includes("dossier"), false);
+  assert.equal(text.includes("dossiers/"), false);
   const analyzed = walk(page.root).find((el) => el.attrs.title === "analysis");
   assert.ok(analyzed);
   assert.match(allText(analyzed), /1\.2\.0, 2026-05-05/);
@@ -133,7 +133,7 @@ test("a configured list shows the count, the new row, the links, and no mirror p
 });
 
 test("Update confirms with the set sentence, then posts JSON, and a missing mirror shows the reason", async (t) => {
-  let competitors = [row(), row({ id: "plain", name: "Plain", mirrorPresent: false, org: "Plain", status: "current" })];
+  let competitors = [row(), row({ id: "plain", name: "Plain", mirrorPresent: false, org: "Plain", status: "current", dossierDir: null })];
   const page = await open(t, () => ok(competitors));
   const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox");
   fire(toggle!, "change", { checked: false });
@@ -519,4 +519,36 @@ test("a candidate card lists the earlier choices it reads like, and a held-back 
   assert.match(allText(page.root), /Reads like Atlas Pro \(tracked, 52% alike\), Sparkles \(dismissed, 30% alike\)\./);
   const held = await open(t, panel([candidate({ examples, judgement: { summary: "Draws battle maps.", overlaps: [], competitor: 0.9, worthTracking: 0.9, heldByHistory: "Reads like Sparkles, which was dismissed (60% alike)" } })]));
   assert.match(allText(held.root), /Held back by your earlier choices: Reads like Sparkles, which was dismissed \(60% alike\)\./);
+});
+
+test("a held-back project has a Release button that posts at once, and the hold gauge line shows under the heading", async (t) => {
+  const held = candidate({ id: "github-acme-sheets", name: "Sheets", passedOver: true, status: "dismissed", judgement: { summary: "A character sheet.", overlaps: [], competitor: 0.9, worthTracking: 0.9, heldByHistory: "Reads like Sparkles, which was dismissed (60% alike)" } });
+  const plain = candidate({ id: "github-acme-dice", name: "Dice", passedOver: true, status: "dismissed", judgement: { summary: "Rolls dice.", overlaps: [], competitor: 0.2, worthTracking: 0.9 } });
+  const holds = { lastRun: { at: "2026-10-26T03:30:00.000Z", held: 2, rescued: 1 }, all: { held: 19, rescued: 3 } };
+  const page = await open(t, (url) => (url.endsWith("/candidates") ? { configured: true, discovery: null, candidates: [], passedOver: [held, plain], holds } : url.endsWith("/release") ? { released: true } : ok([row()])));
+  assert.match(allText(page.root), /History: the last search 2 held back, 1 of them rescued; all searches 19 held back, 3 of them rescued\./);
+  const releases = walk(page.root).filter((el) => el.attrs["data-release"]);
+  assert.deepEqual(releases.map((el) => el.attrs["data-release"]), ["github-acme-sheets"]);
+  await click(releases[0]!);
+  assert.equal(page.calls.find((call) => call.url === "/api/competitors/candidates/github-acme-sheets/release")?.method, "POST");
+  assert.match(allText(page.root), /Sheets released/);
+});
+
+test("the hold gauge stays out of the way until something was held", async (t) => {
+  const page = await open(t, panel([candidate()]));
+  assert.equal(walk(page.root).find((el) => el.attrs["data-holds"] !== undefined)?.hidden, true);
+});
+
+test("a row with a dossier folder has an Open dossier link that shows the overview page", async (t) => {
+  const page = await open(t, (url) => (url.endsWith("/dossier") ? { folder: "Acme - Tools", files: ["00_Overview.md", "01_Notes.md"], overview: "# Acme Tools\nWhat it is." } : ok([row({ dossierDir: "D:/x/Acme - Tools" }), row({ id: "plain", name: "Plain", dossierDir: null })])));
+  const buttons = walk(page.root).filter((el) => el.attrs["data-dossier"]);
+  assert.deepEqual(buttons.map((el) => el.attrs["data-dossier"]), ["acme-tools"]);
+  await click(buttons[0]!);
+  const dialog = walk(page.root).find((el) => el.tag === "dialog")!;
+  assert.equal(dialog.open, true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(page.calls.some((call) => call.url === "/api/competitors/acme-tools/dossier"), true);
+  assert.match(allText(dialog), /Dossier: Acme Tools/);
+  assert.match(allText(dialog), /Acme - Tools: 00_Overview\.md, 01_Notes\.md/);
+  assert.match(allText(dialog), /What it is\./);
 });

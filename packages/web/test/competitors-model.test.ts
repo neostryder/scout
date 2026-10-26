@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates, filterRows, batchOptions, flagOptions, sortBy, addedText, BATCH_ORIGINAL, TRACK_CONFIRM, examplesText, heldText } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates, filterRows, batchOptions, flagOptions, sortBy, addedText, BATCH_ORIGINAL, TRACK_CONFIRM, examplesText, heldText, holdText } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -219,4 +219,11 @@ test("a candidate says what it reads like and, when history held it back, why", 
   assert.equal(heldText({ judgement: { heldByHistory: "Reads like Fx, which was dismissed (60% alike)" } }), "Held back by your earlier choices: Reads like Fx, which was dismissed (60% alike).");
   assert.equal(heldText({ judgement: {} }), "");
   assert.match(TRACK_CONFIRM, /dossier page/);
+});
+
+test("the hold line is empty until something was held, then counts the last search and all searches", () => {
+  assert.equal(holdText(undefined), "");
+  assert.equal(holdText({ lastRun: null, all: { held: 0, rescued: 0 } }), "");
+  assert.equal(holdText({ lastRun: { at: "2026-10-26T03:30:00.000Z", held: 2, rescued: 1 }, all: { held: 19, rescued: 3 } }), "History: the last search 2 held back, 1 of them rescued; all searches 19 held back, 3 of them rescued.");
+  assert.equal(holdText({ lastRun: { at: "2026-10-26T03:30:00.000Z", held: 0, rescued: 0 }, all: { held: 4, rescued: 0 } }), "History: nothing held back in the last search; all searches 4 held back, 0 of them rescued.");
 });

@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { applyAddChange, applyCompetitorCheck, applyGateChange, applyRemoveChange, applyRepoChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { applyAddChange, applyCompetitorCheck, applyGateChange, applyRemoveChange, applyRepoChange, applyWatchChange, compareVersions, competitorPaths, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
 import type { Notifier } from "./notify.ts";
 import type { ScheduleClock } from "./schedule.ts";
 
@@ -208,6 +208,19 @@ export class CompetitorSchedule {
       this.log(`dossier stub: ${this.plain(error)}`);
       return null;
     }
+  }
+
+  /** The dossier folder of one competitor: its file names and the text of the overview page. Only a folder inside the dossier root is read; anything else, and a missing folder, gives null. */
+  readDossier(id: string): { folder: string; files: string[]; overview: string | null } | null {
+    if (!this.registry) return null;
+    const dir = competitorPaths(this.db, id)?.dossierDir?.replace(/\\/g, "/").replace(/\/+$/, "");
+    const root = this.registry.dossierRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+    if (!dir || dir.split("/").includes("..") || !dir.toLowerCase().startsWith(`${root.toLowerCase()}/`)) return null;
+    try {
+      const files = readdirSync(dir).filter((name) => /\.md$/i.test(name)).sort();
+      const first = files.find((name) => name === "00_Overview.md") ?? files[0];
+      return { folder: dir.slice(root.length + 1), files, overview: first ? readFileSync(`${dir}/${first}`, "utf8").slice(0, 40_000) : null };
+    } catch { return null; }
   }
 
   /** Removes a competitor from the registry. A competitor with research in progress stays until that finishes. */

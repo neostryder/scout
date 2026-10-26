@@ -29,6 +29,8 @@ export interface CandidateJudgement {
   needs?: { competitor: number; worthTracking: number };
   /** Set when the run held the project back because it reads like projects the owner dismissed, whatever the scores said. */
   heldByHistory?: string;
+  /** What the hold said, kept when the owner put the project back in the offered list, so a wrong hold can be counted. */
+  releasedFromHold?: string;
 }
 
 export interface Candidate extends CandidateSource {
@@ -147,6 +149,35 @@ export function setCandidateStatus(db: Db, id: string, status: Exclude<Candidate
   if (!row) throw new Error("no such candidate");
   db.prepare("UPDATE competitor_candidates SET status = ?, decided_at = ? WHERE id = ?").run(status, now, id);
   return { ...row, status, decidedAt: now };
+}
+
+/** Puts a project the run held back by history into the offered list. The hold text stays on it as `releasedFromHold`; what the owner does next (Track or Dismiss) is then a decision the filter learns from. */
+export function releaseHeld(db: Db, id: string): Candidate {
+  const row = getCandidate(db, id);
+  if (!row) throw new Error("no such candidate");
+  const hold = row.judgement?.heldByHistory;
+  if (!row.judgement || !row.passedOver || row.status !== "dismissed" || !hold) throw new Error("this candidate was not held back by your earlier choices");
+  const { heldByHistory: _removed, ...rest } = row.judgement;
+  const judgement: CandidateJudgement = { ...rest, releasedFromHold: hold };
+  db.prepare("UPDATE competitor_candidates SET status = 'new', passed_over = 0, decided_at = NULL, judge_json = ? WHERE id = ?").run(JSON.stringify(judgement), id);
+  return getCandidate(db, id)!;
+}
+
+export interface HoldCount { held: number; rescued: number }
+export interface HoldStats { lastRun: (HoldCount & { at: string }) | null; all: HoldCount }
+
+/** How many projects history held back, and how many of those the owner then rescued (Track anyway, or released and not yet dismissed). Counted for the newest batch and for all batches. */
+export function holdStats(db: Db): HoldStats {
+  const rows = db.prepare("SELECT found_at, status, judge_json FROM competitor_candidates WHERE judge_json LIKE '%heldByHistory%' OR judge_json LIKE '%releasedFromHold%'").all() as unknown as { found_at: string; status: string; judge_json: string }[];
+  const latest = (db.prepare("SELECT MAX(found_at) AS at FROM competitor_candidates").get() as { at: string | null }).at;
+  const all: HoldCount = { held: 0, rescued: 0 };
+  const last: HoldCount = { held: 0, rescued: 0 };
+  for (const row of rows) {
+    const judgement = JSON.parse(row.judge_json) as CandidateJudgement;
+    const rescued = row.status === "tracked" || (row.status === "new" && judgement.releasedFromHold !== undefined);
+    for (const count of row.found_at === latest ? [all, last] : [all]) { count.held += 1; if (rescued) count.rescued += 1; }
+  }
+  return { lastRun: latest ? { at: latest, ...last } : null, all };
 }
 
 /** Returns the registry file text with one competitor added. The id must be unused. */

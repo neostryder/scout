@@ -273,6 +273,15 @@ export function scoreText(candidate) {
   return `Competitor ${show(judgement.competitor)}${needs ? ` of ${show(needs.competitor)} needed` : ""}, worth watching ${show(judgement.worthTracking)}${needs ? ` of ${show(needs.worthTracking)} needed` : ""}.`;
 }
 
+/** One line on how often history held a project back and how many of those the owner then rescued. Empty until something was held. */
+export function holdText(holds) {
+  const all = holds?.all;
+  if (!all || !all.held) return "";
+  const part = (count) => `${count.held} held back, ${count.rescued} of them rescued`;
+  const last = holds.lastRun;
+  return last && last.held > 0 ? `History: the last search ${part(last)}; all searches ${part(all)}.` : `History: nothing held back in the last search; all searches ${part(all)}.`;
+}
+
 /** What a project reads like: the owner's closest earlier decisions, as one sentence. Empty when there are none yet. */
 export function examplesText(candidate) {
   const list = Array.isArray(candidate?.examples) ? candidate.examples : [];
