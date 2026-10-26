@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { knownCandidateKeys, listOwnerDecisions, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type Db, type OwnerDecision } from "@scout/core";
+import { historyHold, knownCandidateKeys, listOwnerDecisions, nearestWithCloseness, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type Db, type OwnerDecision } from "@scout/core";
 import { readSecret } from "./secrets.ts";
 
 export interface DiscoveryProduct { name: string; summary: string }
@@ -26,21 +26,9 @@ export interface Judge { summarize(project: CandidateSource, products: Discovery
 export interface Decider { decide(project: CandidateSource, summary: string, products: DiscoveryProduct[], decisions?: OwnerDecision[]): Promise<{ competitor: number; worthTracking: number }> }
 
 const DECISIONS_PER_SIDE = 4;
-const STOP_WORDS = new Set(["a", "an", "and", "or", "the", "of", "for", "to", "in", "on", "with", "that", "this", "is", "are", "it", "its", "by", "as", "at", "from", "into", "your", "their", "who", "can", "use", "using"]);
-const tokens = (text: string): Set<string> => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !STOP_WORDS.has(word)));
-
 /** The owner's decisions that read most like this project, a few tracked and a few dismissed, by shared words in the summary and topics. */
 export function nearestDecisions(summary: string, topics: string[], decisions: OwnerDecision[], perSide = DECISIONS_PER_SIDE): OwnerDecision[] {
-  const mine = tokens(`${summary} ${topics.join(" ")}`);
-  const scored = decisions.map((decision) => {
-    const theirs = tokens(`${decision.summary} ${decision.topics.join(" ")}`);
-    let shared = 0;
-    for (const word of mine) if (theirs.has(word)) shared += 1;
-    const union = mine.size + theirs.size - shared;
-    return { decision, closeness: union === 0 ? 0 : shared / union };
-  }).sort((a, b) => b.closeness - a.closeness);
-  const pick = (verdict: OwnerDecision["verdict"]) => scored.filter((item) => item.decision.verdict === verdict).slice(0, perSide).map((item) => item.decision);
-  return [...pick("tracked"), ...pick("dismissed")];
+  return nearestWithCloseness(summary, topics, decisions, perSide).map((item) => item.decision);
 }
 
 export interface DiscoveryResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null }
@@ -176,13 +164,16 @@ export async function runDiscovery(db: Db, input: {
   for (const project of fresh) {
     try {
       const read = await judge.summarize(project, config.products);
-      const decision = await decider.decide(project, read.summary, config.products, nearestDecisions(read.summary, project.topics, learned));
+      const near = nearestWithCloseness(read.summary, project.topics, learned, DECISIONS_PER_SIDE);
+      const decision = await decider.decide(project, read.summary, config.products, near.map((item) => item.decision));
       inARow = 0;
       result.judged += 1;
       const stamp = now.toISOString();
       const judgement: CandidateJudgement = { summary: read.summary, overlaps: read.overlaps, competitor: decision.competitor, worthTracking: decision.worthTracking, needs: { competitor: config.minCompetitor, worthTracking: config.minWorthTracking } };
       const score = Math.round((decision.competitor * 0.7 + decision.worthTracking * 0.3) * 100) / 100;
-      if (decision.competitor >= config.minCompetitor && decision.worthTracking >= config.minWorthTracking) {
+      const held = historyHold(near, learned.length);
+      if (held) judgement.heldByHistory = held;
+      if (!held && decision.competitor >= config.minCompetitor && decision.worthTracking >= config.minWorthTracking) {
         if (saveCandidate(db, project, judgement, score, stamp)) result.offered += 1;
       } else {
         rememberPassedOver(db, project, judgement, score, stamp);

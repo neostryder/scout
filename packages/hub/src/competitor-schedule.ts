@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { applyAddChange, applyCompetitorCheck, applyGateChange, applyRemoveChange, applyRepoChange, applyWatchChange, compareVersions, countOpenResearch, enqueueAutoRun, evaluateResearchGate, failCompetitorRun, listCompetitors, markCompetitorNotified, parseCompetitorsFile, readGateSettings, recordMirrorSync, redactUrlSecrets, resolveResearchGate, seedWatchBaseline, setCompetitorPending, startPullingRun, syncCompetitors, watchFromJson, type CompetitorRun, type CompetitorWatch, type CompetitorsFile, type Db, type GateChange, type GateSettings, type ResearchDelta } from "@scout/core";
 import type { Notifier } from "./notify.ts";
 import type { ScheduleClock } from "./schedule.ts";
@@ -173,22 +173,40 @@ export class CompetitorSchedule {
   }
 
   /** Adds a competitor to the registry. A repository address also gets a first baseline from one read of it, so the next check can tell what is new. */
-  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null; batch?: string | null }): Promise<{ mirror: boolean; note: string | null }> {
+  async addCompetitor(entry: { id: string; name: string; org: string | null; remoteUrl: string | null; packageUrl: string | null; batch?: string | null; dossier?: { folder: string; text: string } }): Promise<{ mirror: boolean; note: string | null; dossier: string | null }> {
     let baseline: { version: string | null; commit: string | null; at: string; source: string } | null = null;
     if (entry.remoteUrl && this.options.check) {
       const read = await this.options.check(entry.remoteUrl).catch(() => null);
       if (read && !read.error && (read.version || read.commit)) baseline = { version: read.version, commit: read.commit, at: this.iso().slice(0, 10), source: "tracked" };
     }
-    this.rewriteConfig((text) => applyAddChange(text, { ...entry, baseline, addedAt: this.iso() }));
-    if (!entry.remoteUrl || !this.options.clone) return { mirror: false, note: null };
+    const dossierDir = this.writeDossierStub(entry.dossier);
+    const { dossier: _stub, ...rest } = entry;
+    this.rewriteConfig((text) => applyAddChange(text, { ...rest, baseline, addedAt: this.iso(), dossierDir }));
+    if (!entry.remoteUrl || !this.options.clone) return { mirror: false, note: null, dossier: dossierDir };
     // The clone is best effort: a project that cannot be mirrored is still tracked through its remote.
     try {
       const cloned = await this.options.clone(entry.remoteUrl, entry.id);
-      if (!cloned.ok) return { mirror: false, note: cloned.error };
+      if (!cloned.ok) return { mirror: false, note: cloned.error, dossier: dossierDir };
       this.updateRepo(entry.id, { remoteUrl: entry.remoteUrl, folder: entry.id, baseline: { commit: cloned.head, ...(baseline?.version ? { version: baseline.version } : {}) } });
-      return { mirror: true, note: null };
+      return { mirror: true, note: null, dossier: dossierDir };
     } catch (error) {
-      return { mirror: false, note: this.plain(error) };
+      return { mirror: false, note: this.plain(error), dossier: dossierDir };
+    }
+  }
+
+  /** Writes the first dossier page under the dossier root, unless the folder already holds one. Returns the folder, or null when there is nothing to write or the write failed. */
+  private writeDossierStub(stub: { folder: string; text: string } | undefined): string | null {
+    if (!stub || !this.registry) return null;
+    try {
+      const root = this.registry.dossierRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+      const dir = `${root}/${stub.folder}`;
+      const file = `${dir}/00_Overview.md`;
+      mkdirSync(dir, { recursive: true });
+      if (!existsSync(file)) writeFileSync(file, stub.text, "utf8");
+      return dir;
+    } catch (error) {
+      this.log(`dossier stub: ${this.plain(error)}`);
+      return null;
     }
   }
 

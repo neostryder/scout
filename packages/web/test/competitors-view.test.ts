@@ -504,3 +504,11 @@ test("a search looks through the whole list even while New only is on by default
   fire(toggle, "change", { checked: true });
   assert.deepEqual(listNames(page.root), []);
 });
+
+test("a candidate card lists the earlier choices it reads like, and a held-back project says why", async (t) => {
+  const examples = [{ name: "Atlas Pro", verdict: "tracked", closeness: 0.52 }, { name: "Sparkles", verdict: "dismissed", closeness: 0.3 }];
+  const page = await open(t, panel([candidate({ examples })]));
+  assert.match(allText(page.root), /Reads like Atlas Pro \(tracked, 52% alike\), Sparkles \(dismissed, 30% alike\)\./);
+  const held = await open(t, panel([candidate({ examples, judgement: { summary: "Draws battle maps.", overlaps: [], competitor: 0.9, worthTracking: 0.9, heldByHistory: "Reads like Sparkles, which was dismissed (60% alike)" } })]));
+  assert.match(allText(held.root), /Held back by your earlier choices: Reads like Sparkles, which was dismissed \(60% alike\)\./);
+});

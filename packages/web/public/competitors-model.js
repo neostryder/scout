@@ -251,7 +251,7 @@ export function repoFromForm({ remoteUrl, folder, commit, version }) {
   return repo;
 }
 
-export const TRACK_CONFIRM = "Add this project to the competitor list, read its newest version, and keep a local copy of its repository so later checks can count what changed. Nothing is installed.";
+export const TRACK_CONFIRM = "Add this project to the competitor list, read its newest version, and keep a local copy of its repository so later checks can count what changed, and start a dossier page for it. Nothing is installed.";
 
 /** What the hub says about the copy it tried to keep when a project was tracked. */
 export function trackedText(name, body) {
@@ -268,6 +268,20 @@ export function scoreText(candidate) {
   const show = (value) => Number(value).toFixed(2);
   const needs = judgement.needs;
   return `Competitor ${show(judgement.competitor)}${needs ? ` of ${show(needs.competitor)} needed` : ""}, worth watching ${show(judgement.worthTracking)}${needs ? ` of ${show(needs.worthTracking)} needed` : ""}.`;
+}
+
+/** What a project reads like: the owner's closest earlier decisions, as one sentence. Empty when there are none yet. */
+export function examplesText(candidate) {
+  const list = Array.isArray(candidate?.examples) ? candidate.examples : [];
+  if (!list.length) return "";
+  const phrase = (item) => `${item.name} (${item.verdict}, ${Math.round(item.closeness * 100)}% alike)`;
+  return `Reads like ${list.map(phrase).join(", ")}.`;
+}
+
+/** Why the run held a project back because of earlier dismissals, or an empty string. */
+export function heldText(candidate) {
+  const reason = candidate?.judgement?.heldByHistory;
+  return typeof reason === "string" && reason ? `Held back by your earlier choices: ${reason}.` : "";
 }
 
 /** The sentence under the panel title: when the last search ran, what it found, and why it stopped early if it did. */
