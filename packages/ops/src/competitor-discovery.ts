@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { knownCandidateKeys, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type Db } from "@scout/core";
+import { knownCandidateKeys, listOwnerDecisions, rememberPassedOver, saveCandidate, type CandidateJudgement, type CandidateSource, type Db, type OwnerDecision } from "@scout/core";
 import { readSecret } from "./secrets.ts";
 
 export interface DiscoveryProduct { name: string; summary: string }
@@ -22,7 +22,26 @@ export interface DiscoveryConfig {
 }
 
 export interface Judge { summarize(project: CandidateSource, products: DiscoveryProduct[]): Promise<{ summary: string; overlaps: string[] }> }
-export interface Decider { decide(project: CandidateSource, summary: string, products: DiscoveryProduct[]): Promise<{ competitor: number; worthTracking: number }> }
+/** `decisions` are the owner's own Track and Dismiss choices on the projects most like this one. */
+export interface Decider { decide(project: CandidateSource, summary: string, products: DiscoveryProduct[], decisions?: OwnerDecision[]): Promise<{ competitor: number; worthTracking: number }> }
+
+const DECISIONS_PER_SIDE = 4;
+const STOP_WORDS = new Set(["a", "an", "and", "or", "the", "of", "for", "to", "in", "on", "with", "that", "this", "is", "are", "it", "its", "by", "as", "at", "from", "into", "your", "their", "who", "can", "use", "using"]);
+const tokens = (text: string): Set<string> => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !STOP_WORDS.has(word)));
+
+/** The owner's decisions that read most like this project, a few tracked and a few dismissed, by shared words in the summary and topics. */
+export function nearestDecisions(summary: string, topics: string[], decisions: OwnerDecision[], perSide = DECISIONS_PER_SIDE): OwnerDecision[] {
+  const mine = tokens(`${summary} ${topics.join(" ")}`);
+  const scored = decisions.map((decision) => {
+    const theirs = tokens(`${decision.summary} ${decision.topics.join(" ")}`);
+    let shared = 0;
+    for (const word of mine) if (theirs.has(word)) shared += 1;
+    const union = mine.size + theirs.size - shared;
+    return { decision, closeness: union === 0 ? 0 : shared / union };
+  }).sort((a, b) => b.closeness - a.closeness);
+  const pick = (verdict: OwnerDecision["verdict"]) => scored.filter((item) => item.decision.verdict === verdict).slice(0, perSide).map((item) => item.decision);
+  return [...pick("tracked"), ...pick("dismissed")];
+}
 
 export interface DiscoveryResult { gathered: number; judged: number; offered: number; rejected: number; errors: number; error: string | null }
 
@@ -152,10 +171,12 @@ export async function runDiscovery(db: Db, input: {
     return !config.ignore.includes(owner) && !config.ignore.includes(project.key.replace("github:", ""));
   }).slice(0, config.maxJudged);
   let inARow = 0;
+  // Read once per run: what the owner tracked and dismissed so far teaches the judge what counts here.
+  const learned = listOwnerDecisions(db);
   for (const project of fresh) {
     try {
       const read = await judge.summarize(project, config.products);
-      const decision = await decider.decide(project, read.summary, config.products);
+      const decision = await decider.decide(project, read.summary, config.products, nearestDecisions(read.summary, project.topics, learned));
       inARow = 0;
       result.judged += 1;
       const stamp = now.toISOString();
@@ -234,7 +255,7 @@ export function minimaxJudge(options: { post?: PostLike; readKey?: KeyReader } =
 const JEV_QUESTIONS = {
   competitor: {
     type: "noul",
-    instructions: "Would the owner of our products want to keep an eye on this public project as a competitor or close neighbor of one of the products in `ourProducts`? Count a tool a game master or player could use for part of what a product does, or in its place. Running on the same virtual tabletop is not enough on its own.",
+    instructions: "Would the owner of our products want to keep an eye on this public project as a competitor or close neighbor of one of the products in `ourProducts`? Count a tool a game master or player could use for part of what a product does, or in its place. Running on the same virtual tabletop is not enough on its own. When `ownerDecisions` is given, it lists projects the owner already looked at and either tracked or dismissed. Judge this project the way the owner judged the closest of them: like the tracked ones counts for competitor, like the dismissed ones counts against.",
     criteria: {
       true: "The project is software for game masters or players of tabletop role-playing games, or for the same game, that overlaps part of what one of our products does: content or lore management, campaign or session help, AI assistants, generators for NPCs, items, quests, maps, or backstories, importers and converters, or modules for the same virtual tabletop that do one of those jobs.",
       false: "The project is a game system or its implementation, a rules or content pack with no tooling, an art, sound, or effects pack, a performance or file utility, a visual or animation effect, a library for developers, a character sheet, a website, or a different kind of software that only shares a theme or a platform with our products.",
@@ -272,8 +293,9 @@ export function jevDecider(options: { post?: PostLike; readKey?: KeyReader } = {
     return answers;
   };
   return {
-    async decide(project, summary, products) {
-      const answers = await ask(JSON.stringify({ model: "jev-preview", state: { project: projectState(project), summary, ourProducts: products }, questions: JEV_QUESTIONS }));
+    async decide(project, summary, products, decisions = []) {
+      const ownerDecisions = decisions.map((item) => ({ verdict: item.verdict, summary: item.summary, topics: item.topics.slice(0, 10) }));
+      const answers = await ask(JSON.stringify({ model: "jev-preview", state: { project: projectState(project), summary, ourProducts: products, ...(ownerDecisions.length > 0 ? { ownerDecisions } : {}) }, questions: JEV_QUESTIONS }));
       const read = (name: string): number => {
         const value = answers[name]?.noul;
         if (typeof value !== "number" || value < 0 || value > 1) throw new Error(`Jev gave no usable ${name} answer`);

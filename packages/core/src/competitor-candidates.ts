@@ -82,6 +82,19 @@ export function listPassedOver(db: Db, limit = 200): Candidate[] {
   return (db.prepare("SELECT * FROM competitor_candidates WHERE passed_over = 1 AND status = 'dismissed' ORDER BY score DESC, found_at DESC LIMIT ?").all(limit) as unknown as Row[]).map(toCandidate);
 }
 
+/** One project the owner decided on by hand, for teaching the judge what the owner counts as a competitor. */
+export interface OwnerDecision { verdict: "tracked" | "dismissed"; summary: string; topics: string[] }
+
+/** The owner's own Track and Dismiss choices. Projects the run held back by itself are not decisions, and a held-back project the owner rescued with "Track anyway" is one. */
+export function listOwnerDecisions(db: Db): OwnerDecision[] {
+  const rows = db.prepare("SELECT * FROM competitor_candidates WHERE judge_json IS NOT NULL AND (status = 'tracked' OR (status = 'dismissed' AND passed_over = 0)) ORDER BY decided_at DESC").all() as unknown as Row[];
+  return rows.flatMap((row): OwnerDecision[] => {
+    const candidate = toCandidate(row);
+    const summary = candidate.judgement?.summary.trim() ?? "";
+    return summary ? [{ verdict: candidate.status === "tracked" ? "tracked" : "dismissed", summary, topics: candidate.topics }] : [];
+  });
+}
+
 export function getCandidate(db: Db, id: string): Candidate | null {
   const row = db.prepare("SELECT * FROM competitor_candidates WHERE id = ?").get(id) as Row | undefined;
   return row ? toCandidate(row) : null;
