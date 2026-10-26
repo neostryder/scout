@@ -28,14 +28,24 @@ test("a public repository is cloned under the mirror root and its head commit co
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a repository over the size limit, an unsupported host, a bad folder name, and an existing folder are refused before any clone", async () => {
+test("any repository size is cloned, and only a nearly full drive refuses", async () => {
+  const dir = root();
+  try {
+    const big = await cloneMirror("https://github.com/acme/Huge.git", dir, "huge", { run: runner([], () => done()), sizeKb: 5_000_000, freeKb: 100 * 1024 * 1024 });
+    assert.equal(big.ok, true);
+    const tight = await cloneMirror("https://github.com/acme/Huge.git", dir, "tight", { run: runner([], () => done()), sizeKb: 5_000_000, freeKb: 22 * 1024 * 1024 });
+    assert.match(tight.ok ? "" : tight.error, /22 GB free and a clone of 4883 MB would leave it under 20 GB/);
+    assert.equal(existsSync(join(dir, "tight")), false);
+    const capped = await cloneMirror("https://github.com/acme/Huge.git", dir, "capped", { run: runner([], () => done()), sizeKb: 900_000, maxKb: 400_000, freeKb: null });
+    assert.match(capped.ok ? "" : capped.error, /over the 391 MB limit/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an unsupported host, a bad folder name, and an existing folder are refused before any clone", async () => {
   const dir = root();
   try {
     const calls: string[][] = [];
     const run = runner(calls, () => done());
-    const big = await cloneMirror("https://github.com/acme/Huge.git", dir, "huge", { run, sizeKb: 900_000 });
-    assert.equal(big.ok, false);
-    assert.match(big.ok ? "" : big.error, /over the 391 MB limit/);
     assert.equal((await cloneMirror("https://example.test/acme/x.git", dir, "x", { run })).ok, false);
     assert.equal((await cloneMirror("https://github.com/acme/x.git", dir, "../escape", { run })).ok, false);
     mkdirSync(join(dir, "taken"));
