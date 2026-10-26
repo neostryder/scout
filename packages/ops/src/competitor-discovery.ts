@@ -200,7 +200,7 @@ export async function runDiscovery(db: Db, input: {
 
 // ---- model clients ----
 
-const MINIMAX_URL = "https://api.minimax.io/v1/chat/completions";
+export const MINIMAX_URL = "https://api.minimax.io/v1/chat/completions";
 export const MINIMAX_MODEL = "MiniMax-M3.1-Flash";
 const JEV_GATEWAY = "http://127.0.0.1:8020/v1/systemone";
 const JEV_DIRECT = "https://api.typesafe.ai/v1/systemone";

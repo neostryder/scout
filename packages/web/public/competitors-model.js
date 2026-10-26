@@ -32,14 +32,74 @@ export function sortCompetitors(rows) {
   return [...(rows || [])].sort((a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) || (nameKey(a) < nameKey(b) ? -1 : nameKey(a) > nameKey(b) ? 1 : 0));
 }
 
-/** Name and organization, every word of the query, and optionally only rows with a new version. */
-export function filterCompetitors(rows, { query = "", newOnly = false } = {}) {
+/** Name and organization, every word of the query, and the filters. */
+export function filterCompetitors(rows, { query = "", newOnly = false, ...filters } = {}) {
   const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
-  return (rows || []).filter((row) => {
-    if (newOnly && row.status !== "new") return false;
+  return filterRows(rows, { newOnly, ...filters }).filter((row) => {
     if (!terms.length) return true;
     const hay = `${row.name || ""} ${row.org || ""}`.toLowerCase();
     return terms.every((term) => hay.includes(term));
+  });
+}
+
+const ORIGINAL_BATCH = "original";
+export const BATCH_ORIGINAL = ORIGINAL_BATCH;
+const OPEN_RUN = new Set(["pulling", "queued", "claimed"]);
+
+/** The filters that sit beside the search. An empty value means no filter. `batch` is a discovery run's timestamp or "original" for the list the watch started with. */
+export function filterRows(rows, { newOnly = false, status = "", flag = "", batch = "", research = "" } = {}) {
+  return (rows || []).filter((row) => {
+    if (newOnly && row.status !== "new") return false;
+    if (status && row.status !== status) return false;
+    if (flag && !(Array.isArray(row.flags) && row.flags.includes(flag))) return false;
+    if (batch && (batch === ORIGINAL_BATCH ? Boolean(row.batch) : row.batch !== batch)) return false;
+    if (research === "open" && !(row.run && OPEN_RUN.has(row.run.state))) return false;
+    if (research === "failed" && row.run?.state !== "failed") return false;
+    if (research === "none" && row.run) return false;
+    return true;
+  });
+}
+
+/** The research batches present in the list, newest first, with how many competitors each holds. The original list comes last. */
+export function batchOptions(rows) {
+  const counts = new Map();
+  for (const row of rows || []) { const key = row.batch || ORIGINAL_BATCH; counts.set(key, (counts.get(key) || 0) + 1); }
+  const found = [...counts].filter(([key]) => key !== ORIGINAL_BATCH).sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([value, count]) => ({ value, count }));
+  return counts.has(ORIGINAL_BATCH) ? [...found, { value: ORIGINAL_BATCH, count: counts.get(ORIGINAL_BATCH) }] : found;
+}
+
+/** The product flags that appear in the list, in the list's own order of first use. */
+export function flagOptions(rows) {
+  return [...new Set((rows || []).flatMap((row) => (Array.isArray(row.flags) ? row.flags : [])))].sort();
+}
+
+/** The day a competitor joined the list, or a word for a row with no date. */
+export function addedText(row) {
+  return row?.addedAt ? String(row.addedAt).slice(0, 10) : "Unknown";
+}
+
+export const SORT_COLUMNS = ["competitor", "added", "analyzed", "status"];
+
+function stringKey(value) { return String(value || "").toLowerCase(); }
+
+const SORT_KEYS = {
+  competitor: (row) => stringKey(row.name),
+  added: (row) => String(row.addedAt || ""),
+  analyzed: (row) => String(row.baseline?.at || ""),
+  status: (row) => STATUS_RANK[row.status] ?? 9,
+};
+
+/** A copy ordered by one column. The default order, new versions first and then name, is `sortCompetitors`. Rows with no value in a date column go last in either direction, and ties fall back to name. */
+export function sortBy(rows, column, direction = "asc") {
+  const key = SORT_KEYS[column];
+  if (!key) return sortCompetitors(rows);
+  const sign = direction === "desc" ? -1 : 1;
+  return [...(rows || [])].sort((a, b) => {
+    const left = key(a);
+    const right = key(b);
+    const empty = (value) => value === "";
+    if (empty(left) !== empty(right)) return empty(left) ? 1 : -1;
+    return (left < right ? -1 : left > right ? 1 : 0) * sign || (stringKey(a.name) < stringKey(b.name) ? -1 : stringKey(a.name) > stringKey(b.name) ? 1 : 0);
   });
 }
 
@@ -191,7 +251,7 @@ export function repoFromForm({ remoteUrl, folder, commit, version }) {
   return repo;
 }
 
-export const TRACK_CONFIRM = "Add this project to the competitor list, read its newest version, and keep a local copy of its repository so later checks can count what changed. A very large repository is tracked without the copy. Nothing is installed.";
+export const TRACK_CONFIRM = "Add this project to the competitor list, read its newest version, and keep a local copy of its repository so later checks can count what changed. Nothing is installed.";
 
 /** What the hub says about the copy it tried to keep when a project was tracked. */
 export function trackedText(name, body) {

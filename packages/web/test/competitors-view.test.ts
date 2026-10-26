@@ -4,6 +4,7 @@ import test, { type TestContext } from "node:test";
 import { createContext, runInContext } from "node:vm";
 
 const model = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const searchModule = await import(new URL("../public/competitors-search.js", import.meta.url).href);
 
 class TextNode { constructor(text: unknown) { this.text = String(text ?? ""); } text: string; }
 class El {
@@ -80,14 +81,15 @@ async function open(t: TestContext, answer: (url: string) => any) {
   const badge = new El("span");
   const root = new El("main");
   const context = createContext({
-    ...model,
+    ...model, ...searchModule,
     h, safeUrl, fetch: async (url: string, options?: { method?: string; body?: string; headers?: Record<string, string> }) => {
       calls.push({ url: String(url), method: options?.method || "GET", body: options?.body, headers: options?.headers });
       const body = answer(String(url));
       return body && body.status ? body : { ok: true, status: 200, json: async () => body };
     },
     document: { hidden: false, getElementById: (id: string) => (id === "competitors-count" ? badge : null), addEventListener() {} },
-    AbortController, setTimeout, clearTimeout, encodeURIComponent, URL, Date, Error,
+    AbortController, setTimeout, clearTimeout, encodeURIComponent, URL, URLSearchParams, Date, Error, HTMLElement: class {},
+    location: { search: "", pathname: "/" }, history: { state: null, replaceState() {} },
   });
   runInContext(source, context);
   const view = (context as { createCompetitorsView: (root: El) => { show: () => Promise<void>; hide: () => void } }).createCompetitorsView(root);
@@ -410,4 +412,84 @@ test("passed-over projects sit in a closed list with their scores, and Track any
 test("the passed-over list is hidden when there is nothing in it", async (t) => {
   const page = await open(t, panel([candidate()]));
   assert.equal(walk(page.root).find((el) => el.tag === "details")?.hidden, true);
+});
+
+const listNames = (root: El) => listed(root).map((item) => allText(item).trim().split(/\s+/)[0]);
+const searchBox = (root: El) => walk(root).find((el) => el.tag === "input" && el.attrs.type === "search")!;
+const filterBox = (root: El, label: string) => walk(root).find((el) => el.tag === "select" && el.attrs["aria-label"] === label)!;
+
+const many = () => [
+  row({ id: "alpha", name: "Alpha", org: "Wolf", status: "current", flags: ["forge"], addedAt: "2026-10-25T20:00:00.000Z", batch: "2026-10-25T19:39:42.021Z", about: "Makes dungeon maps." }),
+  row({ id: "beta", name: "Beta", org: "Fox", status: "new", flags: ["atlas"], addedAt: "2026-10-20", batch: null, about: "Writes session notes." }),
+  row({ id: "gamma", name: "Gamma", org: "Owl", status: "current", flags: ["forge"], addedAt: "2026-10-26T01:30:00.000Z", batch: "2026-10-26T01:24:51.024Z", about: "Tracks lore." }),
+];
+
+test("the table has an Added column and sorts by a header, flipping direction on a second click", async (t) => {
+  const page = await open(t, () => ok(many()));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox")!;
+  fire(toggle, "change", { checked: false });
+  assert.deepEqual(listNames(page.root), ["Beta", "Alpha", "Gamma"]);
+  assert.match(allText(page.root), /2026-10-25/);
+  const head = (label: string) => walk(page.root).find((el) => el.tag === "button" && el.attrs["data-sort"] === label)!;
+  await click(head("added"));
+  assert.deepEqual(listNames(page.root), ["Beta", "Alpha", "Gamma"]);
+  assert.equal(head("added").children.length > 0, true);
+  await click(head("added"));
+  assert.deepEqual(listNames(page.root), ["Gamma", "Alpha", "Beta"]);
+  await click(head("competitor"));
+  assert.deepEqual(listNames(page.root), ["Alpha", "Beta", "Gamma"]);
+});
+
+test("the batch and product filters narrow the list, and Clear filters brings it back", async (t) => {
+  const page = await open(t, () => ok(many()));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox")!;
+  fire(toggle, "change", { checked: false });
+  const batch = filterBox(page.root, "Filter by research batch");
+  assert.equal(batch.children.length, 4);
+  assert.match(allText(batch.children[3]), /Original list \(1\)/);
+  fire(batch, "change", { value: "2026-10-26T01:24:51.024Z" });
+  assert.deepEqual(listNames(page.root), ["Gamma"]);
+  assert.match(allText(page.root), /Showing 1 of 3/);
+  fire(batch, "change", { value: "original" });
+  assert.deepEqual(listNames(page.root), ["Beta"]);
+  fire(batch, "change", { value: "" });
+  fire(filterBox(page.root, "Filter by product"), "change", { value: "forge" });
+  assert.deepEqual(listNames(page.root), ["Alpha", "Gamma"]);
+  await click(button(page.root, "Clear filters")!);
+  assert.equal(listed(page.root).length, 3);
+});
+
+test("a misspelled search shows the close matches with the reason, and Escape clears the box", async (t) => {
+  const page = await open(t, () => ok(many()));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox")!;
+  fire(toggle, "change", { checked: false });
+  const box = searchBox(page.root);
+  fire(box, "input", { value: "dungon" });
+  assert.deepEqual(listNames(page.root), ["Alpha"]);
+  assert.match(allText(page.root), /Close spelling: "dungon" is close to "dungeon"/);
+  assert.match(allText(page.root), /Nothing matches exactly\. 1 with close spelling/);
+  for (const fn of box.listeners.keydown || []) fn({ key: "Escape", preventDefault() {} });
+  assert.equal(listed(page.root).length, 3);
+});
+
+test("when spelling finds nothing the hub ranks by meaning, and the answer fills the list", async (t) => {
+  const page = await open(t, (url) => (url === "/api/competitors/semantic" ? { ids: ["gamma", "beta", "nobody"] } : ok(many())));
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox")!;
+  fire(toggle, "change", { checked: false });
+  fire(searchBox(page.root), "input", { value: "wiki helper" });
+  assert.match(allText(page.root), /Looking for similar meanings/);
+  await new Promise((done) => setTimeout(done, 700));
+  const asked = page.calls.filter((call) => call.url === "/api/competitors/semantic");
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0]?.body, JSON.stringify({ query: "wiki helper" }));
+  assert.deepEqual(listNames(page.root), ["Gamma", "Beta"]);
+  assert.match(allText(page.root), /Similar meaning, ranked best first/);
+});
+
+test("a failed meaning search says so once and does not ask again", async (t) => {
+  const page = await open(t, (url) => (url === "/api/competitors/semantic" ? { ok: false, status: 502, json: async () => ({ error: "similar-meaning search failed: MiniMax answered 500" }) } : ok(many())));
+  fire(searchBox(page.root), "input", { value: "wiki helper" });
+  await new Promise((done) => setTimeout(done, 700));
+  assert.match(allText(page.root), /Similar-meaning search is not available: similar-meaning search failed/);
+  assert.equal(page.calls.filter((call) => call.url === "/api/competitors/semantic").length, 1);
 });

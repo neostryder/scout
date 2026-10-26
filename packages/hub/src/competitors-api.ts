@@ -3,6 +3,9 @@ import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, getCandid
 import type { CompetitorSchedule } from "./competitor-schedule.ts";
 import type { DiscoverySchedule } from "./discovery-schedule.ts";
 
+/** Ranks competitors by meaning for the search; the hub passes MiniMax, a test passes a stub. */
+export type SemanticRanker = (query: string, items: { id: string; name: string; org: string | null; products: string[]; about: string | null }[]) => Promise<string[]>;
+
 type SendJson = (res: ServerResponse, status: number, value: unknown) => void;
 
 const MAX_BODY = 16_384;
@@ -53,7 +56,7 @@ function runNumber(value: string): number {
   return id;
 }
 
-export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, schedule: CompetitorSchedule | undefined, discovery?: DiscoverySchedule): Promise<void> {
+export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson, schedule: CompetitorSchedule | undefined, discovery?: DiscoverySchedule, semantic?: SemanticRanker): Promise<void> {
   const path = url.pathname;
   const read = req.method === "GET" || req.method === "HEAD";
   if (path === "/api/competitors") {
@@ -83,7 +86,7 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
   }
   const repoPath = /^\/api\/competitors\/([^/]+)\/repo$/.exec(path);
   const removePath = /^\/api\/competitors\/([^/]+)\/remove$/.exec(path);
-  const known = path === "/api/competitors/discover" || candidatePath || path === "/api/competitors/check" || path === "/api/competitors/gate" || runPath || updatePath || watchPath || repoPath || removePath;
+  const known = path === "/api/competitors/discover" || path === "/api/competitors/semantic" || candidatePath || path === "/api/competitors/check" || path === "/api/competitors/gate" || runPath || updatePath || watchPath || repoPath || removePath;
   if (req.method !== "POST") return json(res, known ? 405 : 404, { error: known ? "method not allowed" : "no such route" });
   const body = await readBody(req, res, hostAllowed, json);
   if (!body) return;
@@ -96,6 +99,14 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
       if (id !== undefined && (typeof id !== "string" || id.length < 1 || id.length > 80)) throw new Error("id must be a string up to 80 characters");
       const result = schedule.runNow(typeof id === "string" ? id : undefined);
       return result.started ? json(res, 202, { started: true }) : json(res, 409, { error: result.reason });
+    }
+    if (path === "/api/competitors/semantic") {
+      if (!semantic) return json(res, 404, { error: "similar-meaning search is off" });
+      only(body, ["query"]);
+      const query = body["query"];
+      if (typeof query !== "string" || !query.trim() || query.length > 200) throw new Error("query must be text of up to 200 characters");
+      const items = listCompetitors(db).map((row) => ({ id: row.id, name: row.name, org: row.org, products: row.flags, about: row.about }));
+      try { return json(res, 200, { ids: await semantic(query, items) }); } catch (error) { return json(res, 502, { error: `similar-meaning search failed: ${(error as Error).message}` }); }
     }
     if (path === "/api/competitors/discover") {
       if (!discovery) return json(res, 404, { error: "competitor discovery is off" });
@@ -112,7 +123,7 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
       if (candidate.status !== "new" && !rescue) return json(res, 409, { error: `this candidate is already ${candidate.status}` });
       if (candidatePath[2] === "track") {
         if (!schedule) return json(res, 404, { error: "competitor watch is off" });
-        const added = await schedule.addCompetitor({ id: candidate.id, name: candidate.name, org: candidate.org, remoteUrl: candidate.repoUrl, packageUrl: candidate.url });
+        const added = await schedule.addCompetitor({ id: candidate.id, name: candidate.name, org: candidate.org, remoteUrl: candidate.repoUrl, packageUrl: candidate.url, batch: candidate.foundAt });
         return json(res, 200, { ...setCandidateStatus(db, id, "tracked", now), mirror: added.mirror, mirrorNote: added.note });
       }
       return json(res, 200, setCandidateStatus(db, id, "dismissed", now));

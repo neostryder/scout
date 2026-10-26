@@ -12,7 +12,7 @@ const NOW = "2026-10-19T00:00:00.000Z";
 function row(over: Partial<CompetitorRow> = {}): CompetitorRow {
   return {
     id: "acme-tools", name: "Acme Tools", org: "Acme", remoteUrl: "https://example.test/acme", packageUrl: "https://example.test/pkg",
-    flags: ["forge"], mirrorPresent: true, dossierReviewed: null,
+    flags: ["forge"], mirrorPresent: true, dossierReviewed: null, addedAt: null, batch: null, about: null, topics: [],
     baseline: { version: "1.0.0", commit: "abc", at: "2026-01-01", source: "mirror" },
     latest: { version: "1.1.0", prerelease: null, commit: "def", checkedAt: NOW, error: null },
     status: "new", newBasis: "version",
