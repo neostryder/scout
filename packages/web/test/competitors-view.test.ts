@@ -493,3 +493,14 @@ test("a failed meaning search says so once and does not ask again", async (t) =>
   assert.match(allText(page.root), /Similar-meaning search is not available: similar-meaning search failed/);
   assert.equal(page.calls.filter((call) => call.url === "/api/competitors/semantic").length, 1);
 });
+
+test("a search looks through the whole list even while New only is on by default, and ticking it by hand still narrows the search", async (t) => {
+  const current = row({ id: "other", name: "Other Atlas", org: "Beta", status: "current", newBasis: null, latest: { version: "2.0.0", prerelease: null, error: null } });
+  const page = await open(t, () => ok([row({ name: "Fresh" }), current]));
+  assert.deepEqual(listNames(page.root), ["Fresh"]);
+  fire(searchBox(page.root), "input", { value: "atlas" });
+  assert.deepEqual(listNames(page.root), ["Other"]);
+  const toggle = walk(page.root).find((el) => el.tag === "input" && el.attrs.type === "checkbox")!;
+  fire(toggle, "change", { checked: true });
+  assert.deepEqual(listNames(page.root), []);
+});
