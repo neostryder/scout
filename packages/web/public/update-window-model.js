@@ -33,6 +33,16 @@ export function autoRunNote(autoRun, quiet) {
   return `Automatic running is on. At the start of the quiet window Scout queues up to ${autoRun.cap ?? 15} updates per machine from the first two lists, which includes updates that close or restart a running program. A failed update switches it off.${last}${left}`;
 }
 
+/** Which updates the automatic run applies, and how many programs are opted in. */
+export function scopeNote(autoRun, optedIn) {
+  if (!autoRun) return "";
+  const count = `${optedIn} ${optedIn === 1 ? "program is" : "programs are"} marked for automatic updates`;
+  if (autoRun.scope === "all") return `The run applies every update in the first two lists. ${count}, which only matters if you switch to marked programs.`;
+  return optedIn === 0
+    ? "The run applies only programs marked for automatic updates, and none are marked yet. Use the Auto menu on an Updates row to mark one."
+    : `The run applies only programs marked for automatic updates, up to the step size each was given. ${count}. A library and the programs that use it run together only when all of them are marked.`;
+}
+
 export function itemLine(item) {
   return `${item.name}: ${item.from || "unknown"} to ${item.to || "unknown"}`;
 }

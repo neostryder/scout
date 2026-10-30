@@ -1,4 +1,4 @@
-import { enqueueBatch, jobById, type Db } from "@scout/core";
+import { enqueueBatch, jobById, listAutoUpdates, type Db } from "@scout/core";
 import { planWindows, previewUpdate, type Runner } from "@scout/ops";
 
 export function planResponse(db: Db, runner: Runner, installId: number, alsoInstallIds: string | null = null): unknown | null {
@@ -7,7 +7,7 @@ export function planResponse(db: Db, runner: Runner, installId: number, alsoInst
 }
 
 export function windowResponse(db: Db, runner: Runner, windowRun: { status(): unknown } | null = null, now = new Date()): unknown {
-  return { ...planWindows(db, runner.deps.machines, now), autoRun: windowRun?.status() ?? null };
+  return { ...planWindows(db, runner.deps.machines, now), autoRun: windowRun?.status() ?? null, autoUpdates: listAutoUpdates(db) };
 }
 
 export function createJobsResponse(db: Db, runner: Runner, body: unknown): { status: number; body: unknown } {

@@ -40,6 +40,7 @@ test("nothing is queued while the switch is off", (t) => {
 test("nothing is queued outside the quiet window", (t) => {
   const { db, runner } = seed(t);
   const run = new WindowRun(db, runner, { clock: clockAt({ value: outside }), offsetMinutes: () => 0 });
+  run.setScope("all");
   run.setEnabled(true);
   assert.equal(run.tick(), 0);
   assert.equal(jobCount(db), 0);
@@ -51,6 +52,7 @@ test("an open window queues the plan once, and the next window runs again", (t) 
   const logs: string[] = [];
   const run = new WindowRun(db, runner, { clock: clockAt(time), offsetMinutes: () => 0, log: (line) => logs.push(line) });
   run.start();
+  run.setScope("all");
   run.setEnabled(true);
   assert.equal(run.status().lastQueued, 1);
   assert.equal(jobCount(db), 1);
@@ -67,6 +69,7 @@ test("a running program is updated in the window because the run allows disrupti
   const { db, runner } = seed(t, true);
   const run = new WindowRun(db, runner, { clock: clockAt({ value: inWindow }), offsetMinutes: () => 0 });
   run.start();
+  run.setScope("all");
   run.setEnabled(true);
   assert.equal(jobCount(db), 1);
 });
@@ -78,6 +81,7 @@ test("the switch and the last run survive a restart", (t) => {
   const path = join(dir, "update-window.json");
   const first = new WindowRun(db, runner, { path, clock: clockAt({ value: inWindow }), offsetMinutes: () => 0 });
   first.start();
+  first.setScope("all");
   first.setEnabled(true);
   const second = new WindowRun(db, runner, { path, clock: clockAt({ value: inWindow }), offsetMinutes: () => 0 });
   assert.deepEqual(second.status(), first.status());
@@ -150,6 +154,7 @@ test("a machine over the cap queues only the cap, and the rest wait for the next
   const logs: string[] = [];
   const run = new WindowRun(db, runner, { clock: clockAt({ value: inWindow }), offsetMinutes: () => 0, cap: 2, log: (line) => logs.push(line) });
   run.start();
+  run.setScope("all");
   run.setEnabled(true);
   assert.equal(jobCount(db), 2);
   assert.equal(run.status().lastQueued, 2);
@@ -216,6 +221,7 @@ test("switching the run back on clears the pause", (t) => {
   const { run } = failedRun(t, ["failed"]);
   run.tick();
   assert.notEqual(run.status().pausedReason, null);
+  run.setScope("all");
   run.setEnabled(true);
   assert.equal(run.status().pausedReason, null);
   assert.equal(run.status().enabled, true);
@@ -234,6 +240,7 @@ test("the cap can be changed, is kept across a restart, and rejects values outsi
   assert.equal(first.status().cap, 3);
   const capped = new WindowRun(db, runner, { path, clock: clockAt({ value: inWindow }), offsetMinutes: () => 0 });
   capped.start();
+  capped.setScope("all");
   capped.setEnabled(true);
   assert.equal(jobCount(db), 3);
   assert.equal(capped.status().lastDeferred, 2);

@@ -30,7 +30,7 @@ export const installs: Row[] = Array.from({ length: 300 }, (_, index) => {
   const statuses = [updatable && "updatable", blockedBy && "blocked", upstream && "upstream", advisoryOnly && "advisory", available === installed && "current"].filter(Boolean);
   const lastUsed = index % 11 === 0 ? null : daysAgo(index % 120);
   const risk = updatable || upstream ? id === 7 ? { hard: 1, soft: 0 } : id === 3 ? { hard: 0, soft: 2 } : { hard: 0, soft: 0 } : null;
-  return { installId: id, machineId, ecosystem, sourceKind: ecosystem, availableSource: ecosystem, key: `tool-${id}`, name, description: `${name} helps with ${categories[index % categories.length]}.`, publisher: publishers[index % publishers.length], category: categories[index % categories.length], kind: index % 5 === 0 ? "app" : "package", location: `C:/Tools/${ecosystem}/tool-${id}`, sourceRoot: `C:/Tools/${ecosystem}`, scope: index % 2 ? "user" : "machine", descriptionSource: index % 3 ? "source" : "generated", categorySource: "source", version: installed, installed, available, upstream, beta, blockedBy, updatable, advisoryOnly, statuses, risk, bump: available === installed ? null : jump === 0 ? "major" : jump === 1 ? "minor" : "patch", checkedAt: daysAgo(index % 20), firstSeen: daysAgo(300 - index % 200), lastSeen: daysAgo(index % 10), lastUsed, useCount: index % 11 === 0 ? 0 : index % 50, neverUsed: index % 11 === 0, unknownUse: index % 23 === 0, running: index % 17 === 0, autostart: index % 31 === 0, ai: index % 7 === 0, constrained: !!blockedBy, homepage: index % 6 ? `https://example.com/tool-${id}` : null, downloadUrl: !updatable && !blockedBy && (upstream || advisoryOnly) ? `https://example.com/tool-${id}` : null, hasDescription: true, presence: index % 4 === 0 ? "one" : "some", job: null };
+  return { installId: id, packageId: id, machineId, ecosystem, sourceKind: ecosystem, availableSource: ecosystem, key: `tool-${id}`, name, description: `${name} helps with ${categories[index % categories.length]}.`, publisher: publishers[index % publishers.length], category: categories[index % categories.length], kind: index % 5 === 0 ? "app" : "package", location: `C:/Tools/${ecosystem}/tool-${id}`, sourceRoot: `C:/Tools/${ecosystem}`, scope: index % 2 ? "user" : "machine", descriptionSource: index % 3 ? "source" : "generated", categorySource: "source", version: installed, installed, available, upstream, beta, blockedBy, updatable, advisoryOnly, statuses, risk, bump: available === installed ? null : jump === 0 ? "major" : jump === 1 ? "minor" : "patch", checkedAt: daysAgo(index % 20), firstSeen: daysAgo(300 - index % 200), lastSeen: daysAgo(index % 10), lastUsed, useCount: index % 11 === 0 ? 0 : index % 50, neverUsed: index % 11 === 0, unknownUse: index % 23 === 0, running: index % 17 === 0, autostart: index % 31 === 0, ai: index % 7 === 0, constrained: !!blockedBy, homepage: index % 6 ? `https://example.com/tool-${id}` : null, downloadUrl: !updatable && !blockedBy && (upstream || advisoryOnly) ? `https://example.com/tool-${id}` : null, hasDescription: true, presence: index % 4 === 0 ? "one" : "some", job: null };
 });
 export const proposals = Array.from({ length: 12 }, (_, index) => ({ id: index + 1, rule: "Matching product name", packages: [installs[index]!, installs[index + 12]!].map((r) => ({ name: r.name, description: r.description, ecosystem: r.ecosystem, key: r.key, publisher: r.publisher, installs: [r] })) }));
 const updateDims = ["machine", "ecosystem", "source", "status", "bump", "category", "publisher"];
@@ -46,13 +46,14 @@ function compare(a: Row, b: Row, key: string, dir: string) {
   const primary = order ? order.indexOf(av) - order.indexOf(bv) : ["installed", "available", "version"].includes(key) ? versionCompare(av || "", bv || "") : typeof av === "number" ? av - bv : String(av ?? "").localeCompare(String(bv ?? ""), undefined, { sensitivity: "base" });
   return primary ? primary * (dir === "desc" ? -1 : 1) : a.name.localeCompare(b.name) || a.machineId.localeCompare(b.machineId);
 }
-const autoRun = { enabled: false, lastWindowStart: null as string | null, lastQueued: 0, lastRunAt: null as string | null, cap: 15, lastDeferred: 0, pausedReason: null as string | null, batchIds: [] as string[] };
+const autoUpdates: { machineId: string; packageId: number; name: string; ecosystem: string; maxBump: string; createdAt: string }[] = [];
+const autoRun = { enabled: false, scope: "opted-in", lastWindowStart: null as string | null, lastQueued: 0, lastRunAt: null as string | null, cap: 15, lastDeferred: 0, pausedReason: null as string | null, batchIds: [] as string[] };
 export function updateWindows() {
   const now = new Date();
   const start = new Date(now); start.setHours(3, 30, 0, 0); if (start.getTime() <= now.getTime()) start.setDate(start.getDate() + 1);
   const quiet = { startMinute: 210, lengthMinutes: 120, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 7_200_000).toISOString(), inWindow: false };
   const item = (row: Row) => ({ installId: row.installId, name: row.name, ecosystem: row.ecosystem, from: row.installed, to: row.available, bump: row.bump, running: row.running, warnings: [] as string[] });
-  return { generatedAt: now.toISOString(), quiet, autoRun: { ...autoRun }, machines: machines.map((machineId) => {
+  return { generatedAt: now.toISOString(), quiet, autoRun: { ...autoRun }, autoUpdates: [...autoUpdates], machines: machines.map((machineId) => {
     const rows = installs.filter((row) => row.machineId === machineId && row.updatable);
     const disruptive = (row: Row) => row.kind === "app" || row.running;
     return {
@@ -171,13 +172,26 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (path === "/favicon.ico") { res.writeHead(204); res.end(); return; }
     if (path === "/api/summary") return json(res, 200, { installs: installs.length, packages: installs.length, described: installs.length, openProposals: proposals.length, updatable: installs.filter((r) => r.updatable).length, machines: machines.map((id) => ({ id, kind: "host" })) });
     if (path === "/api/updates/window") return json(res, 200, updateWindows());
+    if (path === "/api/updates/auto-updates" && req.method === "GET") return json(res, 200, { autoUpdates });
+    if (path === "/api/updates/auto-updates" && req.method === "POST") {
+      let body: Row; try { body = JSON.parse(await new Promise<string>((resolveBody) => { let data = ""; req.on("data", (part) => data += part); req.on("end", () => resolveBody(data)); })); } catch { return json(res, 400, { error: "Invalid JSON" }); }
+      const row = installs.find((r) => r.installId === body?.installId);
+      if (!row) return json(res, 404, { error: "no such install" });
+      if (body.maxBump !== null && !["patch", "minor", "major"].includes(body.maxBump)) return json(res, 400, { error: "maxBump must be patch, minor, major, or null" });
+      const at = autoUpdates.findIndex((entry) => entry.machineId === row.machineId && entry.packageId === row.installId);
+      if (at >= 0) autoUpdates.splice(at, 1);
+      if (body.maxBump !== null) autoUpdates.push({ machineId: row.machineId, packageId: row.installId, name: row.name, ecosystem: row.ecosystem, maxBump: body.maxBump, createdAt: new Date().toISOString() });
+      return json(res, 200, { autoUpdates });
+    }
     if (path === "/api/updates/window/auto" && req.method === "POST") {
       let body: Row; try { body = JSON.parse(await new Promise<string>((resolveBody) => { let data = ""; req.on("data", (part) => data += part); req.on("end", () => resolveBody(data)); })); } catch { return json(res, 400, { error: "Invalid JSON" }); }
-      if (body?.enabled === undefined && body?.cap === undefined) return json(res, 400, { error: "enabled or cap is required" });
+      if (body?.enabled === undefined && body?.cap === undefined && body?.scope === undefined) return json(res, 400, { error: "enabled, cap, or scope is required" });
+      if (body.scope !== undefined && body.scope !== "all" && body.scope !== "opted-in") return json(res, 400, { error: "scope must be \"all\" or \"opted-in\"" });
       if (body.enabled !== undefined && typeof body.enabled !== "boolean") return json(res, 400, { error: "enabled must be true or false" });
       if (body.cap !== undefined && (!Number.isSafeInteger(body.cap) || body.cap < 1 || body.cap > 100)) return json(res, 400, { error: "cap must be a whole number from 1 to 100" });
       if (typeof body.enabled === "boolean") autoRun.enabled = body.enabled;
       if (typeof body.cap === "number") autoRun.cap = body.cap;
+      if (body.scope !== undefined) autoRun.scope = body.scope;
       return json(res, 200, { ...autoRun });
     }
     if (path === "/api/updates/plan") return json(res, 200, plan(Number(url.searchParams.get("installId")), list(url.searchParams, "alsoInstallIds").map(Number)));
