@@ -127,8 +127,10 @@ export function recordServices(db: Db, machineId: string, result: ServiceResult,
     const emit = (kind: string, fact: ServiceFact, before: ReturnType<typeof watched> | null, after: ReturnType<typeof watched> | null) => {
       if (!firstScan) event.run(now, machineId, kind, JSON.stringify({ machine: machineId, kind: fact.kind, domain: fact.domain, name: fact.name, old: before, new: after }));
     };
-    for (const fact of facts.values()) {
-      const before = old.get(identity(fact));
+    for (const read of facts.values()) {
+      const before = old.get(identity(read));
+      // The cheap launchd reader never sees the program or the enabled flag, so a launchd job keeps what an earlier fuller read stored instead of flapping between the two.
+      const fact = read.kind === "launchd" && before ? { ...read, program: read.program ?? before.program, enabled: read.enabled ?? before.enabled } : read;
       put.run(
         machineId, fact.kind, fact.domain, fact.name, fact.displayName, fact.program, fact.state, fact.startMode,
         fact.enabled === null ? null : fact.enabled ? 1 : 0, fact.pid, fact.runAs, fact.triggers === null ? null : JSON.stringify(fact.triggers),

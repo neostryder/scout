@@ -249,3 +249,21 @@ test("a catalog built before systemd units gains the kind and keeps its service 
     } finally { reopened.close(); }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a launchd job keeps its program and enabled flag when the cheap reader omits them", (t) => {
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  upsertMachine(db, { id: "mini", name: "Mini", os: "macos", kind: "host" });
+  const full: ServiceFact = { kind: "launchd", name: "com.example.worker", displayName: null, domain: "gui", program: "/opt/worker", state: "running", startMode: null, enabled: true, pid: 40, runAs: null, triggers: null, lastRun: null, lastResult: null };
+  const cheap: ServiceFact = { ...full, program: null, enabled: null };
+  recordServices(db, "mini", { origin: "launchd-state", status: "ok", facts: [full, { ...full, name: "com.example.other" }] }, T);
+  const eventCount = () => (db.prepare("SELECT COUNT(*) AS n FROM events WHERE kind = 'service_changed'").get() as { n: number }).n;
+  recordServices(db, "mini", { origin: "launchd-state", status: "ok", facts: [cheap] }, T2);
+  recordServices(db, "mini", { origin: "launchd-state", status: "ok", facts: [full] }, T3);
+  assert.equal(eventCount(), 0);
+  const row = listServices(db, { machine: "mini" }).find((entry) => entry.name === "com.example.worker")!;
+  assert.equal(row.program, "/opt/worker");
+  assert.equal(row.enabled, true);
+  recordServices(db, "mini", { origin: "launchd-state", status: "ok", facts: [{ ...cheap, state: "stopped" }] }, "2026-10-06T15:00:00Z");
+  assert.equal(eventCount(), 1);
+});
