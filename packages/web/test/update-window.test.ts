@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { createMockHub } from "../dev/mock-hub.ts";
 
-const { windowRange, startLabel, quietWindowNote, autoRunNote, itemLine, heldLine, machineGroups, safeNowCount } = await import(new URL("../public/update-window-model.js", import.meta.url).href);
+const { windowRange, startLabel, quietWindowNote, autoRunNote, scopeNote, itemLine, heldLine, machineGroups, safeNowCount } = await import(new URL("../public/update-window-model.js", import.meta.url).href);
 
 const quiet = (extra = {}) => ({ startMinute: 210, lengthMinutes: 120, startsAt: "2026-10-26T03:30:00", endsAt: "2026-10-26T05:30:00", inWindow: false, ...extra });
 const item = (name: string, extra = {}) => ({ installId: 1, name, ecosystem: "brew", from: "1.0.0", to: "2.0.0", bump: "major", running: false, warnings: [], ...extra });
@@ -94,4 +94,12 @@ test("the mock hub serves the window plan and the new files", async () => {
 test("the automatic note names the cap that is set", () => {
   assert.match(autoRunNote({ enabled: true, lastWindowStart: null, lastQueued: 0, lastRunAt: null, cap: 40 }, quiet()), /up to 40 updates per machine/);
   assert.match(autoRunNote({ enabled: true, lastWindowStart: "x", lastQueued: 40, lastRunAt: "2026-10-25T10:31:00.000Z", cap: 40, lastDeferred: 18 }, quiet()), /more than 40 to run/);
+});
+
+test("the scope note says what the run applies and how many programs are marked", () => {
+  assert.equal(scopeNote(null, 0), "");
+  assert.match(scopeNote({ scope: "opted-in" }, 0), /none are marked yet/);
+  assert.match(scopeNote({ scope: "opted-in" }, 1), /1 program is marked/);
+  assert.match(scopeNote({ scope: "opted-in" }, 3), /3 programs are marked.*all of them are marked/);
+  assert.match(scopeNote({ scope: "all" }, 2), /every update in the first two lists/);
 });

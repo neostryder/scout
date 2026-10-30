@@ -502,12 +502,13 @@ CREATE TABLE IF NOT EXISTS support_windows (
   PRIMARY KEY (package_id, cycle)
 );
 
--- Off everywhere in v1.
-CREATE TABLE IF NOT EXISTS auto_apply (
-  machine_id  TEXT NOT NULL,
-  item_id     INTEGER,
-  class       TEXT,
-  enabled     INTEGER NOT NULL DEFAULT 0
+-- Software a person has opted in to the automatic update run, per machine. A reinstall keeps its opt-in because the row follows the package, not the install.
+CREATE TABLE IF NOT EXISTS auto_updates (
+  machine_id  TEXT NOT NULL REFERENCES machines(id),
+  package_id  INTEGER NOT NULL REFERENCES packages(id),
+  max_bump    TEXT NOT NULL DEFAULT 'minor' CHECK (max_bump IN ('patch','minor','major')),
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (machine_id, package_id)
 );
 
 -- Cloudflare catalog. Rows are replaced on a successful read. The token, account id and API bodies are not stored.

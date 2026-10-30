@@ -60,3 +60,4 @@ export * from "./backup-health.ts";
 export * from "./competitors.ts";
 export * from "./competitor-candidates.ts";
 export * from "./update-window.ts";
+export * from "./auto-updates.ts";

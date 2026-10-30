@@ -135,6 +135,32 @@ function labelCells(table) {
   const names = [...table.tHead.rows[0].cells].map((cell) => cell.textContent.replace(/\s+[\^v]$/, "").trim());
   for (const row of table.tBodies[0].rows) [...row.cells].forEach((cell, index) => { if (names[index]) cell.dataset.label = names[index]; });
 }
+const autoUpdates = new Map();
+const autoKey = (row) => `${row.machineId}:${row.packageId}`;
+async function loadAutoUpdates() {
+  try {
+    const response = await fetch("/api/updates/auto-updates");
+    if (!response.ok) return;
+    autoUpdates.clear();
+    for (const entry of (await response.json()).autoUpdates || []) autoUpdates.set(`${entry.machineId}:${entry.packageId}`, entry.maxBump);
+  } catch { /* the toggle shows Off until the list loads */ }
+}
+/** Opts one program in to the automatic run, with the biggest version step it may take. */
+function autoToggle(row) {
+  const select = h("select", { class: "auto-update", "aria-label": `Update ${row.name} on ${row.machineId} automatically`, title: "Whether the automatic update run may update this program", onclick: (e) => e.stopPropagation(), onchange: async (e) => {
+    e.stopPropagation(); e.target.disabled = true;
+    try {
+      const response = await fetch("/api/updates/auto-updates", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installId: row.installId, maxBump: e.target.value || null }) });
+      if (!response.ok) throw new Error((await response.json()).error || "The choice could not be saved");
+      autoUpdates.clear();
+      for (const entry of (await response.json()).autoUpdates || []) autoUpdates.set(`${entry.machineId}:${entry.packageId}`, entry.maxBump);
+      windowPanel?.refresh();
+    } catch (error) { $("count").textContent = error.message; }
+    renderTable();
+  } }, [["", "Auto: off"], ["patch", "Auto: patch"], ["minor", "Auto: up to minor"], ["major", "Auto: any update"]].map(([value, label]) => h("option", { value }, label)));
+  select.value = autoUpdates.get(autoKey(row)) || "";
+  return select;
+}
 function updateRow(row) {
   const job = state.jobs.find((j) => j.installId === row.installId) || row.job;
   const badge = row.risk ? riskBadge(row.risk) : null;
@@ -142,7 +168,7 @@ function updateRow(row) {
   const updateButton = h("button", { class: row.risk?.hard > 0 ? "primary muted-action" : "primary", type: "button", disabled: !row.updatable || !!job && !["done", "failed", "stopped"].includes(job.state), title: row.updatable ? badge?.text || "" : reason, "aria-label": row.updatable ? `Update ${row.name} on ${row.machineId}${badge ? `: ${badge.text}` : ""}` : `Cannot update ${row.name}: ${reason}`, onclick: (e) => { e.stopPropagation(); startPlan([row.installId]); } }, "Update");
   const canDownload = !row.updatable && !row.blockedBy && (row.downloadUrl || row.statuses?.some((status) => status === "upstream" || status === "advisory"));
   const button = canDownload ? h("button", { class: "button download", "data-install-id": String(row.installId), type: "button", disabled: !!job && !["done", "failed", "stopped"].includes(job.state), "aria-label": `Download ${row.name} to ${row.machineId}`, onclick: (e) => { e.stopPropagation(); startDownload(row, e.currentTarget); } }, "Download") : updateButton;
-  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button)]);
+  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button, row.updatable ? autoToggle(row) : [])]);
 }
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
@@ -155,6 +181,7 @@ async function load() {
     if (current === "review") { await loadReview(controller.signal, sequence); return; }
     if (current === "jobs") { await loadJobs(controller.signal, sequence); return; }
     const q = new URLSearchParams(state.params); q.delete("view"); q.set("limit", String(state.limit));
+    if (current === "updates") await loadAutoUpdates();
     const response = await fetch(`/api/${current === "updates" ? "updates" : "installs"}?${q}`, { signal: controller.signal });
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);
     const data = await response.json();

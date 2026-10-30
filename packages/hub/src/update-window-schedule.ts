@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dependencyGroups, dependencyPairs, quietWindow, type Db, type OutageNotice } from "@scout/core";
+import { autoUpdateAllows, dependencyGroups, dependencyPairs, quietWindow, type Db, type OutageNotice } from "@scout/core";
 import { planWindows, type Runner } from "@scout/ops";
 import type { ScheduleClock } from "./schedule.ts";
 import { createJobsResponse } from "./jobs-api.ts";
@@ -9,8 +9,12 @@ export const WINDOW_TICK_MS = 60_000;
 export const WINDOW_CAP_PER_MACHINE = 15;
 export const WINDOW_CAP_MAX = 100;
 
+/** What the automatic run applies: every planned update, or only the software a person opted in. */
+export type WindowScope = "all" | "opted-in";
+
 export interface WindowRunState {
   enabled: boolean;
+  scope: WindowScope;
   /** Start of the last window that was acted on, so a window runs once. */
   lastWindowStart: string | null;
   lastQueued: number;
@@ -51,12 +55,14 @@ const CLOCK: ScheduleClock = {
 const isCap = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= WINDOW_CAP_MAX;
 
 function readState(path: string | undefined, cap: number): WindowRunState {
-  const empty: WindowRunState = { enabled: false, lastWindowStart: null, lastQueued: 0, lastRunAt: null, cap, lastDeferred: 0, pausedReason: null, batchIds: [] };
+  const empty: WindowRunState = { enabled: false, scope: "opted-in", lastWindowStart: null, lastQueued: 0, lastRunAt: null, cap, lastDeferred: 0, pausedReason: null, batchIds: [] };
   if (!path || !existsSync(path)) return empty;
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<WindowRunState>;
     return {
       enabled: raw.enabled === true,
+      // A state file from before the scope existed was running everything, so it keeps doing that.
+      scope: raw.scope === "opted-in" ? "opted-in" : raw.scope === "all" || raw.enabled === true ? "all" : "opted-in",
       lastWindowStart: typeof raw.lastWindowStart === "string" ? raw.lastWindowStart : null,
       lastQueued: Number.isSafeInteger(raw.lastQueued) ? raw.lastQueued! : 0,
       lastRunAt: typeof raw.lastRunAt === "string" ? raw.lastRunAt : null,
@@ -80,6 +86,13 @@ export function capInstalls(db: Db, ids: number[], cap: number): { chosen: numbe
     if (chosen.size === 0 || chosen.size + group.length <= cap) for (const member of group) chosen.add(member);
   }
   return { chosen: ids.filter((id) => chosen.has(id)), deferred: ids.length - chosen.size };
+}
+
+/** Keeps the ordered installs whose whole dependency group is opted in, so a library never runs without the programs that use it, or the other way round. */
+export function optedInGroups(db: Db, ids: number[], allowed: Set<number>): number[] {
+  const whole = new Set<number>();
+  for (const group of dependencyGroups(ids, dependencyPairs(db, ids))) if (group.every((id) => allowed.has(id))) for (const id of group) whole.add(id);
+  return ids.filter((id) => whole.has(id));
 }
 
 /** Queues each machine's planned updates once when the quiet window opens, only while the switch is on. A window the hub was down for is skipped, never made up later. A failed job switches the run off, and a finished run sends a notice. */
@@ -106,6 +119,14 @@ export class WindowRun {
     this.state = { ...this.state, enabled, ...(enabled ? { pausedReason: null, batchIds: [] } : {}) };
     this.save();
     if (enabled && this.started) this.tick();
+    return this.status();
+  }
+
+  /** Chooses between running every planned update and only the software opted in. */
+  setScope(scope: WindowScope): WindowRunState {
+    if (scope !== "all" && scope !== "opted-in") throw new Error('scope must be "all" or "opted-in"');
+    this.state = { ...this.state, scope };
+    this.save();
     return this.status();
   }
 
@@ -153,7 +174,9 @@ export class WindowRun {
     const cap = this.state.cap;
     try {
       for (const machine of planWindows(this.db, this.runner.deps.machines, now, offset).machines) {
-        const wanted = [...machine.now, ...machine.atQuietHour].map((item) => item.installId);
+        const planned = [...machine.now, ...machine.atQuietHour];
+        const ordered = planned.map((item) => item.installId);
+        const wanted = this.state.scope === "all" ? ordered : optedInGroups(this.db, ordered, new Set(planned.filter((item) => autoUpdateAllows(this.db, item.installId, item.bump)).map((item) => item.installId)));
         if (wanted.length === 0) continue;
         const { chosen: installIds, deferred: left } = capInstalls(this.db, wanted, cap);
         deferred += left;

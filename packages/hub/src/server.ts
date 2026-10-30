@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type Db } from "@scout/core";
+import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, isAutoBump, listAutoUpdates, setAutoUpdate, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { revalidate } from "./etag.ts";
@@ -148,6 +148,7 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
   const jobId = /^\/api\/jobs\/(\d+)\/stop$/.exec(url.pathname);
   const creating = url.pathname === "/api/jobs";
   const autoWindow = url.pathname === "/api/updates/window/auto";
+  const autoUpdate = url.pathname === "/api/updates/auto-updates";
   const scanning = url.pathname === "/api/scans/run";
   const refreshing = url.pathname === "/api/research/refresh";
   const refreshingChangelog = url.pathname === "/api/changelog/refresh";
@@ -156,7 +157,7 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
   if (refreshing && !research) return json(res, 404, { error: "no such route" });
   if (!runner && (creating || jobId)) return json(res, 404, { error: "no such route" });
   if (autoWindow && !windowRun) return json(res, 404, { error: "no such route" });
-  if (!m && !autoWindow && !(runner && (jobId || creating)) && !refreshing && !refreshingChangelog && !discovering && !scanning) return json(res, 405, { error: "read only" });
+  if (!m && !autoWindow && !autoUpdate && !(runner && (jobId || creating)) && !refreshing && !refreshingChangelog && !discovering && !scanning) return json(res, 405, { error: "read only" });
   const origin = req.headers.origin;
   if (origin !== undefined && !hostAllowed(URL.canParse(origin) ? new URL(origin).host : undefined)) return json(res, 403, { error: "cross-origin request refused" });
   if (!(req.headers["content-type"] ?? "").startsWith("application/json")) return json(res, 415, { error: "content type must be application/json" });
@@ -191,12 +192,21 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
       if (sources !== undefined && (!Array.isArray(sources) || sources.some((source) => typeof source !== "string"))) throw new Error("sources must be an array of source names");
       return json(res, 200, await research.runNow(sources as string[] | undefined));
     }
+    if (autoUpdate) {
+      const { installId, maxBump } = (JSON.parse(raw) ?? {}) as { installId?: unknown; maxBump?: unknown };
+      if (typeof installId !== "number" || !Number.isSafeInteger(installId) || installId <= 0) throw new Error("installId must be a positive integer");
+      if (maxBump !== null && !isAutoBump(maxBump)) throw new Error("maxBump must be patch, minor, major, or null");
+      try { setAutoUpdate(db, installId, maxBump); } catch (error) { return json(res, 404, { error: error instanceof Error ? error.message : "no such install" }); }
+      return json(res, 200, { autoUpdates: listAutoUpdates(db) });
+    }
     if (autoWindow && windowRun) {
-      const { enabled, cap } = (JSON.parse(raw) ?? {}) as { enabled?: unknown; cap?: unknown };
-      if (enabled === undefined && cap === undefined) throw new Error("enabled or cap is required");
+      const { enabled, cap, scope } = (JSON.parse(raw) ?? {}) as { enabled?: unknown; cap?: unknown; scope?: unknown };
+      if (enabled === undefined && cap === undefined && scope === undefined) throw new Error("enabled, cap, or scope is required");
+      if (scope !== undefined && scope !== "all" && scope !== "opted-in") throw new Error('scope must be "all" or "opted-in"');
       if (enabled !== undefined && typeof enabled !== "boolean") throw new Error("enabled must be true or false");
       if (cap !== undefined && (typeof cap !== "number" || !Number.isSafeInteger(cap) || cap < 1 || cap > 100)) throw new Error("cap must be a whole number from 1 to 100");
       if (typeof cap === "number") windowRun.setCap(cap);
+      if (scope !== undefined) windowRun.setScope(scope);
       return json(res, 200, typeof enabled === "boolean" ? windowRun.setEnabled(enabled) : windowRun.status());
     }
     if (m) return json(res, 200, decideProposalRequest(db, Number(m[1]), JSON.parse(raw)));
@@ -306,6 +316,7 @@ export function createHub(options: HubOptions): Server {
         const plan = planResponse(db, runner, Number(url.searchParams.get("installId")), url.searchParams.get("alsoInstallIds"));
         return plan ? json(res, 200, plan) : json(res, 404, { error: "no such install or update" });
       }
+      if (url.pathname === "/api/updates/auto-updates") return json(res, 200, { autoUpdates: listAutoUpdates(db) });
       if (runner && url.pathname === "/api/updates/window") return json(res, 200, windowResponse(db, runner, windowRun));
       if (downloadKinds && url.pathname === "/api/downloads/kinds") return json(res, 200, downloadKinds.snapshot());
       if (runner && url.pathname === "/api/downloads/plan") {
