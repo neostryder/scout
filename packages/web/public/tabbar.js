@@ -7,6 +7,7 @@ const MAIN = [
 ];
 const MORE = [
   { label: "Updates", href: "/", view: "updates" },
+  { label: "Claude", href: "/?view=claude", view: "claude" },
   { label: "Competitors", href: "/?view=competitors", view: "competitors", count: "competitors-count" },
   { label: "Catalog", href: "/?view=catalog", view: "catalog" },
   { label: "Review queue", href: "/?view=review", view: "review" },

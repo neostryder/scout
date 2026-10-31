@@ -13,6 +13,7 @@ export const PAGES = [
   { label: "Port map", hint: "Services tab", href: "/?view=services&tab=ports", words: "ports map ranges clashes" },
   { label: "Stacks", hint: "Services tab", href: "/?view=services&tab=stacks", words: "stacks groups compose" },
   { label: "Resources", hint: "Page", href: "/?view=resources", words: "resources cpu memory disk meters usage" },
+  { label: "Claude", hint: "Page", href: "/?view=claude", words: "claude sessions code waiting running idle memory" },
   { label: "Competitors", hint: "Page", href: "/?view=competitors", words: "competitors watch versions research" },
   { label: "Review queue", hint: "Page", href: "/?view=review", words: "review proposals merges decisions" },
   { label: "Jobs", hint: "Page", href: "/?view=jobs", words: "jobs running updates downloads" },

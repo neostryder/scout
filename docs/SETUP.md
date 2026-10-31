@@ -209,7 +209,7 @@ The portal works in a phone's browser and as an app saved to the home screen. To
 
 ### On a narrow screen
 
-When the window is narrower than 720 pixels, the top navigation moves to a tab bar along the bottom of the screen. The tabs are Services, Resources, Alerts, Outages, and More, and More opens a sheet with Updates, Catalog, Review queue, Jobs, and Settings. The Alerts tab carries the number of open alerts. The Catalog and Updates tables show each row as a card, and the detail panel takes the whole screen when it opens.
+When the window is narrower than 720 pixels, the top navigation moves to a tab bar along the bottom of the screen. The tabs are Services, Resources, Alerts, Outages, and More, and More opens a sheet with Updates, Claude, Competitors, Catalog, Review queue, Jobs, and Settings. The Alerts tab carries the number of open alerts. The Catalog and Updates tables show each row as a card, and the detail panel takes the whole screen when it opens.
 
 On a narrow screen, Services opens filtered to the hub machine when the link does not name a machine. Choose All machines in the machine menu to see the rest. A link that names a machine opens on that machine.
 

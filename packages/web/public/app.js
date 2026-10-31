@@ -7,6 +7,7 @@ import { isLive, jobProgress, jobSummary } from "./jobs-model.js";
 let windowPanel;
 let servicesView;
 let resourcesView;
+let claudeView;
 let competitorsView;
 let traySettings;
 
@@ -173,7 +174,7 @@ function updateRow(row) {
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
   const current = view();
-  if (current === "services" || current === "resources" || current === "settings" || current === "competitors") return;
+  if (current === "services" || current === "resources" || current === "claude" || current === "settings" || current === "competitors") return;
   state.controller?.abort();
   const controller = new AbortController(); state.controller = controller;
   const sequence = ++state.sequence;
@@ -328,6 +329,7 @@ function showView(next, initial = false) {
   if (next === "settings") openSettings();
   if (next === "services") openServices(); else servicesView?.hide();
   if (next === "resources") openResources(); else resourcesView?.hide();
+  if (next === "claude") openClaude(); else claudeView?.hide();
   if (next === "competitors") openCompetitors(); else competitorsView?.hide();
   $("toggle-filters").hidden = !["updates", "catalog"].includes(next);
   $("plan-window").hidden = next !== "updates"; windowPanel?.hide();
@@ -354,6 +356,12 @@ async function openWindowPlanner() {
   const { createWindowPanel } = await import("./update-window.js");
   windowPanel ||= createWindowPanel({ root: $("window"), button: $("plan-window"), startPlan: (ids, machineId) => startPlan(ids, machineId) });
   windowPanel.toggle();
+}
+async function openClaude() {
+  const { createClaudeView } = await import("./claude.js");
+  if (view() !== "claude") return;
+  claudeView ||= createClaudeView($("claude"));
+  claudeView.show();
 }
 async function openResources() {
   const { createResourcesView } = await import("./resources.js");
@@ -382,7 +390,7 @@ $("select-page").addEventListener("click", () => { for (const row of state.rows)
 $("clear-selection").addEventListener("click", () => { state.selected.clear(); renderTable(); });
 $("confirm-cancel").addEventListener("click", () => $("confirm").close());
 $("confirm-submit").addEventListener("click", submitPlans);
-const initial = ["updates", "catalog", "review", "jobs", "services", "resources", "competitors", "settings"].includes(view()) ? view() : "updates";
+const initial = ["updates", "catalog", "review", "jobs", "services", "resources", "claude", "competitors", "settings"].includes(view()) ? view() : "updates";
 window.addEventListener("popstate", () => { state.params = new URLSearchParams(location.search); showView(view(), true); });
 const savedFilters = savedFilterControl($("saved-filters"), { view, query: () => state.params, apply: (spec) => {
   const current = view(); clearTimeout(state.timer);
