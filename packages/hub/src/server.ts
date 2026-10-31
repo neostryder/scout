@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, isAutoBump, listAutoUpdates, setAutoUpdate, type Db } from "@scout/core";
+import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type ClaudeSessionsResponse, isAutoBump, listAutoUpdates, setAutoUpdate, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { revalidate } from "./etag.ts";
@@ -100,6 +100,8 @@ export interface HubOptions {
   health?: HealthScheduleOptions | false;
   /** Samples machine resources for /api/resources. Off when omitted. */
   meters?: MeterSchedule;
+  /** Reads the Claude Code sessions running on the hub machine for /api/claude. Omit it and the route answers 404. */
+  claude?: { read(): Promise<ClaudeSessionsResponse> };
   /** The quiet meter alerts: their settings and the alerts that are up. Omit it and the settings route answers 404. */
   meterAlerts?: HubMeterAlerts;
   /** Watches the Galadriel backup health file and raises an alert while the backup is critical. Omit it and no backup alert is raised. */
@@ -308,6 +310,10 @@ export function createHub(options: HubOptions): Server {
       if (options.scans && url.pathname === "/api/scans") return json(res, 200, { machines: options.scans.status(), intervalSeconds: options.scans.intervalSeconds() });
       if (options.research && url.pathname === "/api/research/status") return json(res, 200, options.research.status());
       if (url.pathname === "/api/resources") { options.meters?.touch(); return json(res, 200, { ...resourcesResponse(db), intervalSeconds: options.meters?.intervalSeconds() ?? null }); }
+      if (url.pathname === "/api/claude") {
+        if (!options.claude) return json(res, 404, { error: "the Claude monitor is off" });
+        try { return json(res, 200, await options.claude.read()); } catch (error) { return json(res, 503, { error: `The process table could not be read: ${(error as Error).message}` }); }
+      }
       if (url.pathname === "/api/summary") return json(res, 200, summaryResponse(db));
       if (url.pathname === "/api/installs") return json(res, 200, installsResponse(db, url.searchParams, provenance()));
       if (url.pathname === "/api/provenance") return json(res, 200, provenanceResponse(db, mineFile()));
