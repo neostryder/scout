@@ -2,7 +2,7 @@ import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, utimesSync } from "node:fs";
 import { join } from "node:path";
-import { acknowledgeAlerts, alertsFileReader, alertsResponse, alertsSummary, evaluateAlerts, openCatalog, recordCloudflare, recordListeners, recordServices, refreshAlertMutes, setAlertMute, upsertMachine, type AlertFile, type Db, type ListenerFact, type ServiceFact } from "../src/index.ts";
+import { acknowledgeAlerts, alertsFileReader, alertsResponse, alertsSummary, evaluateAlerts, listListeners, listServices, openCatalog, recordCloudflare, recordListeners, recordServices, refreshAlertMutes, setAlertMute, upsertMachine, type AlertFile, type Db, type ListenerFact, type ServiceFact } from "../src/index.ts";
 
 const T = "2026-10-07T00:00:00.000Z";
 const T2 = "2026-10-07T01:00:00.000Z";
@@ -235,6 +235,58 @@ test("services that stop or disappear warn, recover and reopen after another sto
   assert.equal(evaluateAlerts(db, T3)[0]!.change, "resolved");
   serve(db, [], T3);
   assert.notEqual(evaluateAlerts(db, T3)[0]!.alert.id, stopped.alert.id);
+});
+
+test("open and acknowledged alerts retain gone service targets older than the baseline", (t) => {
+  const db = seed(t);
+  serve(db, [], T2);
+  const stopped = evaluateAlerts(db, T2).find((change) => change.alert.kind === "service-down")!.alert;
+  const later = "2026-10-08T00:00:00.000Z";
+  db.prepare("INSERT INTO events (at, machine_id, kind) VALUES (?, 'hub', 'scan')").run(later);
+  evaluateAlerts(db, later);
+  assert.deepEqual(evaluateAlerts(db, later), []);
+  assert.equal(all(db).find((row) => row.id === stopped.id)!.state, "open");
+  acknowledgeAlerts(db, { id: stopped.id }, later);
+  assert.deepEqual(evaluateAlerts(db, later), []);
+  assert.equal(all(db).find((row) => row.id === stopped.id)!.state, "acknowledged");
+  db.prepare("UPDATE services SET expected_down = 1 WHERE id = ?").run(stopped.target.id!);
+  assert.ok(evaluateAlerts(db, later).some((change) => change.alert.id === stopped.id && change.change === "resolved"));
+});
+
+test("service retention keeps present, recent and referenced rows and composes with other filters", (t) => {
+  const db = seed(t);
+  serve(db, [service("Baseline"), service("Old"), service("Referenced", { state: "stopped" }), service("Boundary"), service("Recent")], T);
+  db.prepare("UPDATE services SET gone_at = ? WHERE name IN ('Old', 'Referenced')").run(T);
+  db.prepare("UPDATE services SET gone_at = ? WHERE name = 'Boundary'").run(T2);
+  db.prepare("UPDATE services SET gone_at = ? WHERE name = 'Recent'").run(T3);
+  upsertMachine(db, { id: "mini", name: "Mini", os: "macos", kind: "host" });
+  recordServices(db, "mini", { origin: "services", status: "ok", facts: [service("Other")] }, T);
+  db.prepare("UPDATE services SET gone_at = ? WHERE machine_id = 'mini'").run(T);
+  const ids = listServices(db).filter((row) => row.name === "Referenced" || row.name === "Other").map((row) => row.id);
+  const keep = { goneSince: T2, ids };
+  assert.deepEqual(listServices(db, { keep }).map((row) => row.name), ["Baseline", "Boundary", "Recent", "Referenced", "Other"]);
+  assert.deepEqual(listServices(db, { keep, machine: "hub", gone: "gone", state: "running" }).map((row) => row.name), ["Boundary", "Recent"]);
+  assert.deepEqual(listServices(db, { keep, gone: "present" }).map((row) => row.name), ["Baseline"]);
+  assert.deepEqual(listServices(db, { keep: { goneSince: T2, ids: [] } }).map((row) => row.name), ["Baseline", "Boundary", "Recent"]);
+  assert.equal(listServices(db, { keep: { goneSince: "", ids: [] } }).length, 6);
+});
+
+test("listener retention keeps present, recent and referenced rows and composes with other filters", (t) => {
+  const db = seed(t);
+  listen(db, [listener(8000), listener(8080), listener(8081), listener(8082), listener(8083)], T);
+  db.prepare("UPDATE listeners SET gone_at = ? WHERE port IN (8080, 8081)").run(T);
+  db.prepare("UPDATE listeners SET gone_at = ? WHERE port = 8082").run(T2);
+  db.prepare("UPDATE listeners SET gone_at = ? WHERE port = 8083").run(T3);
+  upsertMachine(db, { id: "mini", name: "Mini", os: "macos", kind: "host" });
+  listen(db, [listener(8084)], T, "mini");
+  db.prepare("UPDATE listeners SET gone_at = ? WHERE machine_id = 'mini'").run(T);
+  const ids = listListeners(db).filter((row) => row.port === 8081 || row.port === 8084).map((row) => row.id);
+  const keep = { goneSince: T2, ids };
+  assert.deepEqual(listListeners(db, { keep }).map((row) => row.port), [8000, 8081, 8082, 8083, 8084]);
+  assert.deepEqual(listListeners(db, { keep, machine: "hub", state: "gone" }).map((row) => row.port), [8081, 8082, 8083]);
+  assert.deepEqual(listListeners(db, { keep, state: "present" }).map((row) => row.port), [8000]);
+  assert.deepEqual(listListeners(db, { keep: { goneSince: T2, ids: [] } }).map((row) => row.port), [8000, 8082, 8083]);
+  assert.equal(listListeners(db, { keep: { goneSince: "", ids: [] } }).length, 6);
 });
 
 test("stopped services that never ran and expected-down rows remain quiet", (t) => {

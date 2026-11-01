@@ -166,6 +166,7 @@ export interface ListenerFilter {
   machine?: string;
   bind?: ListenerBind;
   state?: "present" | "gone";
+  keep?: { goneSince: string; ids: number[] };
   q?: string;
   port?: number;
   class?: ServiceClass;
@@ -180,6 +181,7 @@ export function listListeners(db: Db, filter: ListenerFilter = {}, descriptions:
   if (filter.bind !== undefined) { clauses.push("l.bind = ?"); params.push(filter.bind); }
   if (filter.state !== undefined) clauses.push(`l.gone_at IS ${filter.state === "present" ? "NULL" : "NOT NULL"}`);
   if (filter.port !== undefined) { clauses.push("l.port = ?"); params.push(filter.port); }
+  if (filter.keep !== undefined) { clauses.push("(l.gone_at IS NULL OR l.gone_at >= ? OR l.id IN (SELECT value FROM json_each(?)))"); params.push(filter.keep.goneSince, JSON.stringify(filter.keep.ids)); }
   const rows = db.prepare(
     `SELECT l.id, l.machine_id AS machineId, m.name AS machineName, l.port, l.protocol, l.address, l.bind, l.pid,
        l.process_name AS processName, l.process_path AS processPath, l.script_path AS scriptPath, l.ppid AS ppid, l.owner AS owner, l.container_name AS containerName, l.container_image AS containerImage,

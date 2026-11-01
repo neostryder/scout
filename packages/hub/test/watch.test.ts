@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { alertsResponse, listOutages, openCatalog, recordListeners, recordServices, upsertMachine, type Db, type OutageNotice, type ServiceFact } from "@scout/core";
 import type { MachineProbe, WatchedMachine } from "@scout/ops";
 import { createHub } from "../src/server.ts";
-import { Notifier, type ChannelResult } from "../src/notify.ts";
+import { Notifier, resetStoredWebhook, type ChannelResult } from "../src/notify.ts";
 import { HubWatch, type HubWatchOptions } from "../src/watch.ts";
 
 const WEBHOOK = "https://discord.com/api/webhooks/123456789/abcDEF-ghi_JKL";
@@ -161,6 +161,46 @@ test("the Discord post carries the notice, refuses a non-Discord address and nev
   assert.deepEqual(refused.map((row) => [row.channel, row.ok, row.error]), [["discord", false, "SCOUT_DISCORD_WEBHOOK is not a Discord webhook address"], ["desktop", false, "no display"]]);
   assert.deepEqual(new Notifier({ webhook: () => undefined }).channels(), { discord: false, desktop: true });
   t.after(() => {});
+});
+
+for (const value of [undefined, WEBHOOK]) test(`notifiers share one stored webhook read when a value is ${value === undefined ? "absent" : "present"}`, (t) => {
+  const fromEnv = process.env["SCOUT_DISCORD_WEBHOOK"];
+  delete process.env["SCOUT_DISCORD_WEBHOOK"];
+  resetStoredWebhook();
+  t.after(() => {
+    resetStoredWebhook();
+    if (fromEnv === undefined) delete process.env["SCOUT_DISCORD_WEBHOOK"];
+    else process.env["SCOUT_DISCORD_WEBHOOK"] = fromEnv;
+  });
+  let reads = 0;
+  const readStored = () => { reads++; return value; };
+  const first = new Notifier({ readStored });
+  const second = new Notifier({ readStored });
+  for (const notifier of [first, first, second, second]) assert.equal(notifier.channels().discord, value !== undefined);
+  assert.equal(reads, 1);
+  resetStoredWebhook();
+  assert.equal(second.channels().discord, value !== undefined);
+  assert.equal(reads, 2);
+});
+
+test("explicit webhooks and environment webhooks bypass the stored reader", (t) => {
+  const fromEnv = process.env["SCOUT_DISCORD_WEBHOOK"];
+  delete process.env["SCOUT_DISCORD_WEBHOOK"];
+  resetStoredWebhook();
+  t.after(() => {
+    resetStoredWebhook();
+    if (fromEnv === undefined) delete process.env["SCOUT_DISCORD_WEBHOOK"];
+    else process.env["SCOUT_DISCORD_WEBHOOK"] = fromEnv;
+  });
+  let reads = 0;
+  const readStored = () => { reads++; return undefined; };
+  assert.equal(new Notifier({ webhook: () => undefined, readStored }).channels().discord, false);
+  process.env["SCOUT_DISCORD_WEBHOOK"] = ` ${WEBHOOK} `;
+  assert.equal(new Notifier({ readStored }).channels().discord, true);
+  assert.equal(reads, 0);
+  delete process.env["SCOUT_DISCORD_WEBHOOK"];
+  assert.equal(new Notifier({ readStored }).channels().discord, false);
+  assert.equal(reads, 1);
 });
 
 async function api(db: Db, watch: HubWatch | undefined, t: TestContext) {

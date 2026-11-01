@@ -2,7 +2,7 @@ import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { acknowledgeAlerts, actionById, alertsResponse, createAction, decideRecipe, evaluateAlerts, openCatalog, portsFileReader, portsResponse, recipeById, recipesResponse, recordListeners, recordServices, resolveStack, scanRecipes, SCHEMA_SQL, setAlertMute, stacksFileReader, stacksResponse, upsertMachine, validatePorts, validateStacks, type ListenerFact, type ServiceFact, type Stack } from "../src/index.ts";
+import { acknowledgeAlerts, actionById, alertsResponse, createAction, decideRecipe, evaluateAlerts, listServices, openCatalog, portsFileReader, portsResponse, recipeById, recipesResponse, recordListeners, recordServices, resolveStack, scanRecipes, SCHEMA_SQL, setAlertMute, stacksFileReader, stacksResponse, upsertMachine, validatePorts, validateStacks, type ListenerFact, type ServiceFact, type Stack } from "../src/index.ts";
 
 function fixture(t: TestContext) {
   const root = mkdtempSync(resolve("ports-core-")).replace(/\\/g, "/");
@@ -187,6 +187,24 @@ test("stack responses resolve exact service and recipe identities and every stat
   assert.equal("rowId" in response.stacks[0]!.members[0]!, false);
   assert.equal(response.file.path, ".scout-data/stacks.json");
   assert.equal(recipeById(f.db, recipe.id)!.gone, true);
+});
+
+test("stack service queries resolve the same rows as a full service listing", (t) => {
+  const f = fixture(t);
+  const running: ServiceFact = { ...service, name: "Running", displayName: "Running worker", state: "running" };
+  const stopped: ServiceFact = { ...service, name: "Stopped" };
+  recordServices(f.db, "hub", { origin: "services", status: "ok", facts: [running, stopped, { ...service, name: "Gone" }] }, "2026-10-07T00:00:00Z");
+  recordServices(f.db, "hub", { origin: "services", status: "ok", facts: [running, stopped] }, "2026-10-07T01:00:00Z");
+  const configured: Stack = { ...stack, members: ["Running", "Stopped", "Missing", "Gone", "Running"].map((name) => ({ type: "service", machine: "hub", kind: "scheduled-task", name, waitSeconds: 30 })) };
+  const expected = resolveStack(f.db, configured, { services: listServices(f.db, { gone: "present", includeHidden: true }), recipes: [] });
+  const resolved = resolveStack(f.db, configured);
+  assert.deepEqual(resolved, expected);
+  assert.equal(resolved.state, "blocked");
+  assert.deepEqual(resolved.members.map((member) => [member.label, member.running, member.available, member.reason]), [
+    ["Running worker", true, true, null], ["Stopped", false, true, null], ["Missing", false, false, "No such service."], ["Gone", false, false, "No such service."], ["Running worker", true, true, null],
+  ]);
+  const response = stacksResponse(f.db, { config: [configured], exists: true, fileError: null });
+  assert.deepEqual(response.stacks, [{ ...expected, members: expected.members.map(({ rowId, ...member }) => member) }]);
 });
 
 test("the stack audit migration preserves recipe and service rows and their plan JSON", (t) => {

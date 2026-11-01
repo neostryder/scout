@@ -177,6 +177,8 @@ CREATE TABLE IF NOT EXISTS events (
   kind        TEXT NOT NULL,
   detail_json TEXT NOT NULL DEFAULT '{}'
 );
+CREATE INDEX IF NOT EXISTS events_at ON events(at);
+CREATE INDEX IF NOT EXISTS events_machine ON events(machine_id, id);
 
 CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY,
@@ -390,6 +392,7 @@ CREATE TABLE IF NOT EXISTS services (
   expected_down INTEGER NOT NULL DEFAULT 0,
   UNIQUE (machine_id, kind, domain, name)
 );
+CREATE INDEX IF NOT EXISTS services_present ON services(machine_id, id) WHERE gone_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS launch_recipes (
   id INTEGER PRIMARY KEY,
