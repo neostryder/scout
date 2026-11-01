@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **You can now get fleet incident alerts in Telegram and investigate, snooze, or mute an incident from the message.** Info notices and digests arrive without a notification sound. See Telegram delivery in SETUP.md to set it up.
 - [Internal] [Services] **The hub checks alerts and answers the tray panel much faster, so the web app and tray panel freeze far less often.** A service uninstalled long ago no longer counts when Scout decides whether a stopped listener needs an alert.
 - [Internal] [Services] **The hub builds the tray panel's data in about 0.56 seconds instead of 1.2 seconds on a copy of the real catalog.** It now reads only current services and listeners, and it reuses its last answer for up to 4 seconds while hide rules and machine reachability stay the same, but an edited rules file always gets a fresh answer.
 - [Visible] [Services] **The hub can open fleet incidents when a scanned service, scheduled task, launchd job, or systemd unit fails, and resolves them when the problem clears.** Turn it on with `sources.catalog.enabled` in the private fleet settings. Systemd units and Windows services report only after you name them in the include list.
