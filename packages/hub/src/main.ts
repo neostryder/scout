@@ -157,12 +157,8 @@ const fleetLocal = new FleetLocalSource(db, fleet, { log: (line) => console.erro
 const fleetRemote = new FleetRemoteSource(db, fleet, { machines: () => loadMachines(resolve(root, "machines.json")), log: (line) => console.error(line) });
 const server = createHub({ db, lagLog: (line) => console.error(line), fleet, scans, competitors, discovery, semantic: minimaxSemantic(), recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(args.includes("--no-claude") ? {} : { claude: claudeMonitor() }), ...(meterAlerts ? { meterAlerts } : {}), ...(backup ? { backup } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), updateWindowPath: resolve(root, ".scout-data/update-window.json"), updateWindowSchedule: !!scheduled, updateWindowNotifier: new Notifier(), alertNotifier: new Notifier(), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json"), coalesceMs: 2000 }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
 live?.start();
-server.once("listening", () => fleetCatalog.start());
-server.once("close", () => fleetCatalog.stop());
-server.once("listening", () => fleetLocal.start());
-server.once("close", () => fleetLocal.stop());
-server.once("listening", () => fleetRemote.start());
-server.once("close", () => fleetRemote.stop());
+server.once("listening", () => { fleetCatalog.start(); fleetLocal.start(); fleetRemote.start(); });
+server.once("close", () => { fleetCatalog.stop(); fleetLocal.stop(); fleetRemote.stop(); });
 cloudflareSchedule?.start();
 server.once("close", () => { research.stop(); scans.stop(); competitors.stop(); live?.stop(); cloudflareSchedule?.stop(); for (const timer of summaries) clearTimeout(timer); });
 server.listen(port, "127.0.0.1", () => console.log(`scout hub listening on http://127.0.0.1:${port}/${access ? ` (production, host ${access.config.host})` : ""}`));
