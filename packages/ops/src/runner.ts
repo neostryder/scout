@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { compareVersions, claimNext, quietWindow, failInterruptedJobs, jobById, listJobs, recordStep, runArgv, setJobAttention, setJobPhase, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type ExecHooks, type ExecResult, type Job, type Transport } from "@scout/core";
+import { compareVersions, claimNext, quietWindow, failInterruptedJobs, jobById, listJobs, recordStep, retryExec, runArgv, setJobAttention, setJobPhase, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type ExecHooks, type ExecResult, type Job, type Transport } from "@scout/core";
 import { ARCH_NEEDS_REBOOT, ARCH_REBOOT, planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } from "./plan.ts";
 import { findHubMachine, setHubMachine, downloadFileName, downloadHttps, type ConfirmedDownload, type DownloadPlan } from "@scout/core";
 import { dependencyRefusal, softConfirmation, updateBreaks, type SoftConfirmation, type UpdateBreaks } from "./guard.ts";
@@ -24,6 +24,8 @@ export interface RunnerDeps {
   observeIntervalMs?: number;
   /** How long an administrator prompt may sit unanswered before the update is stopped. */
   promptTimeoutMs?: number;
+  readServices?: (signal: AbortSignal) => Promise<WindowsService[]>;
+  startService?: (name: string, signal: AbortSignal) => Promise<void>;
   resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null>;
 }
 export interface Preview { installId: number; machineId: string; name: string; ecosystem: string; from: string | null; to: string | null; command: string; disruptive: boolean; needsAdmin: boolean; running: boolean; warnings: string[]; allowed: boolean; refusal: string | null; breaks: UpdateBreaks; softConfirmation: SoftConfirmation | null }
@@ -81,14 +83,14 @@ export function configureHubMachine(path: string): MachineConfig[] {
   return machines;
 }
 
-function installRecord(db: Db, id: number): { machineId: string; key: string; kind: string; details: Record<string, unknown> } | null {
-  const row = db.prepare("SELECT i.machine_id AS machineId, i.package_id AS packageId, p.ecosystem, p.key, i.kind, i.details_json AS details FROM installs i JOIN packages p ON p.id = i.package_id WHERE i.id = ? AND i.removed_at IS NULL")
-    .get(id) as { machineId: string; packageId: number; ecosystem: string; key: string; kind: string; details: string } | undefined;
+function installRecord(db: Db, id: number): { machineId: string; key: string; name: string; location: string; kind: string; details: Record<string, unknown> } | null {
+  const row = db.prepare("SELECT i.machine_id AS machineId, i.package_id AS packageId, p.ecosystem, p.key, p.name, i.location, i.kind, i.details_json AS details FROM installs i JOIN packages p ON p.id = i.package_id WHERE i.id = ? AND i.removed_at IS NULL")
+    .get(id) as { machineId: string; packageId: number; ecosystem: string; key: string; name: string; location: string; kind: string; details: string } | undefined;
   if (!row) return null;
   const details = JSON.parse(row.details) as Record<string, unknown>;
   // A winget row carries no install scope; the registry entry of the same software on this machine does, and a machine-wide one raises the Windows prompt.
   if (["winget", "msstore"].includes(row.ecosystem) && details["scope"] === undefined && machineScopeOfSameSoftware(db, row.packageId, row.machineId)) details["scope"] = "machine";
-  return { machineId: row.machineId, key: row.key, kind: row.kind, details };
+  return { machineId: row.machineId, key: row.key, name: row.name, location: row.location, kind: row.kind, details };
 }
 
 function machineScopeOfSameSoftware(db: Db, packageId: number, machineId: string): boolean {
@@ -162,18 +164,98 @@ const REBOOT = new Set([-1978334967, -1978334966, -1978334965]);
 export interface FailureContext { promptSeen: boolean; windowSeen: boolean; timeoutMs: number }
 
 export function failure(exitCode: number, output: string, context?: FailureContext): string {
+  const reportedCode = exitCode;
+  exitCode |= 0;
+  if (exitCode === (0x8A15002B | 0) || exitCode === (0x8A15008E | 0)) return "the new version uses a different installer type than the installed one; uninstall the package and install the newer version";
+  if (exitCode === (0x8A150114 | 0)) return "winget cannot upgrade this package; use the publisher's own update method (for MSYS2, run pacman -Syu inside MSYS2)";
+  if (exitCode === (0x8A150049 | 0) && /exit code:\s*1603\b/i.test(output)) return "the installer failed with MSI error 1603; it needs an administrator prompt or the app closed";
   if (context?.promptSeen && (DECLINED.has(exitCode) || /operation (?:was )?cancel|cancelled by|declined/i.test(output))) return "the Windows administrator prompt was declined";
   if (DECLINED.has(exitCode)) return "the installation was cancelled";
   if (IN_USE.has(exitCode)) return "the app is running; close it and try again";
   if (exitCode === -1978334974) return "another installation is in progress; try again when it finishes";
   if (REBOOT.has(exitCode)) return "restart the computer to finish the update";
   if (exitCode === -1978335207 || /requires? (?:administrator|admin|sudo)|sudo:|a terminal is required|password is required/i.test(output)) return "needs admin; Scout cannot elevate yet";
-  if (exitCode === -1978335189) return "no applicable update is available";
   if (exitCode === -1 && context) return `did not finish in ${Math.round(context.timeoutMs / 60_000)} minutes${context.windowSeen ? "; the installer opened a window and may have been waiting for you" : ""}`;
-  return `command exited with code ${exitCode}`;
+  return `command exited with code ${reportedCode}`;
 }
 
 export interface WatchedRun { result: ExecResult; tracker: AttentionTracker; promptExpired: boolean }
+
+export interface WindowsService { name: string; state: string; startMode: string; pathName: string }
+
+const SERVICES_SCRIPT = "$ErrorActionPreference = 'Stop'; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Service | ForEach-Object { [pscustomobject]@{ name = $_.Name; state = $_.State; startMode = $_.StartMode; pathName = [string]$_.PathName } })";
+const START_SERVICE_SCRIPT = "$ErrorActionPreference = 'Stop'; Start-Service -Name $args[0] -ErrorAction Stop; (Get-Service -Name $args[0] -ErrorAction Stop).WaitForStatus('Running', [TimeSpan]::FromSeconds(15))";
+const SERVICE_GENERIC = new Set(["exe", "app", "desktop", "windows", "application", "installer", "service", "services", "update"]);
+
+export function packageOwnsService(service: WindowsService, install: { key: string; name: string; location: string }): boolean {
+  const path = service.pathName.match(/^"([^"]+\.exe)"|^(.+?\.exe)(?:\s|$)/i);
+  const executable = (path?.[1] ?? path?.[2] ?? "").replaceAll("\\", "/").toLowerCase();
+  const location = install.location.replaceAll("\\", "/").replace(/\/+$/, "").toLowerCase();
+  if (location && executable.startsWith(`${location}/`)) return true;
+  const tokens = `${install.key} ${install.name}`.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !SERVICE_GENERIC.has(token));
+  const file = executable.split("/").at(-1)?.replace(/\.exe$/, "");
+  return tokens.includes(service.name.toLowerCase()) || !!file && tokens.includes(file);
+}
+
+function serviceAccess(exec: Exec, transport: Transport): { read: NonNullable<RunnerDeps["readServices"]>; start: NonNullable<RunnerDeps["startService"]> } {
+  return {
+    read: async (signal) => {
+      const result = await exec(transport, ["pwsh", "-NoProfile", "-NonInteractive", "-Command", SERVICES_SCRIPT], 15_000, signal);
+      if (result.exitCode !== 0) throw new Error(cleanOutput(result.stderr) || "could not read Windows services");
+      const value: unknown = JSON.parse(result.stdout);
+      if (!Array.isArray(value) || value.some((service) => !service || ["name", "state", "startMode", "pathName"].some((key) => typeof service[key] !== "string"))) throw new Error("could not read Windows services");
+      return value as WindowsService[];
+    },
+    start: async (name, signal) => {
+      const result = await exec(transport, ["pwsh", "-NoProfile", "-NonInteractive", "-CommandWithArgs", START_SERVICE_SCRIPT, name], 60_000, signal);
+      if (result.exitCode !== 0) throw new Error(cleanOutput(result.stderr) || "could not start the service");
+    },
+  };
+}
+
+async function serviceDeadline<T>(run: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([Promise.resolve().then(() => run(controller.signal)), new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(new Error("service recovery timed out")); }, ms);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+async function restoreServices(db: Db, jobId: number, before: WindowsService[], read: NonNullable<RunnerDeps["readServices"]>, start: NonNullable<RunnerDeps["startService"]>): Promise<void> {
+  const pending = new Set(before.map((service) => service.name));
+  const output: string[] = [];
+  const attention: string[] = [];
+  const needsHelp = (name: string): string => `service ${name.replace(/\s+/g, " ")} could not be restored; run Start-Service -Name '${name.replaceAll("'", "''")}' in an elevated PowerShell`;
+  try {
+    if (before.length > 0) await serviceDeadline(async (signal) => {
+      const after = await read(signal);
+      for (const service of before) {
+        if (signal.aborted) throw new Error("service recovery timed out");
+        if (after.find((current) => current.name.toLowerCase() === service.name.toLowerCase())?.state.toLowerCase() === "running") {
+          output.push(`${service.name}: still running`);
+        } else {
+          try {
+            await start(service.name, signal);
+            if (signal.aborted) return;
+            output.push(`${service.name}: restored to Running`);
+          } catch (error) {
+            if (signal.aborted) return;
+            attention.push(needsHelp(service.name));
+            output.push(`${service.name}: ${(error as Error).message}`);
+          }
+        }
+        pending.delete(service.name);
+      }
+    }, 60_000);
+  } catch (error) {
+    output.push((error as Error).message);
+    for (const name of pending) attention.push(needsHelp(name));
+  }
+  if (attention.length > 0) setJobAttention(db, jobId, { kind: "service", detail: attention.join("; ") });
+  recordStep(db, jobId, "services-restore", attention.length > 0 ? "failed" : "done", cleanOutput([...output, ...attention].join("\n")) || "no running automatic package services needed a restart");
+}
 
 /**
  * Runs the update command and, while it runs, records the stage its output reaches and what it is waiting on a person for.
@@ -207,6 +289,7 @@ export async function runWatched(db: Db, job: Job, deps: RunnerDeps, exec: Exec,
     if (looking || rootPid === undefined || controller.signal.aborted) return;
     looking = true;
     void observe(rootPid, controller.signal).then((seen) => {
+      if (controller.signal.aborted) return;
       tracker.look(seen);
       sync();
       if (!tracker.prompting) promptSince = null;
@@ -219,6 +302,7 @@ export async function runWatched(db: Db, job: Job, deps: RunnerDeps, exec: Exec,
     return { result, tracker, promptExpired };
   } finally {
     if (timer) clearInterval(timer);
+    controller.abort();
     signal.removeEventListener("abort", forward);
     setJobAttention(db, job.id, null);
   }
@@ -226,7 +310,7 @@ export async function runWatched(db: Db, job: Job, deps: RunnerDeps, exec: Exec,
 
 export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSignal): Promise<void> {
   if (job.action === "download") return runDownloadJob(db, job, deps, signal);
-  const exec = deps.exec ?? runArgv;
+  const exec = deps.exec ? retryExec(deps.exec) : runArgv;
   const batchOptions = (): { alsoUpdating: number[] } => ({ alsoUpdating: (db.prepare("SELECT install_id AS installId FROM jobs WHERE batch_id = ? AND machine_id = ? AND action = 'update' AND state IN ('queued','preflight','running','done') AND id != ?").all(job.batchId, job.machineId, job.id) as { installId: number }[]).map((row) => row.installId) });
   const preview = previewUpdate(db, job.installId, deps.machines, batchOptions());
   const fail = (message: string): void => { setJobState(db, job.id, signal.aborted ? "stopped" : "failed", signal.aborted ? "stopped by user" : message); };
@@ -241,6 +325,8 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
   const updateTimeout = deps.updateTimeoutMs ?? 1_200_000;
   const isBrew = ["brew", "cask"].includes(preview.preview.ecosystem);
   const env = isBrew ? { HOMEBREW_NO_AUTO_UPDATE: "1", HOMEBREW_NO_SUDO: "1", HOMEBREW_NO_INSTALL_CLEANUP: "1", HOMEBREW_NO_ENV_HINTS: "1" } : undefined;
+  let verifying = false;
+  const verifyFailure = "could not read the installed version after the update; check it with winget list";
   try {
     const before = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
     const installed = plan.verify.parse(before.stdout);
@@ -296,7 +382,28 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       fail(reason);
       return;
     }
-    const { result: updated, tracker, promptExpired } = await runWatched(db, job, deps, exec, transport, plan.argv, preview.preview.ecosystem, updateTimeout, signal, env);
+    const windowsLocal = transport.type === "local" && !!db.prepare("SELECT 1 FROM machines WHERE id = ? AND os = 'windows'").get(job.machineId);
+    const access = serviceAccess(exec, transport);
+    const readServices = deps.readServices ?? access.read;
+    const startService = deps.startService ?? access.start;
+    let services: WindowsService[] = [];
+    if (windowsLocal) {
+      try {
+        const install = installRecord(db, job.installId)!;
+        const owned = (await serviceDeadline(readServices, 15_000)).filter((service) => packageOwnsService(service, install));
+        services = owned.filter((service) => service.state.toLowerCase() === "running" && /^(auto|automatic)$/i.test(service.startMode));
+        recordStep(db, job.id, "services-before", "done", owned.map((service) => `${service.name}: ${service.state} (${service.startMode})`).join("\n") || "no package services");
+      } catch (error) { recordStep(db, job.id, "services-before", "failed", cleanOutput((error as Error).message)); }
+    }
+    let watched: WatchedRun;
+    try {
+      if (signal.aborted) throw new Error("stopped by user");
+      watched = await runWatched(db, job, deps, exec, transport, plan.argv, preview.preview.ecosystem, updateTimeout, signal, env);
+    } finally {
+      // Recovery uses its own deadline because a stopped installer can leave its services down.
+      if (windowsLocal) await restoreServices(db, job.id, services, readServices, startService);
+    }
+    const { result: updated, tracker, promptExpired } = watched;
     if (signal.aborted) throw new Error("stopped by user");
     if (promptExpired) {
       recordStep(db, job.id, "update", "failed", cleanOutput(updated.stdout + "\n" + updated.stderr));
@@ -315,19 +422,22 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       if (signal.aborted) throw new Error("stopped by user");
       recordStep(db, job.id, "cleanup", cleaned.exitCode === 0 ? "done" : "failed", cleanOutput(cleaned.stdout + "\n" + cleaned.stderr));
     }
+    verifying = true;
     const after = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
     if (signal.aborted) throw new Error("stopped by user");
     const version = plan.verify.parse(after.stdout);
     if (after.exitCode !== 0 || !version || !job.to || compareVersions(version, job.to) !== 0 && compareVersions(version, job.to) !== 1) {
       recordStep(db, job.id, "verify", "failed", cleanOutput(after.stdout + "\n" + after.stderr));
-      fail("installed version did not reach the target");
+      const selfUpdating = /(?:^|[^a-z0-9])(?:itch|epic(?:games)?)(?:[^a-z0-9]|$)/i.test(`${job.name} ${plan.argv.join(" ")}`);
+      fail(after.exitCode !== 0 && plan.verify.argv[0] === "winget" ? verifyFailure : `installed version did not reach the target${version === job.from && selfUpdating ? "; the app may update itself; open it and let it finish" : ""}`);
       return;
     }
     db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(version, new Date().toISOString(), job.installId);
     recordStep(db, job.id, "verify", "done", cleanOutput(after.stdout + "\n" + after.stderr));
     setJobState(db, job.id, "done");
   } catch (err) {
-    if (jobById(db, job.id)?.state !== "stopped") fail((err as Error).message);
+    if (verifying) recordStep(db, job.id, "verify", "failed", cleanOutput((err as Error).message));
+    if (jobById(db, job.id)?.state !== "stopped") fail(verifying && plan.verify.argv[0] === "winget" ? verifyFailure : (err as Error).message);
   }
 }
 

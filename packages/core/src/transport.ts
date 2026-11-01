@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Probe, ProbeOutput } from "./adapter.ts";
 
-export interface ExecResult { exitCode: number; stdout: string; stderr: string }
+export interface ExecResult { exitCode: number; stdout: string; stderr: string; spawnError?: string }
 /** Live views of a running command: `onOutput` gets each chunk as it arrives, `onSpawn` the local child's process id. */
 export interface ExecHooks { onOutput?: (chunk: string) => void; onSpawn?: (pid: number) => void; maxOutputBytes?: number }
 export type Exec = (transport: Transport, argv: string[], timeoutMs: number, signal?: AbortSignal, env?: Record<string, string>, hooks?: ExecHooks) => Promise<ExecResult>;
@@ -52,7 +53,7 @@ function run(file: string, args: string[], timeoutMs: number, signal?: AbortSign
     child.on("error", (err) => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", stop);
-      resolve({ exitCode: 127, stdout, stderr: append(stderr, String(err.message)) });
+      resolve({ exitCode: 127, stdout, stderr: append(stderr, String(err.message)), spawnError: (err as NodeJS.ErrnoException).code });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -77,25 +78,57 @@ export function sshProgram(env: NodeJS.ProcessEnv = process.env, platform: strin
   return "ssh";
 }
 
-/** Resolve npm and npx to the JavaScript CLI shipped beside Node on Windows. */
-export function windowsNodeCli(file: string, execPath: string, platform: string, exists: (path: string) => boolean): { file: string; args: string[] } | null {
-  if (platform !== "win32" || (file !== "npm" && file !== "npx")) return null;
-  const script = join(dirname(execPath), "node_modules", "npm", "bin", file === "npm" ? "npm-cli.js" : "npx-cli.js");
-  return exists(script) ? { file: execPath, args: [script] } : null;
+/** Windows cmd shims need a shell, so use their CLI scripts or standalone executable. */
+export function windowsNodeCli(file: string, execPath: string, platform: string, exists: (path: string) => boolean, env: NodeJS.ProcessEnv = process.env): { file: string; args: string[] } | null {
+  const tool = file.toLowerCase().replace(/\.cmd$/, "");
+  if (platform !== "win32" || !["npm", "npx", "pnpm"].includes(tool)) return null;
+  const dirs = [dirname(execPath), env["PNPM_HOME"], env["APPDATA"] ? join(env["APPDATA"], "npm") : undefined, env["LOCALAPPDATA"] ? join(env["LOCALAPPDATA"], "pnpm") : undefined, env["ProgramFiles"] ? join(env["ProgramFiles"], "nodejs") : undefined].filter((dir): dir is string => !!dir);
+  for (const dir of dirs) {
+    const script = tool === "pnpm" ? join(dir, "node_modules", "pnpm", "bin", "pnpm.cjs") : join(dir, "node_modules", "npm", "bin", `${tool}-cli.js`);
+    if (exists(script)) return { file: execPath, args: [script] };
+    if (tool === "pnpm") {
+      const exe = join(dir, "pnpm.exe");
+      if (exists(exe)) return { file: exe, args: [] };
+      const corepack = join(dir, "node_modules", "corepack", "dist", "pnpm.js");
+      if (exists(corepack)) return { file: execPath, args: [corepack] };
+    }
+  }
+  return null;
+}
+
+/** An installer can briefly lock a tool while replacing it. */
+export function retryExec(exec: Exec, pause: (ms: number, signal?: AbortSignal) => Promise<void> = async (ms, signal) => { await delay(ms, undefined, { signal }); }): Exec {
+  return async (transport, argv, timeoutMs, signal, env, hooks) => {
+    const deadline = Date.now() + timeoutMs;
+    for (let attempt = 0; ; attempt++) {
+      if (signal?.aborted) return { exitCode: -1, stdout: "", stderr: "stopped" };
+      let result: ExecResult;
+      try { result = await exec(transport, argv, Math.max(1, deadline - Date.now()), signal, env, hooks); }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "EACCES" && code !== "EBUSY") throw error;
+        result = { exitCode: 127, stdout: "", stderr: (error as Error).message, spawnError: code };
+      }
+      const code = result.spawnError ?? (result.exitCode === 127 ? /\bspawn\b[^\r\n]*\b(EACCES|EBUSY)\b/.exec(result.stderr)?.[1] : undefined);
+      if (transport.type !== "local" || code !== "EACCES" && code !== "EBUSY" || attempt >= 5 || Date.now() + 3000 >= deadline) return result;
+      try { await pause(3000, signal); }
+      catch (error) { if (!signal?.aborted) throw error; }
+    }
+  };
 }
 
 /** Run one argv locally or through SSH, with no stdin and an abortable child. */
-export const runArgv: Exec = (transport, argv, timeoutMs, signal, env, hooks) => {
+export const runArgv: Exec = retryExec((transport, argv, timeoutMs, signal, env, hooks) => {
   if (transport.type === "local") {
     const [file, ...args] = argv;
     if (!file) return Promise.resolve({ exitCode: 127, stdout: "", stderr: "empty argv" });
-    const cli = windowsNodeCli(file, process.execPath, process.platform, existsSync);
+    const cli = windowsNodeCli(file, process.execPath, process.platform, existsSync, { ...process.env, ...env });
     return cli ? run(cli.file, [...cli.args, ...args], timeoutMs, signal, env, undefined, hooks) : run(file, args, timeoutMs, signal, env, undefined, hooks);
   }
   const words = transport.guest ? [...transport.guest, ...argv] : argv;
   const remote = env ? ["env", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), ...words] : words;
   return run(sshProgram(), ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...(transport.options ?? []), transport.target, remoteCommand(remote)], timeoutMs, signal, undefined, undefined, hooks);
-};
+});
 
 /** Run one probe on a machine and return its raw output. Never throws. */
 export function runProbe(transport: Transport, probe: Probe, timeoutMs = 120_000): Promise<ProbeOutput> {
