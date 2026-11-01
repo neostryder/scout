@@ -73,6 +73,7 @@ test("the watch waits five minutes, checks one repository at a time, and alerts 
   });
   try {
     assert.equal(schedule.status().configured, true);
+    assert.equal(schedule.status().intervalSeconds, 1800);
     schedule.start();
     clock.advance(COMPETITOR_START_DELAY_MS - 1);
     await idle(schedule);

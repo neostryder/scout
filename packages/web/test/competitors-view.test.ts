@@ -98,7 +98,7 @@ async function open(t: TestContext, answer: (url: string) => any) {
   return { root, calls, badge, view };
 }
 
-const ok = (competitors: any[], extra: Record<string, unknown> = {}) => ({ configured: true, intervalSeconds: 21600, checkedAt: "2026-10-19T12:04:00.000Z", competitors, ...extra });
+const ok = (competitors: any[], extra: Record<string, unknown> = {}) => ({ configured: true, intervalSeconds: 1800, checkedAt: "2026-10-19T12:04:00.000Z", competitors, ...extra });
 
 test("a configured list shows the count, the new row, the links, and no mirror path", async (t) => {
   const current = row({ id: "other", name: "Other", org: "Beta", status: "current", newBasis: null, latest: { version: "2.0.0", prerelease: null, error: null } });
@@ -157,7 +157,7 @@ test("Update confirms with the set sentence, then posts JSON, and a missing mirr
 });
 
 test("an unset watch shows the setup sentence once, and a failed read shows one message", async (t) => {
-  const missing = await open(t, () => ({ configured: false, intervalSeconds: 21600, checkedAt: null, competitors: [] }));
+  const missing = await open(t, () => ({ configured: false, intervalSeconds: 1800, checkedAt: null, competitors: [] }));
   const missingText = allText(missing.root);
   assert.match(missingText, /Competitor watch is not set up\. Run the seed command described in the setup guide\./);
   assert.equal(missingText.split("Competitor watch is not set up").length - 1, 1);

@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **The competitor watch now checks tracked repositories for new releases every 30 minutes instead of every six hours.** A new release is queued for research and shown as a notice within about 30 minutes of appearing. The check only reads tags from each remote and changes nothing on your machine.
 - [Visible] [Software] **On Windows, the hub and the outage watchdog now start again within five minutes after they stop.** Before this, a stopped task stayed down until the next logon. Running the installer again updates the triggers and settings of tasks that already exist.
 - [Internal] [Services] **The hub now logs which requests were running when its event loop is blocked for more than a second.** The hub checks the loop every 250 milliseconds and writes at most one line every ten seconds, listing each running or just-finished request by method, path, and duration. Query strings are never logged.
 - [Visible] [UI] **Possible-competitor cards now show a badge when Laya and Jev disagree about a project.** The badge, such as "Laya: yes, Jev: no", has a tooltip with both scores and the bar Jev needed, and it stays hidden when they agree or Laya has not read the project. A line under the hold-back note on the Competitors page compares the two yes rates and, once you have decided on some projects, shows how many of your choices each model agreed with.
