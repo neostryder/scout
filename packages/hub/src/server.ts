@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, type ClaudeSessionsResponse, isAutoBump, listAutoUpdates, setAutoUpdate, type Db } from "@scout/core";
+import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, mineFileReader, trayFileReader, protectedFileReader, provenanceContext, provenanceResponse, refreshProjectGit, machineRisks, type ClaudeSessionsResponse, isAutoBump, listAutoUpdates, setAutoUpdate, type Db } from "@scout/core";
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { revalidate } from "./etag.ts";
@@ -314,6 +314,7 @@ export function createHub(options: HubOptions): Server {
         if (!options.claude) return json(res, 404, { error: "the Claude monitor is off" });
         try { return json(res, 200, await options.claude.read()); } catch (error) { return json(res, 503, { error: `The process table could not be read: ${(error as Error).message}` }); }
       }
+      if (url.pathname === "/api/risk") return json(res, 200, { machines: machineRisks(db), generatedAt: new Date().toISOString() });
       if (url.pathname === "/api/summary") return json(res, 200, summaryResponse(db));
       if (url.pathname === "/api/installs") return json(res, 200, installsResponse(db, url.searchParams, provenance()));
       if (url.pathname === "/api/provenance") return json(res, 200, provenanceResponse(db, mineFile()));

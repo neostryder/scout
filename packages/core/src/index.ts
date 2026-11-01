@@ -62,3 +62,4 @@ export * from "./competitors.ts";
 export * from "./competitor-candidates.ts";
 export * from "./update-window.ts";
 export * from "./auto-updates.ts";
+export * from "./machine-risk.ts";
