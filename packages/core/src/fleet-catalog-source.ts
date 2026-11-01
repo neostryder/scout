@@ -10,6 +10,7 @@ export interface CatalogServiceRow {
   lastRun: string | null;
   lastResult: string | null;
   keepAlive: boolean | null;
+  firstSeenAt: string;
   lastSeenAt: string;
 }
 
@@ -19,6 +20,7 @@ export interface CatalogSourceScope {
   systemd: { include: RegExp[]; exclude: RegExp[] };
   windowsServices: { include: RegExp[] };
   neverRan: RegExp[];
+  neverRanGraceDays: number;
   staleScanMinutes: number;
 }
 
@@ -28,6 +30,7 @@ export const DEFAULT_CATALOG_SCOPE: CatalogSourceScope = {
   systemd: { include: [], exclude: [] },
   windowsServices: { include: [] },
   neverRan: [],
+  neverRanGraceDays: 8,
   staleScanMinutes: 30,
 };
 
@@ -80,6 +83,8 @@ export function catalogPackets(rows: readonly CatalogServiceRow[], scope: Catalo
       const evidence: IncidentEvidence = { snapshot: { taskResult: row.lastResult, lastRun: row.lastRun, state: row.state, running, kind: row.kind } };
       if (code === 267011n) {
         if (!matches(scope.neverRan, component)) continue;
+        const firstSeenMs = Date.parse(row.firstSeenAt);
+        if (!Number.isFinite(firstSeenMs) || nowMs - firstSeenMs < scope.neverRanGraceDays * 86_400_000) continue;
         next = packet(row, component, "never-ran", "task has never run", evidence, now);
       } else {
         if (Number.isSafeInteger(Number(code))) evidence.exitCode = Number(code);

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { DEFAULT_CATALOG_SCOPE, FALSE_ALARMS, catalogPackets, fingerprint, isFalseAlarm, parsePacket, reconcileCatalog, type CatalogServiceRow } from "../src/index.ts";
 
 const T = "2026-10-31T18:00:00.000Z";
-const row: CatalogServiceRow = { machine: "desktop", kind: "scheduled-task", name: "\\Backup", state: "stopped", startMode: null, enabled: true, lastRun: "2026-10-31T17:59:00.000Z", lastResult: "1", keepAlive: null, lastSeenAt: T };
+const row: CatalogServiceRow = { machine: "desktop", kind: "scheduled-task", name: "\\Backup", state: "stopped", startMode: null, enabled: true, lastRun: "2026-10-31T17:59:00.000Z", lastResult: "1", keepAlive: null, firstSeenAt: "2026-10-01T18:00:00.000Z", lastSeenAt: T };
 
 test("a failed root task carries catalog evidence and a warning", () => {
   const packets = catalogPackets([row], DEFAULT_CATALOG_SCOPE, T);
@@ -63,6 +63,44 @@ test("never-run tasks stay silent without a match or outside the enabled fresh t
   assert.equal(catalogPackets([{ ...task, lastSeenAt: "2026-10-31T17:30:00.000Z" }], scope, T).length, 1);
   assert.deepEqual(catalogPackets([task], { ...scope, tasks: { include: [], exclude: [] } }, T), []);
   assert.deepEqual(catalogPackets([task], { ...scope, tasks: { include: [/backup/i], exclude: [/backup/i] } }, T), []);
+});
+
+test("never-run tasks stay silent inside the default grace window", () => {
+  const scope = { ...DEFAULT_CATALOG_SCOPE, neverRan: [/^backup$/i] };
+  assert.equal(scope.neverRanGraceDays, 8);
+  for (const firstSeenAt of [T, "2026-10-23T18:00:00.001Z", "2026-11-01T18:00:00.000Z"]) {
+    assert.deepEqual(catalogPackets([{ ...row, lastResult: "267011", firstSeenAt }], scope, T), [], firstSeenAt);
+  }
+});
+
+test("never-run tasks open exactly at the grace boundary", () => {
+  const scope = { ...DEFAULT_CATALOG_SCOPE, neverRan: [/^backup$/i] };
+  const packets = catalogPackets([{ ...row, lastResult: "267011", firstSeenAt: "2026-10-23T18:00:00.000Z" }], scope, T);
+  assert.equal(packets.length, 1);
+  assert.equal(packets[0]?.failureClass, "never-ran");
+});
+
+test("zero grace days lets a never-run task open immediately", () => {
+  const scope = { ...DEFAULT_CATALOG_SCOPE, neverRan: [/^backup$/i], neverRanGraceDays: 0 };
+  const packets = catalogPackets([{ ...row, lastResult: "267011", firstSeenAt: T }], scope, T);
+  assert.equal(packets.length, 1);
+  assert.equal(packets[0]?.failureClass, "never-ran");
+});
+
+test("never-run tasks with an unparseable first observation stay silent even with zero grace", () => {
+  for (const neverRanGraceDays of [0, 8]) {
+    const scope = { ...DEFAULT_CATALOG_SCOPE, neverRan: [/^backup$/i], neverRanGraceDays };
+    assert.deepEqual(catalogPackets([{ ...row, lastResult: "267011", firstSeenAt: "invalid" }], scope, T), []);
+  }
+});
+
+test("first observation age does not suppress other catalog failures", () => {
+  const scope = { ...DEFAULT_CATALOG_SCOPE, systemd: { include: [/backup/i], exclude: [] }, windowsServices: { include: [/backup/i] } };
+  for (const firstSeenAt of [T, "invalid"]) {
+    const fresh = { ...row, firstSeenAt };
+    const rows = [fresh, { ...fresh, kind: "launchd", name: "org.example.backup", keepAlive: true }, { ...fresh, kind: "systemd", name: "backup.service", startMode: "auto" }, { ...fresh, kind: "windows-service", name: "Backup", startMode: "auto" }];
+    assert.deepEqual(catalogPackets(rows, scope, T).map((item) => item.failureClass), ["ran-failed", "dead", "dead", "dead"]);
+  }
 });
 
 test("Task Scheduler refusals while running and minute watchdog refusals are false alarms", () => {

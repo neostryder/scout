@@ -81,7 +81,7 @@ test("catalog source config is optional and validates flags, ages, and regex lis
       writeFileSync(path, JSON.stringify({ sources: { catalog: { neverRan: { tasks } } } }), "utf8");
       const file = loadFleetConfig(path);
       assert.equal(file.fileError, null);
-      assert.deepEqual(file.sources?.catalog?.neverRan, { tasks });
+      assert.deepEqual(file.sources?.catalog?.neverRan, { tasks, graceDays: 8 });
     }
     for (const invalid of [
       { tasks: { include: ["["] } },
@@ -105,6 +105,7 @@ test("catalog source config is optional and validates flags, ages, and regex lis
       { neverRan: { tasks: ["x".repeat(201)] } },
       { neverRan: { tasks: [1] } },
       { neverRan: { tasks: [], unknown: true } },
+      ...[-1, 366, 1.5, "8", null, true, [], {}].map((graceDays) => ({ neverRan: { tasks: [], graceDays } })),
       { unknown: true },
     ]) {
       writeFileSync(path, JSON.stringify({ ingestTokenEnv: "FLEET_TOKEN", sources: { catalog: { enabled: true, ...invalid } } }), "utf8");
@@ -112,6 +113,22 @@ test("catalog source config is optional and validates flags, ages, and regex lis
       assert.match(broken.fileError ?? "", /malformed/);
       assert.equal(broken.sources?.catalog?.enabled, undefined);
       assert.equal(broken.ingestTokenEnv, null);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("never-run config accepts grace days from zero through 365", () => {
+  const dir = mkdtempSync(join(root, "scout-fleet-file-"));
+  try {
+    const path = join(dir, "fleet.json");
+    for (const graceDays of [0, 1, 8, 365]) {
+      const neverRan = { tasks: ["^backup$"], graceDays };
+      writeFileSync(path, JSON.stringify({ sources: { catalog: { neverRan } } }), "utf8");
+      const file = loadFleetConfig(path);
+      assert.equal(file.fileError, null);
+      assert.deepEqual(file.sources?.catalog?.neverRan, neverRan);
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
