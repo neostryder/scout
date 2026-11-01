@@ -10,6 +10,7 @@ import type { OutageNotice } from "@scout/core";
 export interface ChannelResult { channel: "discord" | "desktop"; ok: boolean; error: string | null }
 export interface NotifierOptions {
   webhook?: () => string | undefined;
+  readStored?: () => string | undefined;
   fetch?: typeof fetch;
   desktop?: (notice: OutageNotice) => Promise<void>;
   log?: (line: string) => void;
@@ -56,9 +57,14 @@ function decryptWithDpapi(path: string): string {
   return execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", DECRYPT_SCRIPT], { env: { ...process.env, SCOUT_STORED_WEBHOOK: path }, encoding: "utf8", windowsHide: true, timeout: 15_000 });
 }
 
+let storedMemo: { value: string | undefined } | undefined;
+
+export function resetStoredWebhook(): void {
+  storedMemo = undefined;
+}
+
 export class Notifier {
   private options: NotifierOptions;
-  private stored: string | undefined;
 
   constructor(options: NotifierOptions = {}) {
     this.options = options;
@@ -68,8 +74,8 @@ export class Notifier {
     if (this.options.webhook !== undefined) return this.options.webhook()?.trim() || undefined;
     const fromEnv = process.env["SCOUT_DISCORD_WEBHOOK"]?.trim();
     if (fromEnv) return fromEnv;
-    this.stored ??= readStoredWebhook();
-    return this.stored;
+    storedMemo ??= { value: (this.options.readStored ?? readStoredWebhook)() };
+    return storedMemo.value;
   }
 
   /** Which channels are set up, for the page. */

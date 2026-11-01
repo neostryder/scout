@@ -129,8 +129,13 @@ export function setAlertMute(db: Db, body: Record<string, unknown>, now = new Da
 
 export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}): AlertChange[] {
   const descriptions = loadDescriptionResolver(db, { hints: [] });
-  const services = listServices(db, {}, descriptions);
-  const listeners = listListeners(db, {}, descriptions);
+  // Only events newer than a machine's baseline are matched against rows, so a row that went gone before the oldest of those events cannot be one they name.
+  const firstUnread = db.prepare("SELECT MIN(at) AS at FROM events WHERE machine_id = ? AND id > ?");
+  const unread = (db.prepare("SELECT machine_id AS machineId, event_id AS eventId FROM alert_baseline").all() as { machineId: string; eventId: number }[]).map((row) => (firstUnread.get(row.machineId, row.eventId) as { at: string | null }).at).filter((at): at is string => at !== null).sort()[0];
+  const goneSince = new Date(Date.parse(unread ?? now) - 60 * 60 * 1000).toISOString();
+  const targets = db.prepare("SELECT target_type AS type, target_id AS id FROM alerts WHERE state <> 'resolved' AND target_id IS NOT NULL").all() as { type: string; id: number }[];
+  const services = listServices(db, { keep: { goneSince, ids: targets.filter((row) => row.type === "service").map((row) => row.id) } }, descriptions);
+  const listeners = listListeners(db, { keep: { goneSince, ids: targets.filter((row) => row.type === "listener").map((row) => row.id) } }, descriptions);
   // Tens of thousands of stored alerts and listeners make a linear search per alert block the hub for seconds, so lookups by id go through maps.
   const serviceById = new Map(services.map((row) => [row.id, row]));
   const listenerById = new Map(listeners.map((row) => [row.id, row]));
@@ -183,7 +188,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
   db.exec("SAVEPOINT evaluate_alerts");
   try {
     const initialized = new Set<string>();
-    const machines = db.prepare("SELECT id FROM machines WHERE id IN (SELECT value FROM json_each(?)) OR id IN (SELECT machine_id FROM services UNION SELECT machine_id FROM listeners UNION SELECT machine_id FROM events)").all(JSON.stringify([...(options.machineId === undefined ? [] : [options.machineId]), ...(options.machineIds ?? [])])) as { id: string }[];
+    const machines = db.prepare("SELECT id FROM machines WHERE id IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM services WHERE machine_id = machines.id) OR EXISTS (SELECT 1 FROM listeners WHERE machine_id = machines.id) OR EXISTS (SELECT 1 FROM events WHERE machine_id = machines.id)").all(JSON.stringify([...(options.machineId === undefined ? [] : [options.machineId]), ...(options.machineIds ?? [])])) as { id: string }[];
     for (const machine of machines) {
       const latest = (db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM events WHERE machine_id = ?").get(machine.id) as { id: number }).id;
       const baseline = db.prepare("SELECT event_id AS id FROM alert_baseline WHERE machine_id = ?").get(machine.id) as { id: number } | undefined;

@@ -13,7 +13,7 @@ export interface TrayDeps {
   provenance: () => ProvenanceContext;
   live?: LiveSchedule | undefined;
   control: { context: () => import("@scout/core").ProtectedContext };
-  /** How long a computed read model is reused when nothing it is built from has changed. Zero computes every request. */
+  /** How long a computed read model is reused while rules and live states are unchanged. Stack registry changes appear within this window. Zero computes every request. */
   cacheMs?: number;
   now?: () => number;
 }
@@ -56,9 +56,8 @@ export async function trayApi(db: Db, req: IncomingMessage, url: URL, res: Serve
     const file = deps.read();
     const states = new Map((deps.live?.status() ?? []).map((s) => [s.id, s.state]));
     const provenance = deps.provenance();
-    const stacks = deps.stacks();
     const now = (deps.now ?? Date.now)();
-    const key = JSON.stringify([file.rules, [...states], stacks]);
+    const key = JSON.stringify([file.rules, [...states]]);
     const cached = memo.get(db);
     let body: TrayBody;
     if (cached && (deps.cacheMs ?? 0) > 0 && cached.key === key && now - cached.at < (deps.cacheMs ?? 0)) {
@@ -66,7 +65,7 @@ export async function trayApi(db: Db, req: IncomingMessage, url: URL, res: Serve
     } else {
       body = trayResponse(db, file.rules, {
         context: deps.control.context(),
-        stacks,
+        stacks: deps.stacks(),
         mine: (row) => programFlags(row.machineId, row.path, row.ports[0] ?? null, provenance).some((flag) => flag.kind === "mine"),
         reachable: (id) => { const state = states.get(id); return state === undefined || state === "never" ? null : state === "fresh" || state === "stale"; },
       });

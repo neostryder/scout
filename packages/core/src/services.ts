@@ -165,6 +165,7 @@ export interface ServiceFilter {
   q?: string;
   hasPort?: boolean;
   gone?: "present" | "gone";
+  keep?: { goneSince: string; ids: number[] };
   class?: ServiceClass;
   official?: boolean;
   includeHidden?: boolean;
@@ -211,6 +212,7 @@ export function listServices(db: Db, filter: ServiceFilter = {}, descriptions: D
   if (filter.kind !== undefined) { clauses.push("s.kind = ?"); params.push(filter.kind); }
   if (filter.state !== undefined) { clauses.push("s.state = ?"); params.push(filter.state); }
   if (filter.gone !== undefined) clauses.push(`s.gone_at IS ${filter.gone === "present" ? "NULL" : "NOT NULL"}`);
+  if (filter.keep !== undefined) { clauses.push("(s.gone_at IS NULL OR s.gone_at >= ? OR s.id IN (SELECT value FROM json_each(?)))"); params.push(filter.keep.goneSince, JSON.stringify(filter.keep.ids)); }
   const rows = db.prepare(
     `SELECT s.id, s.machine_id AS machineId, m.name AS machineName, s.kind, s.domain, s.name, s.display_name AS displayName,
        s.program, s.state, s.start_mode AS startMode, s.enabled, s.pid, s.run_as AS runAs, s.triggers, s.last_run AS lastRun,

@@ -1,6 +1,6 @@
 import { hubMachineId } from "./hub.ts";
 import type { Db } from "./db.ts";
-import { listServices, type Service, type ServiceKind } from "./services.ts";
+import type { Service, ServiceKind } from "./services.ts";
 import { recipesResponse } from "./recipes.ts";
 import { registryFileReader, registryObject, registryPort, type RegistryFile } from "./ports.ts";
 
@@ -51,12 +51,23 @@ export function validateStacks(data: unknown): { config: Stack[]; fileError: str
 export const stacksFileReader = (path = ".scout-data/stacks.json") => registryFileReader(path, () => [] as Stack[], validateStacks);
 
 /** Rows a stack resolves against. Listing them is the cost, so a response that resolves several stacks reads them once. */
-interface StackRows { services: Service[]; recipes: ReturnType<typeof recipesResponse>["recipes"] }
+interface StackRows { services: Pick<Service, "id" | "machineId" | "kind" | "name" | "displayName" | "state" | "goneAt">[]; recipes: ReturnType<typeof recipesResponse>["recipes"] }
 
 function stackRows(db: Db, stacks: Stack[]): StackRows {
   const members = stacks.flatMap((stack) => stack.members);
+  const services: StackRows["services"] = [];
+  const seen = new Set<string>();
+  const get = db.prepare("SELECT id, machine_id AS machineId, kind, name, display_name AS displayName, state, gone_at AS goneAt FROM services WHERE machine_id = ? AND kind = ? AND name = ? AND gone_at IS NULL ORDER BY id LIMIT 1");
+  for (const member of members) {
+    if (member.type !== "service") continue;
+    const key = JSON.stringify([member.machine, member.kind, member.name]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const service = get.get(member.machine, member.kind, member.name) as StackRows["services"][number] | undefined;
+    if (service) services.push(service);
+  }
   return {
-    services: members.some((member) => member.type === "service") ? listServices(db, { gone: "present", includeHidden: true }) : [],
+    services,
     recipes: members.some((member) => member.type === "recipe") ? recipesResponse(db).recipes : [],
   };
 }

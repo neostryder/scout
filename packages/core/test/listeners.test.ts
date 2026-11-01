@@ -243,3 +243,11 @@ test("present listeners of one machine are read through the partial index", (t) 
   const plan = db.prepare("EXPLAIN QUERY PLAN SELECT l.id FROM listeners l JOIN machines m ON m.id = l.machine_id WHERE l.machine_id = ? AND l.gone_at IS NULL ORDER BY m.name, l.port, l.id").all("hub") as { detail: string }[];
   assert.ok(plan.some((row) => row.detail.includes("listeners_present")), plan.map((row) => row.detail).join(" | "));
 });
+
+test("event and present-service reads go through indexes instead of scanning the table", (t) => {
+  const db = seed(t);
+  const detail = (sql: string, ...params: string[]) => (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  assert.match(detail("SELECT COALESCE(MAX(id), 0) FROM events WHERE machine_id = ?", "hub"), /events_machine/);
+  assert.match(detail("SELECT detail_json FROM events WHERE kind IN ('service_changed') AND at >= ? AND at <= ?", "a", "b"), /events_at/);
+  assert.match(detail("SELECT s.id FROM services s WHERE s.machine_id = ? AND s.gone_at IS NULL", "hub"), /services_present/);
+});

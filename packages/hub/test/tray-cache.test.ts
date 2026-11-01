@@ -21,24 +21,29 @@ test("a read model is reused inside the cache window and rebuilt after it", asyn
     db.prepare("UPDATE machines SET state = 'reachable' WHERE id = 'hub'").run();
     recordServices(db, "hub", { origin: "services", status: "ok", facts: [svc("worker")] }, AT);
     let clock = 1_000;
+    let stackReads = 0;
     const deps: TrayDeps = {
       rulesPath: "unused",
       read: () => ({ rules: parseTrayRules({}), fileError: null }),
-      stacks: () => [],
+      stacks: () => { stackReads++; return []; },
       provenance: () => emptyProvenance(),
       control: { context: () => ({}) as ProtectedContext },
       cacheMs: 4000,
       now: () => clock,
     };
     assert.equal(await rowCount(db, deps), 1);
+    assert.equal(stackReads, 1);
     recordServices(db, "hub", { origin: "services", status: "ok", facts: [svc("worker"), svc("spooler")] }, AT);
     clock += 3_999;
     assert.equal(await rowCount(db, deps), 1);
+    assert.equal(stackReads, 1);
     clock += 1;
     assert.equal(await rowCount(db, deps), 2);
+    assert.equal(stackReads, 2);
     recordServices(db, "hub", { origin: "services", status: "ok", facts: [svc("worker")] }, AT);
     const uncached: TrayDeps = { ...deps, cacheMs: 0 };
     assert.equal(await rowCount(db, uncached), 1);
+    assert.equal(stackReads, 3);
   } finally {
     db.close();
   }
