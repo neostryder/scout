@@ -134,3 +134,28 @@ test("never-run config accepts grace days from zero through 365", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("fleet file accepts remote alongside other sources and rejects malformed remote blocks", () => {
+  const dir = mkdtempSync(join(root, "scout-fleet-file-"));
+  try {
+    const path = join(dir, "fleet.json");
+    const check = { machine: "example", component: "Example app", argv: ["example", "status"] };
+    writeFileSync(path, JSON.stringify({ sources: { catalog: { enabled: true }, local: {}, remote: { enabled: true, checks: [check] } } }), "utf8");
+    const file = loadFleetConfig(path);
+    assert.equal(file.fileError, null);
+    assert.equal(file.sources?.catalog?.enabled, true);
+    assert.ok(file.sources?.local);
+    assert.equal(file.sources?.remote?.enabled, true);
+    assert.equal(file.sources?.remote?.checks[0]?.machine, "example");
+    assert.equal(file.sources?.remote?.checks[0]?.timeoutSeconds, 20);
+    for (const remote of [null, { unknown: true }, { checks: [{ ...check, pattern: "[" }] }, { checks: [check, check] }]) {
+      writeFileSync(path, JSON.stringify({ ingestTokenEnv: "FLEET_TOKEN", sources: { remote } }), "utf8");
+      const broken = loadFleetConfig(path);
+      assert.match(broken.fileError ?? "", /malformed/);
+      assert.equal(broken.sources, undefined);
+      assert.equal(broken.ingestTokenEnv, null);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

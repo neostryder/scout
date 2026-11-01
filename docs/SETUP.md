@@ -426,6 +426,46 @@ The local source runs inside the hub, with no token or scripts to install, and c
 - `wsl`, set to `{ "enabled": true }`, runs `wsl.exe --status` and opens a `dead` incident named `wsl` on a failing exit or a timeout. Machines without `wsl.exe` skip the check silently.
 - `logs` takes up to 30 entries, each with a `component`, a `path`, and a `pattern`, which is a case-insensitive regular expression of up to 200 characters. Scout reads the last `tailKilobytes` of the file (default 64, up to 512) and keeps lines that match `pattern`, do not match the optional `ignore` expression, and are newer than `maxAgeMinutes` (default 30). Lines that do not start with a timestamp count as current. Matches open one incident per entry with the count and the newest five matching lines, classed by `failureClass` (default `ran-failed`). If you set `staleAfterMinutes` (1 to 10080, or `null` to turn the check off) and the file goes unwritten for that long, Scout opens a critical `wedged` incident. A missing or unreadable file opens a `watcher-failure` incident.
 
+### Remote source
+
+The remote source runs inside the hub and checks the other machines in `machines.json` by running read-only commands over each machine's existing ssh transport. Those machines need no token or script, and nothing is installed on them. To turn it on, add a `remote` block under `sources` in `.scout-data/fleet.json`, set `enabled` to `true`, and add a `checks` list. An unknown key or a bad value makes the fleet file malformed, the same as with the catalog and local settings. The source runs every two minutes along with the catalog and local sources, and at most four checks run at once. Each incident it opens is a fleet incident whose host is the machine id.
+
+```json
+{
+  "sources": {
+    "remote": {
+      "enabled": true,
+      "checks": [
+        { "machine": "studio-mac", "component": "containers", "argv": ["sh", "-c", "docker ps -a --format '{{.Names}} {{.Status}}' 2>&1"], "pattern": "Exited \\((?!0\\))|unhealthy|Restarting", "failureClass": "dead" },
+        { "machine": "studio-mac", "component": "colima", "argv": ["sh", "-c", "colima status 2>&1"], "mustMatch": "is running", "failureClass": "dead", "severity": "critical" }
+      ]
+    }
+  }
+}
+```
+
+The first check lists every container and opens a `dead` incident when one has exited with a non-zero code, is unhealthy, or keeps restarting. The second opens a critical incident when `colima status` no longer says Colima is running.
+
+Each check takes these settings, and the list holds up to 60 checks:
+
+- `machine`: a machine id from `machines.json`, up to 64 lowercase letters, digits, dashes, or underscores.
+- `component`: the name shown on the incident, up to 180 characters. Each machine and component pair can appear only once.
+- `argv`: the command and its arguments, 1 to 20 strings of up to 500 characters each. For a shell pipeline, use `["sh", "-c", "..."]`.
+- `timeoutSeconds`: 1 to 120, default 20.
+- `failureClass`: the class of incident the check opens, default `ran-failed`.
+- `severity`: optional. It replaces the class's default severity.
+- `pattern` and `ignore`: case-insensitive regular expressions of up to 200 characters. A stdout line counts as a problem when it matches `pattern` and does not match `ignore`.
+- `mustMatch`: a case-insensitive regular expression of up to 200 characters that at least one stdout line has to match.
+- `unreachable`: `report` (the default) or `ignore`.
+
+The hub first looks at whether ssh reached the machine. A timeout or exit code 255 counts as unreachable, because ssh uses 255 for its own connection errors. With `unreachable` set to `report`, the machine gets a single `watcher-failure` incident named `remote:<machine>` and its other checks add nothing. With `ignore`, nothing is reported. A check that names a machine missing from the machine list, or a paused machine, opens the same `remote:<machine>` incident with the summary "machine is not in the machine list".
+
+When the command did run, a non-zero exit opens an incident of the check's class titled "command failed (exit N)", with the exit code, the tail of stderr, and the last five stdout lines. On exit 0, problem lines matching `pattern` open an incident with their count and the newest five of them. If `mustMatch` is set and no stdout line matches it, an incident says the expected output is missing. Any other exit 0 is healthy.
+
+Every open incident is sent again on each tick, so its last-seen time and count keep advancing while the problem lasts, as with the local source. When the condition clears, the incident resolves with a recovery notice. A check that could not run does not resolve anything. If ssh could not reach the machine, an incident already open for that check stays open until the check runs again and passes.
+
+The hub reads at most 64 KB per stream from each command. Summaries stay under 300 characters and excerpts under 1500, and secrets are redacted before anything is stored.
+
 ### Reading a meter
 
 Each bar has a tick at 85 percent. At 70 percent and above, the bar and the number turn amber and the row says "High". At 85 percent and above they turn red, the bar is striped, and the row says "Very high". The number and the word are always shown, so color is never the only signal.
