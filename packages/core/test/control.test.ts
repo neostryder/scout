@@ -98,7 +98,7 @@ test("service facts retain uid, KeepAlive and plist through cheap reads and list
   const joined = controlRow(listListeners(db)[0]!, services);
   assert.equal(joined.kind, "launchd");
   assert.equal(joined.serviceId, services[0]!.id);
-  assert.equal(SCHEMA_VERSION, 3);
+  assert.equal(SCHEMA_VERSION, 4);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'actions'").get());
 });
 

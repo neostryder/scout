@@ -406,7 +406,7 @@ test("the evaluator rolls back watermarks and alert changes after a catalog erro
   assert.equal(all(db).length, 0);
   db.exec("DROP TRIGGER reject_alert");
   assert.equal(evaluateAlerts(db, T2).length, 1);
-  assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()!.value, "3");
+  assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()!.value, "4");
 });
 
 test("machineIds baselines every named machine even when it has no rows yet", (t) => {

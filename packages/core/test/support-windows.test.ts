@@ -9,7 +9,7 @@ test("support windows replace one package's rows and compute dated and boolean E
   try {
     db.exec("INSERT INTO packages (id, ecosystem, key, name) VALUES (1, 'brew', 'node', 'Node'), (2, 'brew', 'python', 'Python')");
     db.exec(SCHEMA_SQL);
-    assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "3");
+    assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "4");
     recordSupportWindows(db, 1, [
       { cycle: "20", eol: "2026-04-30", latest: "20.20.0", lts: true },
       { cycle: "24", eol: "2026-09-30", latest: "24.14.0", lts: true },

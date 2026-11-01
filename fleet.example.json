@@ -1,0 +1,20 @@
+{
+  "ingestTokenEnv": "SCOUT_FLEET_INGEST_TOKEN",
+  "digestTimes": ["08:00", "18:00"],
+  "policy": {
+    "quietHours": { "start": "22:00", "end": "07:00", "timezone": "local" },
+    "escalateAfterMinutes": 30,
+    "escalateEveryMinutes": 120,
+    "flapReopens": 3,
+    "flapWindowMinutes": 60,
+    "flapQuietMinutes": 60
+  },
+  "expected": [
+    { "host": "desktop", "component": "backup", "everyMinutes": 1440, "graceMinutes": 30, "since": "2026-01-01T00:00:00.000Z" }
+  ],
+  "notifiers": [
+    { "type": "desktop" },
+    { "type": "webhook", "urlEnv": "SCOUT_FLEET_WEBHOOK_URL" },
+    { "type": "command", "command": ["node", "-e", "process.stdin.resume()"] }
+  ]
+}

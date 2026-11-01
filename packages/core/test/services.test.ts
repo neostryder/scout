@@ -187,12 +187,12 @@ test("a failed transaction rolls back service rows and events", (t) => {
   assert.deepEqual(events(db), []);
 });
 
-test("the additive services schema leaves version 3 and existing data intact", (t) => {
+test("the additive services schema leaves version 4 and existing data intact", (t) => {
   const db = seed(t);
   recordServices(db, "hub", result([service]), T);
   db.exec(SCHEMA_SQL);
-  assert.equal(SCHEMA_VERSION, 3);
-  assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "3");
+  assert.equal(SCHEMA_VERSION, 4);
+  assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "4");
   assert.equal(listServices(db).length, 1);
 });
 

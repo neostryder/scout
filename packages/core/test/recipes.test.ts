@@ -147,7 +147,7 @@ test("an existing actions table gains recipe targets while preserving audit rows
     const recipe = createAction(reopened, { ...audit, target: "recipe", mechanism: "recipe", command: "node app.js" }, {});
     assert.equal(recipe.target, "recipe");
     assert.equal(reopened.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()!.value, String(SCHEMA_VERSION));
-    assert.equal(SCHEMA_VERSION, 3);
+    assert.equal(SCHEMA_VERSION, 4);
   } finally { reopened.close(); }
 });
 

@@ -337,6 +337,20 @@ Each beat is also sent to the `relay-heartbeat` Cloudflare Worker, which can not
 
 When the hub starts and finds its last heartbeat more than 5 minutes old, it records a `monitor-gap` outage, "Scout was not running", that covers the silence. An outage of the hub machine itself shows up this way once the machine is back. While the whole hub machine is down, nothing can send a notice: the watchdog covers a hub process that hangs or stops.
 
+## Fleet failure alerts
+
+Fleet alerts stay off until the hub finds a config file. Copy `fleet.example.json` from the repo root to `.scout-data/fleet.json`, which git ignores, and fill it in. The file never holds the ingest token or the webhook address. Instead, it names the environment variables that hold them through `ingestTokenEnv` and `urlEnv`, for example `SCOUT_FLEET_INGEST_TOKEN` and `SCOUT_FLEET_WEBHOOK_URL`.
+
+Set the token variable on the hub and on every machine that posts packets. The hub answers 503 while no token is configured and 401 when a machine sends the wrong one.
+
+To watch a job, run it through the shell wrapper at `tools/fleet/scout-run.sh` or the PowerShell wrapper at `tools/fleet/scout-run.ps1`. The wrapper times the command and posts a packet when the command fails or runs past `--timeout-seconds`. With `--expect-output`, a run that prints nothing also counts as a failure. The wrapped command does not inherit the token or the hub address.
+
+```
+scout-run.sh --fleet-host <name> --component <name> [--timeout-seconds N] [--expect-output] [--failure-class C] -- <command>
+```
+
+A high incident notifies you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. Open incidents are listed at `GET /api/fleet/incidents`. The portal does not have an incidents page yet.
+
 ## Resource meters
 
 The Resources view sits beside Services in the page's top navigation and shows how busy each machine is. Each machine gets a card titled with its name, showing its operating system, how old the reading is ("Updated 8 s ago"), and a one-line summary such as "Processor 12%, Memory 38%, Video memory 44%".
