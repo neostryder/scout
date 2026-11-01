@@ -340,6 +340,7 @@ export class FleetService {
   private triageNoise = new Map<string, number>();
   private healing = new Set<number>();
   private cached: FleetFile | null = null;
+  private configErrors = new Set<string>();
   private stamp = "";
   private timer: TimerHandle | undefined;
   private retries: TimerHandle[] = [];
@@ -385,6 +386,13 @@ export class FleetService {
     if (!this.cached || stamp !== this.stamp) {
       this.stamp = stamp;
       this.cached = loadFleetConfig(this.configPath, this.env);
+      if (this.cached.fileError) {
+        const detail = this.cached.fileErrorDetail ?? this.cached.fileError;
+        if (!this.configErrors.has(detail)) {
+          this.configErrors.add(detail);
+          this.log(`fleet file ignored: ${detail}`);
+        }
+      }
     }
     return this.cached;
   }
@@ -515,7 +523,30 @@ export class FleetService {
     const nowDate = this.now();
     const now = nowDate.toISOString();
     const policy = resolvePolicy(file.policy);
-    const decisions: FleetDecision[] = [...sweepEscalations(this.db, now, file.policy)];
+    const decisions: FleetDecision[] = [];
+    const configFingerprint = fingerprint("Eru", "fleet config", "dead");
+    const configIncident = incidentByFingerprint(this.db, configFingerprint);
+    if (file.fileError || (configIncident && configIncident.state !== "resolved")) {
+      const packet: IncidentPacket = {
+        version: 1,
+        host: "Eru",
+        component: "fleet config",
+        severity: "critical",
+        failureClass: "dead",
+        firstSeen: configIncident?.firstSeen ?? now,
+        lastSeen: now,
+        count: 1,
+        fingerprint: configFingerprint,
+        summary: file.fileError ? `fleet.json is invalid and ignored: ${file.fileErrorDetail ?? file.fileError}` : "fleet.json loaded cleanly",
+        evidence: {},
+        redaction: { applied: false, rules: [] },
+        ownerChat: null,
+        runbook: null,
+        recovered: !file.fileError,
+      };
+      decisions.push(...ingest(this.db, packet, now, file.policy));
+    }
+    decisions.push(...sweepEscalations(this.db, now, file.policy));
     const lastSeen = new Map<string, string | null>();
     for (const row of file.expected) {
       const meta = this.db.prepare("SELECT value FROM meta WHERE key = ?").get(heartbeatMetaKey(row.host, row.component)) as { value: string } | undefined;

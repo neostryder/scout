@@ -12,6 +12,7 @@ test("a missing fleet file is empty and a malformed or secret-bearing file is ig
   try {
     const missing = loadFleetConfig(join(dir, "absent.json"));
     assert.equal(missing.fileError, null);
+    assert.equal(missing.fileErrorDetail, null);
     assert.deepEqual(missing.notifiers, []);
     assert.deepEqual(missing.digestTimes, ["08:00", "18:00"]);
     missing.digestTimes.push("09:00");
@@ -21,6 +22,7 @@ test("a missing fleet file is empty and a malformed or secret-bearing file is ig
     const bad = join(dir, "bad.json");
     writeFileSync(bad, "{", "utf8");
     assert.match(loadFleetConfig(bad).fileError ?? "", /malformed/);
+    assert.equal(loadFleetConfig(bad).fileErrorDetail, "the file is not valid JSON");
     const secret = join(dir, "secret.json");
     writeFileSync(secret, JSON.stringify({ url: "https://example.test/hook" }), "utf8");
     assert.ok(loadFleetConfig(secret).fileError);
@@ -54,6 +56,7 @@ test("the example fleet file loads with no embedded address", () => {
   const path = fileURLToPath(new URL("../../../fleet.example.json", import.meta.url));
   const file = loadFleetConfig(path, () => undefined);
   assert.equal(file.fileError, null);
+  assert.equal(file.fileErrorDetail, null);
   assert.equal(file.policy?.quietHours?.timezone, "local");
   assert.deepEqual(file.digestTimes, ["08:00", "18:00"]);
   assert.equal(file.ingestTokenEnv, "SCOUT_FLEET_INGEST_TOKEN");
@@ -155,6 +158,97 @@ test("fleet file accepts remote alongside other sources and rejects malformed re
       assert.equal(broken.sources, undefined);
       assert.equal(broken.ingestTokenEnv, null);
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("remote validation details identify the check and reason without command or pattern values", () => {
+  const dir = mkdtempSync(join(root, "scout-fleet-detail-"));
+  try {
+    const path = join(dir, "fleet.json");
+    const check = { machine: "example", component: "hermes cron", argv: ["private-command", "private-token", "private\nargument"] };
+    writeFileSync(path, JSON.stringify({ sources: { remote: { checks: [check] } } }));
+    assert.equal(loadFleetConfig(path).fileErrorDetail, 'sources.remote.checks[0] (component "hermes cron"): argv part 3 holds a control character such as a newline');
+    const valid = { ...check, argv: ["private-command"] };
+    const location = 'sources.remote.checks[0] (component "hermes cron")';
+    const rows: [unknown, string, string][] = [
+      [null, "sources.remote.checks[0]", "check must be an object"],
+      [{ ...valid, unknown: "private-value" }, location, "check holds an unknown field"],
+      [{ ...valid, machine: "private invalid machine" }, location, "machine must use 1 through 64 lowercase letters, digits, underscores or hyphens and start with a letter or digit"],
+      [{ ...valid, component: "private\ncomponent" }, "sources.remote.checks[0]", "component must be a non-empty string of at most 180 characters without control characters"],
+      ...[null, [], Array(21).fill("private-argument")].map((argv): [unknown, string, string] => [{ ...valid, argv }, location, "argv must be a list of 1 through 20 strings"]),
+      ...[[null], [""], ["x".repeat(501)]].map((argv): [unknown, string, string] => [{ ...valid, argv }, location, "argv part 1 must be a string of 1 through 500 characters"]),
+      [{ ...valid, argv: ["private\u007fargument"] }, location, "argv part 1 holds a control character such as a newline"],
+      [{ ...valid, timeoutSeconds: 0 }, location, "timeoutSeconds must be an integer from 1 through 120"],
+      [{ ...valid, failureClass: "private-value" }, location, "failureClass is not a recognized failure class"],
+      [{ ...valid, severity: "private-value" }, location, "severity must be critical, warning or info"],
+      [{ ...valid, unreachable: "private-value" }, location, "unreachable must be report or ignore"],
+      ...["pattern", "ignore", "mustMatch"].flatMap((key): [unknown, string, string][] => [
+        [{ ...valid, [key]: 1 }, location, `${key} must be a string of at most 200 characters`],
+        [{ ...valid, [key]: "x".repeat(201) }, location, `${key} must be a string of at most 200 characters`],
+        [{ ...valid, [key]: "[private-pattern" }, location, `${key} holds an invalid regular expression`],
+      ]),
+    ];
+    const cases: [unknown, string][] = [
+      ...rows.map(([row, where, reason]): [unknown, string] => [{ checks: [row] }, `${where}: ${reason}`]),
+      [null, "sources.remote: remote must be an object"],
+      [{ unknown: "private-value" }, "sources.remote: remote holds an unknown field"],
+      [{ enabled: "private-value" }, "sources.remote: enabled must be a boolean"],
+      [{ checks: "private-value" }, "sources.remote.checks: checks must be a list of at most 60 checks"],
+      [{ checks: Array(61).fill(valid) }, "sources.remote.checks: checks must be a list of at most 60 checks"],
+      [{ checks: [valid, valid] }, "sources.remote.checks[1]: duplicate machine and component"],
+      [{ checks: [{ ...valid, argv: ["x".repeat(65_536)] }] }, "sources.remote: remote exceeds 65536 characters"],
+    ];
+    for (const [remote, detail] of cases) {
+      writeFileSync(path, JSON.stringify({ sources: { remote } }));
+      const file = loadFleetConfig(path);
+      assert.match(file.fileError ?? "", /malformed/);
+      assert.equal(file.fileErrorDetail, detail);
+      assert.doesNotMatch(file.fileErrorDetail!, /private|x{10}/);
+    }
+    writeFileSync(path, JSON.stringify({ sources: { remote: { checks: [valid] } } }));
+    assert.equal(loadFleetConfig(path).fileErrorDetail, null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("task validation details and other invalid sections never include config values", () => {
+  const dir = mkdtempSync(join(root, "scout-fleet-detail-"));
+  try {
+    const path = join(dir, "fleet.json");
+    const tasks: [unknown, string][] = [
+      [null, "tasks must be an object"],
+      [{ unknown: "private-value" }, "tasks holds an unknown field"],
+      [{ enabled: "private-value" }, "enabled must be a boolean"],
+      [{ ignore: "private-pattern" }, "ignore must be a list of at most 50 regular expressions"],
+      [{ ignore: Array(51).fill("private-pattern") }, "ignore must be a list of at most 50 regular expressions"],
+      [{ ignore: [null] }, "ignore entries must be strings of at most 200 characters"],
+      [{ ignore: ["x".repeat(201)] }, "ignore entries must be strings of at most 200 characters"],
+      [{ ignore: ["[private-pattern"] }, "ignore holds an invalid regular expression"],
+      [{ expected: "private-value" }, "expected must be a list of at most 50 tasks"],
+      [{ failureClass: "private-value" }, "failureClass is not a recognized failure class"],
+      [{ expected: [null] }, "expected[0] must be an object"],
+      [{ expected: [{ unknown: "private-value" }] }, "expected[0] holds an unknown field"],
+      [{ expected: [{ name: "private\nname", maxAgeHours: 1 }] }, "expected[0].name must be a non-empty string of at most 195 characters without control characters"],
+      [{ expected: [{ name: "private-name", maxAgeHours: 0 }] }, "expected[0].maxAgeHours must be an integer from 1 through 8760"],
+    ];
+    for (const [value, reason] of tasks) {
+      writeFileSync(path, JSON.stringify({ sources: { local: { tasks: value } } }));
+      assert.equal(loadFleetConfig(path).fileErrorDetail, `sources.local.tasks: ${reason}`);
+    }
+    const sections = ["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources"];
+    for (const section of sections) {
+      writeFileSync(path, JSON.stringify({ [section]: null }));
+      assert.equal(loadFleetConfig(path).fileErrorDetail, `section ${section} is invalid`);
+    }
+    for (const section of ["catalog", "local"]) {
+      writeFileSync(path, JSON.stringify({ sources: { [section]: { unknown: "private-value" } } }));
+      assert.equal(loadFleetConfig(path).fileErrorDetail, `section sources.${section} is invalid`);
+    }
+    writeFileSync(path, JSON.stringify({ sources: { catalog: { tasks: { include: ["[private-pattern"] } } } }));
+    assert.equal(loadFleetConfig(path).fileErrorDetail, "section sources.catalog is invalid");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

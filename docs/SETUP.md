@@ -526,6 +526,10 @@ Every open incident is sent again on each tick, so its last-seen time and count 
 
 The hub reads at most 64 KB per stream from each command. Summaries stay under 300 characters and excerpts under 1500, and secrets are redacted before anything is stored.
 
+### Checking the fleet file
+
+`check-config` checks the fleet file: `node packages/cli/src/main.ts fleet check-config [path]`, with `path` defaulting to `.scout-data/fleet.json`. It prints `fleet config ok: N remote checks, M local probes enabled` and exits 0, or prints `fleet config invalid: <detail>` to stderr and exits 1. The detail names the entry and the reason without echoing values. Run it before saving edits, because one invalid entry makes the hub ignore the whole file and stops every fleet source. While the file is invalid, the hub logs `fleet file ignored: <detail>` and holds a critical `fleet config` incident for Eru with the summary `fleet.json is invalid and ignored: <detail>`, shown in the Incidents tab and Telegram. The incident resolves with a recovery notice once the file loads cleanly. Each part of a remote check's `argv` must be a single line with no newline or other control character, so join a multi-line script into one line with semicolons.
+
 ### Reading a meter
 
 Each bar has a tick at 85 percent. At 70 percent and above, the bar and the number turn amber and the row says "High". At 85 percent and above they turn red, the bar is striped, and the row says "Very high". The number and the word are always shown, so color is never the only signal.

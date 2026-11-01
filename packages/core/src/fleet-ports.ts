@@ -140,6 +140,7 @@ export interface FleetFile {
   ingestTokenEnv: string | null;
   digestTimes: string[];
   fileError: string | null;
+  fileErrorDetail?: string | null;
   sources?: { catalog?: FleetCatalogConfig; local?: FleetLocalConfig; remote?: FleetRemoteConfig };
 }
 
@@ -153,6 +154,7 @@ const EMPTY: FleetFile = {
   ingestTokenEnv: null,
   digestTimes: ["08:00", "18:00"],
   fileError: null,
+  fileErrorDetail: null,
 };
 
 const FILE_ERROR = "The fleet file is malformed or unreadable; fleet settings were ignored.";
@@ -161,8 +163,8 @@ const TZ = /^([+-])\d{2}:\d{2}$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SECRET_FIELDS = new Set(["url", "token", "webhook", "authorization", "secret", "password"]);
 
-function broken(): FleetFile {
-  return { ...EMPTY, notifiers: [], healers: [], expected: [], digestTimes: ["08:00", "18:00"], fileError: FILE_ERROR };
+function broken(detail: string): FleetFile {
+  return { ...EMPTY, notifiers: [], healers: [], expected: [], digestTimes: ["08:00", "18:00"], fileError: FILE_ERROR, fileErrorDetail: detail };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -284,7 +286,8 @@ function catalogConfig(value: unknown): FleetCatalogConfig | null {
   return result;
 }
 
-export function localConfig(value: unknown): FleetLocalConfig | null {
+export function localConfig(value: unknown, onInvalid?: (detail: string) => void): FleetLocalConfig | null {
+  const invalidTasks = (reason: string): null => { onInvalid?.(`sources.local.tasks: ${reason}`); return null; };
   const keys = (row: Record<string, unknown>, allowed: string[]): boolean => Object.keys(row).every((key) => allowed.includes(key));
   const text = (item: unknown, max: number): item is string => typeof item === "string" && item.trim().length > 0 && item.length <= max && !/[\x00-\x1f]/.test(item);
   const integer = (item: unknown, max: number): item is number => typeof item === "number" && Number.isSafeInteger(item) && item >= 1 && item <= max;
@@ -320,16 +323,23 @@ export function localConfig(value: unknown): FleetLocalConfig | null {
   }
   if (value.tasks !== undefined) {
     const tasks = value.tasks;
-    if (!isRecord(tasks) || !keys(tasks, ["enabled", "ignore", "expected", "failureClass"])) return null;
-    if (tasks.enabled !== undefined && typeof tasks.enabled !== "boolean") return null;
+    if (!isRecord(tasks)) return invalidTasks("tasks must be an object");
+    if (!keys(tasks, ["enabled", "ignore", "expected", "failureClass"])) return invalidTasks("tasks holds an unknown field");
+    if (tasks.enabled !== undefined && typeof tasks.enabled !== "boolean") return invalidTasks("enabled must be a boolean");
     const ignore = tasks.ignore === undefined ? [] : tasks.ignore;
     const expected = tasks.expected === undefined ? [] : tasks.expected;
     const failureClass = tasks.failureClass === undefined ? "ran-failed" : tasks.failureClass;
-    if (!Array.isArray(ignore) || ignore.length > 50 || !ignore.every(regex)) return null;
-    if (!Array.isArray(expected) || expected.length > 50 || !FAILURE_CLASSES.includes(failureClass as FailureClass)) return null;
+    if (!Array.isArray(ignore) || ignore.length > 50) return invalidTasks("ignore must be a list of at most 50 regular expressions");
+    if (ignore.some((item) => typeof item !== "string" || item.length > 200)) return invalidTasks("ignore entries must be strings of at most 200 characters");
+    if (!ignore.every(regex)) return invalidTasks("ignore holds an invalid regular expression");
+    if (!Array.isArray(expected) || expected.length > 50) return invalidTasks("expected must be a list of at most 50 tasks");
+    if (!FAILURE_CLASSES.includes(failureClass as FailureClass)) return invalidTasks("failureClass is not a recognized failure class");
     result.tasks = { enabled: tasks.enabled === true, ignore, expected: [], failureClass: failureClass as FailureClass };
-    for (const row of expected) {
-      if (!isRecord(row) || !keys(row, ["name", "maxAgeHours"]) || !text(row.name, 195) || !integer(row.maxAgeHours, 8760)) return null;
+    for (const [index, row] of expected.entries()) {
+      if (!isRecord(row)) return invalidTasks(`expected[${index}] must be an object`);
+      if (!keys(row, ["name", "maxAgeHours"])) return invalidTasks(`expected[${index}] holds an unknown field`);
+      if (!text(row.name, 195)) return invalidTasks(`expected[${index}].name must be a non-empty string of at most 195 characters without control characters`);
+      if (!integer(row.maxAgeHours, 8760)) return invalidTasks(`expected[${index}].maxAgeHours must be an integer from 1 through 8760`);
       result.tasks.expected.push({ name: row.name, maxAgeHours: row.maxAgeHours });
     }
   }
@@ -370,39 +380,52 @@ export function localConfig(value: unknown): FleetLocalConfig | null {
   return result;
 }
 
-export function remoteConfig(value: unknown): FleetRemoteConfig | null {
+export function remoteConfig(value: unknown, onInvalid?: (detail: string) => void): FleetRemoteConfig | null {
+  const invalid = (where: string, reason: string): null => { onInvalid?.(`${where}: ${reason}`); return null; };
   const keys = (row: Record<string, unknown>, allowed: string[]): boolean => Object.keys(row).every((key) => allowed.includes(key));
   const text = (item: unknown, max: number): item is string => typeof item === "string" && item.trim().length > 0 && item.length <= max && !/[\x00-\x1f\x7f-\x9f]/.test(item);
   const regex = (item: unknown): item is string => {
     if (typeof item !== "string" || item.length > 200) return false;
     try { new RegExp(item, "i"); return true; } catch { return false; }
   };
-  if (!isRecord(value) || !keys(value, ["enabled", "checks"]) || JSON.stringify(value).length > 65_536) return null;
-  if (value.enabled !== undefined && typeof value.enabled !== "boolean") return null;
+  if (!isRecord(value)) return invalid("sources.remote", "remote must be an object");
+  if (!keys(value, ["enabled", "checks"])) return invalid("sources.remote", "remote holds an unknown field");
+  if (JSON.stringify(value).length > 65_536) return invalid("sources.remote", "remote exceeds 65536 characters");
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") return invalid("sources.remote", "enabled must be a boolean");
   const result: FleetRemoteConfig = { checks: [] };
   if (typeof value.enabled === "boolean") result.enabled = value.enabled;
   const checks = value.checks === undefined ? [] : value.checks;
-  if (!Array.isArray(checks) || checks.length > 60) return null;
+  if (!Array.isArray(checks) || checks.length > 60) return invalid("sources.remote.checks", "checks must be a list of at most 60 checks");
   const seen = new Set<string>();
-  for (const row of checks) {
-    if (!isRecord(row) || !keys(row, ["machine", "component", "argv", "timeoutSeconds", "failureClass", "severity", "pattern", "ignore", "mustMatch", "unreachable"])) return null;
-    if (!text(row.machine, 64) || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(row.machine) || !text(row.component, 180)) return null;
-    if (!Array.isArray(row.argv) || row.argv.length < 1 || row.argv.length > 20 || !row.argv.every((part) => typeof part === "string" && part.length >= 1 && part.length <= 500 && !/[\x00-\x1f\x7f-\x9f]/.test(part))) return null;
+  for (const [index, row] of checks.entries()) {
+    const where = `sources.remote.checks[${index}]`;
+    if (!isRecord(row)) return invalid(where, "check must be an object");
+    const location = text(row.component, 180) ? `${where} (component ${JSON.stringify(row.component)})` : where;
+    if (!keys(row, ["machine", "component", "argv", "timeoutSeconds", "failureClass", "severity", "pattern", "ignore", "mustMatch", "unreachable"])) return invalid(location, "check holds an unknown field");
+    if (!text(row.machine, 64) || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(row.machine)) return invalid(location, "machine must use 1 through 64 lowercase letters, digits, underscores or hyphens and start with a letter or digit");
+    if (!text(row.component, 180)) return invalid(where, "component must be a non-empty string of at most 180 characters without control characters");
+    if (!Array.isArray(row.argv) || row.argv.length < 1 || row.argv.length > 20) return invalid(location, "argv must be a list of 1 through 20 strings");
+    for (const [partIndex, part] of row.argv.entries()) {
+      if (typeof part !== "string" || part.length < 1 || part.length > 500) return invalid(location, `argv part ${partIndex + 1} must be a string of 1 through 500 characters`);
+      if (/[\x00-\x1f\x7f-\x9f]/.test(part)) return invalid(location, `argv part ${partIndex + 1} holds a control character such as a newline`);
+    }
     const timeoutSeconds = row.timeoutSeconds === undefined ? 20 : row.timeoutSeconds;
     const failureClass = row.failureClass === undefined ? "ran-failed" : row.failureClass;
     const unreachable = row.unreachable === undefined ? "report" : row.unreachable;
-    if (typeof timeoutSeconds !== "number" || !Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 120) return null;
-    if (!FAILURE_CLASSES.includes(failureClass as FailureClass) || (row.severity !== undefined && !SEVERITIES.includes(row.severity as Severity))) return null;
-    if (unreachable !== "report" && unreachable !== "ignore") return null;
-    const entry: FleetRemoteCheckConfig = { machine: row.machine, component: row.component, argv: row.argv, timeoutSeconds, failureClass: failureClass as FailureClass, unreachable };
+    if (typeof timeoutSeconds !== "number" || !Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 120) return invalid(location, "timeoutSeconds must be an integer from 1 through 120");
+    if (!FAILURE_CLASSES.includes(failureClass as FailureClass)) return invalid(location, "failureClass is not a recognized failure class");
+    if (row.severity !== undefined && !SEVERITIES.includes(row.severity as Severity)) return invalid(location, "severity must be critical, warning or info");
+    if (unreachable !== "report" && unreachable !== "ignore") return invalid(location, "unreachable must be report or ignore");
+    const entry: FleetRemoteCheckConfig = { machine: row.machine, component: row.component, argv: row.argv as string[], timeoutSeconds, failureClass: failureClass as FailureClass, unreachable };
     if (row.severity !== undefined) entry.severity = row.severity as Severity;
     for (const key of ["pattern", "ignore", "mustMatch"] as const) {
       if (row[key] === undefined) continue;
-      if (!regex(row[key])) return null;
+      if (typeof row[key] !== "string" || row[key].length > 200) return invalid(location, `${key} must be a string of at most 200 characters`);
+      if (!regex(row[key])) return invalid(location, `${key} holds an invalid regular expression`);
       entry[key] = row[key];
     }
     const key = `${entry.machine}\n${entry.component}`;
-    if (seen.has(key)) return null;
+    if (seen.has(key)) return invalid(where, "duplicate machine and component");
     seen.add(key);
     result.checks.push(entry);
   }
@@ -414,94 +437,115 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
   try {
     text = readFileSync(path, "utf8");
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { ...EMPTY, notifiers: [], healers: [], expected: [], digestTimes: ["08:00", "18:00"] } : broken();
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { ...EMPTY, notifiers: [], healers: [], expected: [], digestTimes: ["08:00", "18:00"] } : broken("the file could not be read");
   }
+  let data: unknown;
   try {
-    const data: unknown = JSON.parse(text);
-    if (!isRecord(data)) return broken();
-    if (Object.keys(data).some((key) => SECRET_FIELDS.has(key))) return broken();
+    data = JSON.parse(text);
+  } catch {
+    return broken("the file is not valid JSON");
+  }
+  let section = "file";
+  let detail: string | null = null;
+  const onInvalid = (reason: string) => { detail = reason; };
+  const invalid = () => broken(detail ?? `section ${section} is invalid`);
+  try {
+    if (!isRecord(data)) return invalid();
+    if (Object.keys(data).some((key) => SECRET_FIELDS.has(key))) return invalid();
     const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources"]);
-    if (Object.keys(data).some((key) => !allowed.has(key))) return broken();
+    if (Object.keys(data).some((key) => !allowed.has(key))) return invalid();
     let sources: FleetFile["sources"];
     if (data.sources !== undefined) {
-      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog" && key !== "local" && key !== "remote")) return broken();
+      section = "sources";
+      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog" && key !== "local" && key !== "remote")) return invalid();
       sources = {};
       if (data.sources.catalog !== undefined) {
+        section = "sources.catalog";
         const catalog = catalogConfig(data.sources.catalog);
-        if (!catalog) return broken();
+        if (!catalog) return invalid();
         sources.catalog = catalog;
       }
       if (data.sources.local !== undefined) {
-        const local = localConfig(data.sources.local);
-        if (!local) return broken();
+        section = "sources.local";
+        const local = localConfig(data.sources.local, onInvalid);
+        if (!local) return invalid();
         sources.local = local;
       }
       if (data.sources.remote !== undefined) {
-        const remote = remoteConfig(data.sources.remote);
-        if (!remote) return broken();
+        section = "sources.remote";
+        const remote = remoteConfig(data.sources.remote, onInvalid);
+        if (!remote) return invalid();
         sources.remote = remote;
       }
     }
+    section = "policy";
     const parsedPolicy = data.policy === undefined ? null : policy(data.policy);
-    if (data.policy !== undefined && parsedPolicy === null) return broken();
+    if (data.policy !== undefined && parsedPolicy === null) return invalid();
     const notifiers: FleetNotifierConfig[] = [];
     if (data.notifiers !== undefined) {
-      if (!Array.isArray(data.notifiers)) return broken();
+      section = "notifiers";
+      if (!Array.isArray(data.notifiers)) return invalid();
       for (let index = 0; index < data.notifiers.length; index += 1) {
         const row = notifier(data.notifiers[index], index, env);
-        if (!row) return broken();
+        if (!row) return invalid();
         notifiers.push(row);
       }
     }
     let investigator: FleetCommandHook | null = null;
     if (data.investigator !== undefined) {
+      section = "investigator";
       investigator = hook(data.investigator);
-      if (!investigator) return broken();
+      if (!investigator) return invalid();
     }
     let triage: FleetCommandHook | null = null;
     if (data.triage !== undefined) {
+      section = "triage";
       triage = hook(data.triage);
-      if (!triage) return broken();
+      if (!triage) return invalid();
     }
     const healers: FleetHealerConfig[] = [];
     if (data.healers !== undefined) {
-      if (!Array.isArray(data.healers)) return broken();
+      section = "healers";
+      if (!Array.isArray(data.healers)) return invalid();
       const allowed = new Set(["id", "command", "host", "component", "failureClass", "cooldownMinutes", "maxPerDay", "timeoutSeconds"]);
       const exact = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f*?^$]/.test(value) && !/^\/.*\/[a-z]*$/.test(value);
       const integer = (value: unknown, max: number): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= max;
       for (const row of data.healers) {
-        if (!isRecord(row) || typeof row.id !== "string" || row.id.length === 0 || row.id.length > 80) return broken();
-        if (Object.keys(row).some((key) => !allowed.has(key)) || healers.some((healer) => healer.id === row.id)) return broken();
+        if (!isRecord(row) || typeof row.id !== "string" || row.id.length === 0 || row.id.length > 80) return invalid();
+        if (Object.keys(row).some((key) => !allowed.has(key)) || healers.some((healer) => healer.id === row.id)) return invalid();
         const command = commandList(row.command);
-        if (!command || !exact(row.host, 200) || !exact(row.component, 180) || !FAILURE_CLASSES.includes(row.failureClass as FailureClass)) return broken();
+        if (!command || !exact(row.host, 200) || !exact(row.component, 180) || !FAILURE_CLASSES.includes(row.failureClass as FailureClass)) return invalid();
         const cooldownMinutes = row.cooldownMinutes === undefined ? 60 : row.cooldownMinutes;
         const maxPerDay = row.maxPerDay === undefined ? 3 : row.maxPerDay;
         const timeoutSeconds = row.timeoutSeconds === undefined ? 120 : row.timeoutSeconds;
-        if (!integer(cooldownMinutes, 1440) || !integer(maxPerDay, 24) || !integer(timeoutSeconds, 300)) return broken();
+        if (!integer(cooldownMinutes, 1440) || !integer(maxPerDay, 24) || !integer(timeoutSeconds, 300)) return invalid();
         healers.push({ id: row.id, command, host: row.host, component: row.component, failureClass: row.failureClass as FailureClass, cooldownMinutes, maxPerDay, timeoutSeconds });
       }
     }
     const expected: ExpectedRun[] = [];
     if (data.expected !== undefined) {
-      if (!Array.isArray(data.expected)) return broken();
+      section = "expected";
+      if (!Array.isArray(data.expected)) return invalid();
       for (const row of data.expected) {
         const parsed = expectedRow(row);
-        if (!parsed) return broken();
+        if (!parsed) return invalid();
         expected.push(parsed);
       }
     }
     let ingestTokenEnv: string | null = null;
     if (data.ingestTokenEnv !== undefined) {
-      if (typeof data.ingestTokenEnv !== "string" || !ENV_NAME.test(data.ingestTokenEnv)) return broken();
+      section = "ingestTokenEnv";
+      if (typeof data.ingestTokenEnv !== "string" || !ENV_NAME.test(data.ingestTokenEnv)) return invalid();
       ingestTokenEnv = data.ingestTokenEnv;
     }
     let digestTimes = ["08:00", "18:00"];
     if (data.digestTimes !== undefined) {
-      if (!Array.isArray(data.digestTimes) || data.digestTimes.length === 0 || data.digestTimes.length > 24 || data.digestTimes.some((item) => typeof item !== "string" || !HM.test(item))) return broken();
+      section = "digestTimes";
+      if (!Array.isArray(data.digestTimes) || data.digestTimes.length === 0 || data.digestTimes.length > 24 || data.digestTimes.some((item) => typeof item !== "string" || !HM.test(item))) return invalid();
       digestTimes = data.digestTimes as string[];
     }
-    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null, ...(sources ? { sources } : {}) };
+    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null, fileErrorDetail: null, ...(sources ? { sources } : {}) };
   } catch {
-    return broken();
+    return invalid();
   }
 }
