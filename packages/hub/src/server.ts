@@ -34,7 +34,7 @@ import { HubBackupWatch, type BackupWatchOptions } from "./backup-watch.ts";
 import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import { HubStacks } from "./stacks.ts";
-import { fleetApi, fleetPackets, type FleetService } from "./fleet.ts";
+import { fleetActions, fleetApi, fleetPackets, type FleetService } from "./fleet.ts";
 
 // Development server: loopback only and no sign-in. It refuses any Host header that is not a loopback name, which
 // stops a web page in another tab from reaching it through DNS rebinding. Proposal decisions and update jobs need a
@@ -281,7 +281,12 @@ export function createHub(options: HubOptions): Server {
     const end = lag.begin(`${req.method} ${url.pathname}`);
     res.once("finish", end);
     res.once("close", end);
-    if (!hostAllowed(req.headers.host)) return send(res, 421, "misdirected request", "text/plain");
+    const fleetAction = url.pathname === "/api/fleet/actions";
+    if (!hostAllowed(req.headers.host) && !(fleetAction && isLoopbackHost(req.headers.host))) return send(res, 421, "misdirected request", "text/plain");
+    if (fleetAction) {
+      if (!options.fleet) return json(res, 404, { error: "no such route" });
+      return fleetActions(options.fleet, req, res, json);
+    }
     // Posting machines authenticate with the ingest token. They do not carry a Cloudflare Access JWT.
     if (req.method === "POST" && url.pathname === "/api/fleet/packets") {
       if (!options.fleet) return json(res, 404, { error: "no such route" });

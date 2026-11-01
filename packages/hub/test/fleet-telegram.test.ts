@@ -13,7 +13,7 @@ const { buildMessage } = await import(notifyUrl.href);
 const { parseCallback } = await import(actionUrl.href);
 const token = randomBytes(24).toString("hex");
 const chat = randomBytes(12).toString("hex");
-const env = { SCOUT_TEST_TELEGRAM_TOKEN: token, SCOUT_TEST_TELEGRAM_CHAT: chat };
+const env = { SCOUT_TEST_TELEGRAM_TOKEN: token, SCOUT_TEST_TELEGRAM_CHAT: chat, SCOUT_FLEET_INGEST_TOKEN: token };
 const notifyArgs = ["--token-env", "SCOUT_TEST_TELEGRAM_TOKEN", "--chat-env", "SCOUT_TEST_TELEGRAM_CHAT"];
 
 function notice(overrides: Partial<FleetNotice> = {}): FleetNotice {
@@ -48,11 +48,11 @@ function run(script: URL, args: string[], stdin = "", overrides: NodeJS.ProcessE
 }
 
 async function server(t: TestContext, status = 200, response: unknown = { ok: true }) {
-  const requests: { method: string | undefined; path: string | undefined; contentType: string | undefined; raw: string }[] = [];
+  const requests: { method: string | undefined; path: string | undefined; contentType: string | undefined; authorization: string | undefined; raw: string }[] = [];
   const http = createServer(async (req, res) => {
     let raw = "";
     for await (const chunk of req) raw += chunk.toString();
-    requests.push({ method: req.method, path: req.url, contentType: req.headers["content-type"], raw });
+    requests.push({ method: req.method, path: req.url, contentType: req.headers["content-type"], authorization: req.headers.authorization, raw });
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(response));
   });
@@ -141,7 +141,7 @@ test("notifier hides the token when the connection is refused", async (t) => {
   assert.match(result.stderr, /^telegram request failed(?: ECONNREFUSED)?\n$/);
 });
 
-for (const name of Object.keys(env)) {
+for (const name of ["SCOUT_TEST_TELEGRAM_TOKEN", "SCOUT_TEST_TELEGRAM_CHAT"]) {
   test(`notifier names the unset variable ${name}`, async () => {
     const result = await run(notifyUrl, notifyArgs, JSON.stringify(notice()), { [name]: "" });
     assert.equal(result.code, 2);
@@ -176,32 +176,30 @@ test("callback parser accepts only the three actions and strict positive ids", (
 });
 
 for (const action of ["investigate", "snooze", "mute"] as const) {
-  test(`relay posts ${action} to the matching hub route`, async (t) => {
-    const mock = await server(t, 200, action === "investigate" ? { ok: true } : { incident: { id: 42 } });
+  test(`relay posts ${action} to the token-authenticated actions route`, async (t) => {
+    const messages = { investigate: "Investigation started: note-1", snooze: "Snoozed for an hour.", mute: "Muted this rule." };
+    const mock = await server(t, 200, { ok: true, message: messages[action] });
     const result = await run(actionUrl, [`scout:${action}:42`, "--hub", `${mock.url}/`]);
     assert.equal(result.code, 0);
     assert.equal(result.stderr, "");
-    const messages = { investigate: "Investigation started.", snooze: "Snoozed for an hour.", mute: "Muted this rule." };
     assert.equal(result.stdout, `${JSON.stringify({ ok: true, action, incidentId: 42, message: messages[action] })}\n`);
     assert.equal(mock.requests.length, 1);
     const request = mock.requests[0]!;
     assert.equal(request.method, "POST");
-    assert.equal(request.path, `/api/fleet/incidents/42/${action}`);
-    if (action === "investigate") {
-      assert.equal(request.raw, "");
-    } else {
-      assert.equal(request.contentType, "application/json");
-      assert.deepEqual(JSON.parse(request.raw), action === "snooze" ? { minutes: 60 } : { reason: "muted from Telegram" });
-    }
+    assert.equal(request.path, "/api/fleet/actions");
+    assert.equal(request.contentType, "application/json");
+    assert.equal(request.authorization === `Bearer ${token}`, true);
+    assert.deepEqual(JSON.parse(request.raw), { incidentId: 42, action });
+    assert.equal(`${result.stdout}${result.stderr}`.includes(token), false);
   });
 }
 
-test("relay includes a valid actor in the mute reason", async (t) => {
-  const mock = await server(t);
+test("relay includes a valid actor in the action body", async (t) => {
+  const mock = await server(t, 200, { ok: true, message: "Muted this rule." });
   const actor = "Test_actor 1.-";
   const result = await run(actionUrl, ["scout:mute:42", "--hub", mock.url, "--actor", actor]);
   assert.equal(result.code, 0);
-  assert.deepEqual(JSON.parse(mock.requests[0]!.raw), { reason: `muted from Telegram by ${actor}` });
+  assert.deepEqual(JSON.parse(mock.requests[0]!.raw), { incidentId: 42, action: "mute", actor });
 });
 
 test("relay rejects invalid callbacks and actors as usage errors", async () => {
@@ -213,12 +211,56 @@ test("relay rejects invalid callbacks and actors as usage errors", async () => {
   }
 });
 
-for (const [status, response] of [[404, { error: "not found" }], [501, { error: "no investigator configured" }], [200, { ok: false, error: "investigation failed" }]] as const) {
+for (const [status, response] of [[200, { ok: false, message: "not found" }], [200, { ok: false, message: "no investigator configured" }], [200, { ok: false, message: "investigation failed" }]] as const) {
   test(`relay reports the hub error at HTTP ${status}`, async (t) => {
     const mock = await server(t, status, response);
     const result = await run(actionUrl, ["scout:investigate:42", "--hub", mock.url]);
     assert.equal(result.code, 1);
     assert.equal(result.stderr, "");
-    assert.equal(result.stdout, `${JSON.stringify({ ok: false, action: "investigate", incidentId: 42, message: response.error })}\n`);
+    assert.equal(result.stdout, `${JSON.stringify({ ok: false, action: "investigate", incidentId: 42, message: response.message })}\n`);
   });
 }
+
+for (const [status, message] of [[401, "hub refused the token"], [503, "hub has no ingest token configured"]] as const) {
+  test(`relay reports token authentication failure at HTTP ${status}`, async (t) => {
+    const mock = await server(t, status, { error: token });
+    const result = await run(actionUrl, ["scout:mute:42", "--hub", mock.url]);
+    assert.equal(result.code, 1);
+    assert.equal(result.stderr, "");
+    assert.deepEqual(JSON.parse(result.stdout), { ok: false, action: "mute", incidentId: 42, message });
+    assert.equal(`${result.stdout}${result.stderr}`.includes(token), false);
+  });
+}
+
+test("relay reads a custom token variable and names an unset variable", async (t) => {
+  const mock = await server(t, 200, { ok: true, message: "Muted this rule." });
+  const args = ["scout:mute:42", "--hub", mock.url, "--token-env", "SCOUT_TEST_TELEGRAM_TOKEN"];
+  const result = await run(actionUrl, args);
+  assert.equal(result.code, 0);
+  assert.equal(mock.requests[0]!.authorization === `Bearer ${token}`, true);
+  for (const [flags, name] of [[[], "SCOUT_FLEET_INGEST_TOKEN"], [["--token-env", "SCOUT_TEST_TELEGRAM_TOKEN"], "SCOUT_TEST_TELEGRAM_TOKEN"]] as const) {
+    const unset = await run(actionUrl, ["scout:mute:42", ...flags], "", { [name]: "" });
+    assert.equal(unset.code, 2);
+    assert.equal(unset.stdout, "");
+    assert.equal(unset.stderr, `${name} is unset\n`);
+  }
+});
+
+test("relay redacts the token from the hub message", async (t) => {
+  const mock = await server(t, 200, { ok: false, message: `failed ${token}` });
+  const result = await run(actionUrl, ["scout:investigate:42", "--hub", mock.url]);
+  assert.equal(result.code, 1);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), { ok: false, action: "investigate", incidentId: 42, message: "failed [redacted]" });
+  assert.equal(result.stdout.includes(token), false);
+});
+
+test("relay reports a refused connection without the token", async (t) => {
+  const mock = await server(t);
+  await new Promise<void>((resolve, reject) => mock.http.close((error) => error ? reject(error) : resolve()));
+  const result = await run(actionUrl, ["scout:snooze:42", "--hub", mock.url]);
+  assert.equal(result.code, 1);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), { ok: false, action: "snooze", incidentId: 42, message: "hub request failed" });
+  assert.equal(result.stdout.includes(token), false);
+});

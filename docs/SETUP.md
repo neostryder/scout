@@ -359,7 +359,15 @@ To get fleet alerts in Telegram, add this `command` notifier to fleet.json and s
 { "type": "command", "command": ["node", "tools/fleet/telegram-notify.mjs", "--token-env", "SCOUT_TELEGRAM_TOKEN", "--chat-env", "SCOUT_TELEGRAM_CHAT"] }
 ```
 
-Incident messages carry three buttons. Investigate starts an investigation, Snooze silences the incident for an hour, and Mute mutes its rule. Telegram lets only one process poll a bot for updates, so Scout never polls. Instead, have the gateway that already polls your bot run `node tools/fleet/telegram-action.mjs <callback_data> [--hub URL] [--actor NAME]` when someone taps a button. The relay calls the hub at http://127.0.0.1:4870 unless you pass `--hub`, and it prints one JSON line whose `message` field your gateway can post back to the chat.
+Each incident message carries Investigate, Snooze, and Mute buttons. Telegram lets only one process poll a bot for updates, so Scout never polls. On a tap, the gateway that already polls your bot runs the relay with the button's callback data: `node tools/fleet/telegram-action.mjs <callback_data> [--hub URL] [--actor NAME] [--token-env NAME]`. The relay sends the action to the hub at `--hub`, which defaults to `http://127.0.0.1:4870`. Put the ingest token in the gateway's environment under `SCOUT_FLEET_INGEST_TOKEN`, or under the name you pass to `--token-env`. The value must match the hub-side variable that `ingestTokenEnv` names in `fleet.json`. A snooze lasts 60 minutes, and Mute records `muted from channel by <actor>`. The relay waits up to 120 seconds for Investigate and 15 seconds for the other buttons, then prints one JSON line `{ok, action, incidentId, message}`. It exits 0 on success, 1 on failure, and 2 on bad usage or an unset token variable. If you see `hub refused the token`, the gateway and hub values differ. If you see `hub has no ingest token configured`, the hub-side variable is unset.
+
+To make Investigate do something, set `investigator` in `fleet.json` to a command. On each Investigate tap the hub runs it and writes one JSON object to its stdin: `{"incident": {id, host, component, failureClass, severity, state, firstSeen, lastSeen, count}, "packet": <the evidence packet>}`. Have the command print `{"ok": true|false, "reference": optional short text, "error": optional text}` as its last line, and the reply reads `Investigation started: <reference>`. If the last line is not JSON, the hub goes by the exit code and uses the first 200 characters of output as the reference. The hub waits at most 90 seconds and reads at most 64 KB of output. It reads the setting on every run, so you can edit `fleet.json` without a restart. Without the setting, Investigate answers `no investigator configured`.
+
+```json
+{
+  "investigator": { "command": ["program", "arg"] }
+}
+```
 
 ### Catalog source
 
