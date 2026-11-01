@@ -1,6 +1,6 @@
 import { compareVersions, type ConfirmedDownload, type Transport } from "@scout/core";
 
-export interface PlanInstall { ecosystem: string; key: string; kind: string; details?: Record<string, unknown> }
+export interface PlanInstall { ecosystem: string; key: string; kind: string; version?: string | null; details?: Record<string, unknown> }
 export interface PlanMachine { transport: Transport }
 export interface UpdatePlan {
   allowed: boolean; refusal: string | null; command: string; argv: string[]; disruptive: boolean; needsAdmin: boolean;
@@ -10,6 +10,15 @@ export interface UpdatePlan {
 const ID = /^(?:@?[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)?)$/;
 const VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 const WINDOWS_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._+-]+)*(?: \([A-Za-z0-9._+-]+(?: [A-Za-z0-9._+-]+)*\))?$/;
+const WINGET_EXTERNAL_UPDATES = new Map<string, { refusal: string; majorChangeOnly?: boolean }>([
+  ["MSYS2.MSYS2", { refusal: "MSYS2 updates through its own package manager; run pacman -Syu in the MSYS2 shell, because winget cannot upgrade it." }],
+  ["ItchIo.Itch", { refusal: "itch updates itself when it runs, and winget cannot see the new version; open itch to update it." }],
+  ["Audacity.Audacity", { refusal: "this version uses a different installer type; uninstall Audacity and install the new version.", majorChangeOnly: true }],
+]);
+const majorVersion = (version: string | null | undefined): number | null => {
+  const match = /^\d+/.exec(version ?? "");
+  return match ? Number(match[0]) : null;
+};
 // pacman names may carry + and @, and its versions an epoch such as 1:2.3-1.
 const PACMAN_ID = /^[A-Za-z0-9][A-Za-z0-9@._+-]*$/;
 const PACMAN_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+:~-]*$/;
@@ -75,11 +84,15 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   const disruptive = install.kind === "app" || running || install.ecosystem === "pacman" || install.ecosystem === "aur";
   const arch = install.ecosystem === "pacman" || install.ecosystem === "aur";
   const needsAdmin = install.details?.scope === "machine" || install.details?.needsAdmin === true || install.details?.requiresSudo === true;
+  const external = ["winget", "msstore"].includes(install.ecosystem) ? WINGET_EXTERNAL_UPDATES.get(install.key) : undefined;
+  const installedMajor = majorVersion(install.version);
+  const targetMajor = majorVersion(target);
   let refusal: string | null = null;
   let argv: string[] = [];
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
   if (!machine) refusal = "machine is not configured";
   else if (!(arch ? PACMAN_ID.test(install.key) && PACMAN_VERSION.test(target) : ID.test(install.key) && (["winget", "msstore"].includes(install.ecosystem) ? WINDOWS_VERSION : VERSION).test(target))) refusal = "invalid package id or version";
+  else if (external && (!external.majorChangeOnly || installedMajor !== null && targetMajor !== null && installedMajor !== targetMajor)) refusal = external.refusal;
   // winget raises the Windows administrator prompt itself, so Scout can run it only where someone can answer: on this computer.
   else if (needsAdmin && !(["winget", "msstore"].includes(install.ecosystem) && machine.transport.type === "local")) refusal = "needs admin; Scout cannot elevate yet";
   else {

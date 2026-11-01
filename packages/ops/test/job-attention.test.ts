@@ -387,7 +387,7 @@ test("a late desktop observation cannot clear service recovery attention", async
 });
 
 test("unchanged self-updating apps retain the failure and add an open-app hint", async (t) => {
-  for (const key of ["ItchIo.Itch", "EpicGames.EpicGamesLauncher", "Zoom.Zoom"]) {
+  for (const key of ["EpicGames.EpicGamesLauncher", "Zoom.Zoom"]) {
     const f = recoverySeed(key, "1.0", "2.0");
     t.after(() => f.db.close());
     const exec: Exec = async (_transport, argv) => ({ exitCode: 0, stdout: argv[1] === "list" ? `Package ${key} 1.0  winget` : "updated", stderr: "" });

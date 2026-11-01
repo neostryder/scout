@@ -111,7 +111,7 @@ export function previewUpdate(db: Db, installId: number, machines: MachineConfig
   if (!row || !install) return null;
   const machine = machines.find((m) => m.id === row.machineId) ?? null;
   const running = !!db.prepare("SELECT 1 FROM usage_signals WHERE install_id = ? AND kind = 'running' AND value = '1' AND available = 1 ORDER BY observed_at DESC LIMIT 1").get(installId);
-  const plan = planUpdate({ ecosystem: row.ecosystem, key: row.key, kind: install.kind, details: install.details }, row.available ?? "", machine, running);
+  const plan = planUpdate({ ecosystem: row.ecosystem, key: row.key, kind: install.kind, version: row.installed, details: install.details }, row.available ?? "", machine, running);
   const breaks = updateBreaks(db, installId, updateTarget(row), row.machineId, options.alsoUpdating);
   const refusal = breaks.hard.length ? dependencyRefusal(`${row.name} ${row.installed ?? ""}`.trim(), breaks.hard.map((entry) => entry.dependent.name), breaks.hard.map((entry) => entry.reason)) : !row.updatable ? row.blockedBy ?? "no installable update is available" : plan.refusal;
   const preview: Preview = { installId, machineId: row.machineId, name: row.name, ecosystem: row.ecosystem, from: row.installed, to: row.available,
