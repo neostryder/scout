@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **You can now review, filter, and act on fleet incidents from the new Incidents tab on the Services page.** Opening a row shows its evidence and latest events, and each row has Investigate, Acknowledge, Snooze, and Mute. Filters live in the page address, so you can share a filtered view.
 - [Visible] [Services] **You can now pass fleet packets through your own triage command to drop noise, and run allowlisted repair commands when a matching incident is announced.** Both are optional, and every repair attempt is written to the fleet events table.
 - [Visible] [Services] **You can now have the hub run read-only commands on your other machines over ssh and open fleet incidents from the results, such as an exited container or a stopped container runtime.** Nothing is installed on those machines.
 - [Visible] [Services] **You can now give a newly registered scheduled task time for its first run before Scout reports that it has never run.** If a raised setting puts a task back inside that window, its open incident resolves with a recovery notice.

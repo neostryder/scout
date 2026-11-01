@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
 import { openCatalog } from "../../core/src/db.ts";
+import { acknowledge, fingerprint, ingest, muteRule, snooze, type IncidentPacket } from "../../core/src/index.ts";
+import { FleetService, fleetApi } from "../../hub/src/fleet.ts";
 import { filtersApi } from "../../hub/src/filters-api.ts";
 import { isLoopbackHost } from "../../hub/src/server.ts";
 
@@ -156,13 +158,46 @@ function runJob(job: Job) {
 }
 function json(res: import("node:http").ServerResponse, status: number, data: unknown) { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(data)); }
 const publicDir = resolve(fileURLToPath(new URL("../public/", import.meta.url)));
-export function createMockHub(options: { noModels?: boolean; controlOff?: boolean; recipesMissing?: boolean; portsMissing?: boolean; stacksMissing?: boolean; portsEmpty?: boolean; stacksEmpty?: boolean; planRefusal?: boolean; alertsMissing?: boolean; healthMissing?: boolean; noHealth?: boolean; healthRefreshStatus?: 404 | 409; alertScenario?: "zero" | "one" | "high"; runStatus?: 404 | 409; runScenario?: "done" | "failed" | "graceful-not-stopped" | "declined" } = {}) {
+export function createMockHub(options: { noModels?: boolean; controlOff?: boolean; recipesMissing?: boolean; incidentsMissing?: boolean; investigatorMissing?: boolean; portsMissing?: boolean; stacksMissing?: boolean; portsEmpty?: boolean; stacksEmpty?: boolean; planRefusal?: boolean; alertsMissing?: boolean; healthMissing?: boolean; noHealth?: boolean; healthRefreshStatus?: 404 | 409; alertScenario?: "zero" | "one" | "high"; runStatus?: 404 | 409; runScenario?: "done" | "failed" | "graceful-not-stopped" | "declined" } = {}) {
   const filtersDb = openCatalog(":memory:");
+  const fleetDb = openCatalog(":memory:");
+  const fleet = new FleetService(fleetDb, {
+    configPath: "",
+    ...(!options.investigatorMissing ? { investigator: { async investigate(incident: { id: number }) { return { ok: true, reference: `mock-investigation-${incident.id}`, error: null }; } } } : {}),
+  });
+  const fleetRows: { host: string; component: string; failureClass: IncidentPacket["failureClass"]; severity: IncidentPacket["severity"]; state: string; summary: string }[] = [
+    { host: "eru", component: "backup", failureClass: "dead", severity: "critical", state: "open", summary: "The backup worker exited and has not reported a heartbeat for 12 minutes." },
+    { host: "bilbo", component: "nightly-index", failureClass: "never-ran", severity: "warning", state: "acknowledged", summary: "The nightly index missed its first scheduled run." },
+    { host: "gamemaster", component: "game-server", failureClass: "resources", severity: "critical", state: "snoozed", summary: "The game data volume has less than 5 percent free space." },
+    { host: "faramir", component: "sync", failureClass: "network-path", severity: "warning", state: "resolved", summary: "The sync destination answers again after a network interruption." },
+    { host: "bazzite", component: "log-watcher", failureClass: "alert-quality", severity: "info", state: "muted", summary: "The log watcher repeats a known harmless warning after resume." },
+    { host: "eru", component: "catalog-export", failureClass: "ran-failed", severity: "warning", state: "open", summary: "The catalog export exited with code 2 before writing its output." },
+  ];
+  for (const [index, row] of fleetRows.entries()) {
+    const firstSeen = new Date(Date.now() - (index + 1) * 3_600_000).toISOString();
+    const lastSeen = new Date(Date.now() - (index + 1) * 120_000).toISOString();
+    const packet: IncidentPacket = {
+      version: 1, host: row.host, component: row.component, failureClass: row.failureClass, severity: row.severity,
+      firstSeen, lastSeen, count: index + 1, fingerprint: fingerprint(row.host, row.component, row.failureClass), summary: row.summary,
+      evidence: { journalTail: `${firstSeen} ${row.component}: check started\n${lastSeen} ${row.component}: ${row.summary}`, stderrTail: index === 0 ? "worker exited unexpectedly" : "", recentChanges: ["The host installed its scheduled updates last night."], exitCode: index === 5 ? 2 : 1, snapshot: { healthy: row.state === "resolved", attempts: index + 1 } },
+      redaction: { applied: true, rules: [] }, ownerChat: "Operations", runbook: `Check ${row.component} logs and confirm the next scheduled run.`,
+    };
+    const incident = ingest(fleetDb, packet, firstSeen)[0]!.incident;
+    if (row.state === "acknowledged") acknowledge(fleetDb, incident.id, lastSeen);
+    if (row.state === "snoozed") snooze(fleetDb, incident.id, new Date(Date.now() + 3_600_000).toISOString(), lastSeen);
+    if (row.state === "muted") muteRule(fleetDb, `${row.host}/${row.component}/${row.failureClass}`, "Known warning after resume", lastSeen);
+    if (row.state === "resolved") ingest(fleetDb, { ...packet, recovered: true }, lastSeen);
+  }
   const discoveryMock = createDiscoveryMock();
   const servicesMock = createServicesMock(options);
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1:4871");
     const path = url.pathname;
+    if (path === "/api/fleet/incidents" || path.startsWith("/api/fleet/incidents/")) {
+      if (!isLoopbackHost(req.headers.host)) return json(res, 421, { error: "misdirected request" });
+      if (options.incidentsMissing) return json(res, 404, { error: "no such route" });
+      return fleetApi(fleet, req, url, res, isLoopbackHost, json);
+    }
     if (await servicesMock.route(req, res, url)) return;
     if (await discoveryMock(req, res, path)) return;
     if (path === "/api/filters" || path.startsWith("/api/filters/")) {
@@ -225,6 +260,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     try { const bytes = await readFile(resolve(publicDir, relative)); res.writeHead(200, { "content-type": extname(relative) === ".css" ? "text/css" : extname(relative) === ".js" ? "text/javascript" : "text/html", "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'" }); res.end(bytes); } catch { json(res, 404, { error: "Not found" }); }
   });
   server.on("close", () => filtersDb.close());
+  server.on("close", () => { fleet.stop(); fleetDb.close(); });
   server.on("close", servicesMock.close);
   return server;
 }

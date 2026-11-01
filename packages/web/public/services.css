@@ -282,3 +282,32 @@
 #services .watch-switches { margin: 18px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; }
 #services .watch-switches fieldset { border: 0; margin: 10px 0; padding: 0; display: grid; gap: 4px; }
 #services .watch-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+#services .incidents-panel { min-width: 0; }
+#services .incident-summary { display: grid; gap: 6px; margin: 12px 0; }
+#services .incident-totals, #services .incident-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#services .incident-totals { gap: 16px; font-variant-numeric: tabular-nums; }
+#services .incident-table { min-width: 1400px; }
+#services .incident-table th, #services .incident-table td { vertical-align: top; }
+#services .incident-table time, #services .incident-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#services .incident-summary-text { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#services .incident-table button { padding: 3px 6px; }
+#services .incident-actions { min-width: 220px; }
+#services .incident-actions select { width: auto; }
+#services .incident-detail { display: grid; gap: 10px; max-width: min(900px, calc(100vw - 64px)); padding: 12px; overflow-wrap: anywhere; }
+#services .incident-detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+#services .incident-detail dd { margin: 0; white-space: pre-wrap; }
+#services .incident-detail pre { max-height: 200px; max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0; padding: 8px; background: var(--bg); border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+#services .incident-detail h4 { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+#services .incident-detail .mute-form { margin: 0; }
+#services .incident-events { max-height: 320px; overflow: auto; margin: 0; padding-left: 24px; }
+#services .incident-events li { margin-bottom: 8px; }
+@media (max-width: 719px) {
+  #services .incidents-panel .data-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); }
+  #services .incident-table { display: table; }
+  #services .incident-table tbody { display: table-row-group; }
+  #services .incident-table thead { position: static; display: table-header-group; width: auto; height: auto; overflow: visible; clip-path: none; }
+  #services .incident-table tr { display: table-row; width: auto; border: 0; padding: 0; margin: 0; }
+  #services .incident-table tr[hidden] { display: none; }
+  #services .incident-table td { display: table-cell; width: auto; padding: var(--row-y) 8px; border-bottom: 1px solid var(--line); }
+  #services .incident-table td::before { content: none; }
+}

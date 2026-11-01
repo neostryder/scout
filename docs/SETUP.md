@@ -349,7 +349,9 @@ To watch a job, run it through the shell wrapper at `tools/fleet/scout-run.sh` o
 scout-run.sh --fleet-host <name> --component <name> [--timeout-seconds N] [--expect-output] [--failure-class C] -- <command>
 ```
 
-A high incident notifies you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. Open incidents are listed at `GET /api/fleet/incidents`. The portal does not have an incidents page yet.
+A high incident notifies you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. Open incidents are listed at `GET /api/fleet/incidents`.
+
+The Incidents tab on the Services page lists the fleet incidents the hub collects. It shows counts of open, acknowledged, resolved, and open critical incidents, and a chip per host with its open count that filters the table to that host. You can filter by state (open and acknowledged by default, all, or resolved), host, failure class, and a search over component and summary, and the filters stay in the page address so you can share a view. Open critical incidents sort first, then the newest. Opening a row shows the summary, owner chat, runbook, the packet's evidence as plain text, and the latest 200 events, oldest first. Each row has Investigate, Acknowledge, Snooze for 1, 4, or 24 hours, and Mute, which asks for a reason of 1 to 500 characters and stops future notices for that host, component, and failure class. Investigate reports "No investigator is configured on this hub." when `investigator` is not set in `fleet.json`. The tab refreshes every 30 seconds while it is visible and again when you return to the browser tab. The tab is hidden when the hub has no fleet incidents route.
 
 ### Telegram delivery
 
