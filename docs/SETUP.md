@@ -351,6 +351,16 @@ scout-run.sh --fleet-host <name> --component <name> [--timeout-seconds N] [--exp
 
 A high incident notifies you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. Open incidents are listed at `GET /api/fleet/incidents`. The portal does not have an incidents page yet.
 
+### Telegram delivery
+
+To get fleet alerts in Telegram, add this `command` notifier to fleet.json and set `SCOUT_TELEGRAM_TOKEN` and `SCOUT_TELEGRAM_CHAT` in the hub's environment. The flags give the names of the variables, so the bot token and chat id stay out of the repo and fleet.json. If a variable is missing, the notifier exits with code 2 and names the variable.
+
+```json
+{ "type": "command", "command": ["node", "tools/fleet/telegram-notify.mjs", "--token-env", "SCOUT_TELEGRAM_TOKEN", "--chat-env", "SCOUT_TELEGRAM_CHAT"] }
+```
+
+Incident messages carry three buttons. Investigate starts an investigation, Snooze silences the incident for an hour, and Mute mutes its rule. Telegram lets only one process poll a bot for updates, so Scout never polls. Instead, have the gateway that already polls your bot run `node tools/fleet/telegram-action.mjs <callback_data> [--hub URL] [--actor NAME]` when someone taps a button. The relay calls the hub at http://127.0.0.1:4870 unless you pass `--hub`, and it prints one JSON line whose `message` field your gateway can post back to the chat.
+
 ### Catalog source
 
 The `sources.catalog` block in `.scout-data/fleet.json` makes the hub open fleet incidents for failed services, scheduled tasks, launchd jobs, and systemd units, using the rows it already scans from each machine. It reads those rows every two minutes and needs no setup on the machines themselves. The block is off until `sources.catalog.enabled` is `true`. By default it skips rows from any machine whose last scan is more than 30 minutes old (`staleScanMinutes`) and any disabled row. It also skips Windows scheduled tasks outside the root task folder, the vendor updaters from Brave, Google, Adobe, CCleaner, Driver Easy, OneDrive, and MicrosoftEdge, and launchd jobs with Apple, application, gui, or user labels. Systemd units and Windows services report nothing until an include pattern names them.
