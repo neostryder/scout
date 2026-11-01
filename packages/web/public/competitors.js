@@ -1,5 +1,5 @@
 import { h, safeUrl } from "./lib.js";
-import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, examplesText, filterRows, flagOptions, GATE_FIELDS, gateChange, heldText, holdText, isWatched, latestParts, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, TRACK_PAGE_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
+import { addedText, analyzedText, BATCH_ORIGINAL, baselineSource, batchOptions, candidateFacts, candidateSummary, scoreText, trackedText, checkedText, commitsText, countLine, defaultNewOnly, discoveryText, examplesText, filterRows, flagOptions, GATE_FIELDS, gateChange, heldText, holdText, isWatched, latestParts, layaBadge, NOT_CONFIGURED, overlapText, pendingText, REMOVE_CONFIRM, repoFromForm, runText, shadowText, sortBy, sortCandidates, sortCompetitors, statusText, syncedText, TRACK_CONFIRM, TRACK_PAGE_CONFIRM, triggerText, updateAction, UPDATE_CONFIRM, watchFromForm, WATCH_KINDS, WATCH_UPDATE_CONFIRM, watchText } from "./competitors-model.js";
 import { searchCompetitors, searchNote } from "./competitors-search.js";
 
 const JSON_POST = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
@@ -26,6 +26,7 @@ export function createCompetitorsView(root) {
   let passedOver = [];
   let discovery = null;
   let holds = null;
+  let shadow = null;
   let discoverConfigured = false;
   let checkedAt = null;
   let configured = true;
@@ -69,11 +70,12 @@ export function createCompetitorsView(root) {
   const discover = h("button", { type: "button", "data-discover": "", onclick: () => discoverNow() }, "Look for new ones");
   const candidatesNote = h("p", { class: "competitors-status" });
   const holdNote = h("p", { class: "competitors-status", "data-holds": "" });
+  const shadowNote = h("p", { class: "competitors-status", "data-shadow": "" });
   const candidatesList = h("div", { class: "candidates" });
   const passedList = h("div", { class: "candidates" });
   const passedTitle = h("summary", {}, "Passed over");
   const passedPanel = h("details", { class: "passed-over" }, passedTitle, h("p", { class: "competitors-status" }, "Projects the last searches read and held back, strongest first. Track anyway adds one to the competitor list."), passedList);
-  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, holdNote, candidatesList, passedPanel);
+  const candidatesPanel = h("section", { class: "candidates-panel", "aria-labelledby": "candidates-title" }, h("div", { class: "competitors-head" }, h("h2", { id: "candidates-title" }, "Possible competitors"), h("div", { class: "actions" }, discover)), candidatesNote, holdNote, shadowNote, candidatesList, passedPanel);
   const dialog = h("dialog", { "aria-labelledby": "competitor-confirm-title" });
 
   root.classList.add("competitors");
@@ -146,12 +148,14 @@ export function createCompetitorsView(root) {
     const safe = safeUrl(candidate.url);
     const facts = candidateFacts(candidate);
     const overlap = overlapText(candidate);
+    const score = scoreText(candidate);
+    const badge = layaBadge(candidate);
     return h("article", { class: "candidate", "data-candidate": candidate.id },
       h("div", { class: "t" }, safe ? h("a", { href: safe, target: "_blank", rel: "noopener noreferrer" }, candidate.name) : candidate.name),
       facts ? h("div", { class: "org" }, facts) : [],
       h("p", { class: "summary" }, candidateSummary(candidate)),
       overlap ? h("div", { class: "commits" }, overlap) : [],
-      scoreText(candidate) ? h("div", { class: "commits" }, scoreText(candidate)) : [],
+      score || badge ? h("div", { class: "commits" }, score, badge ? h("span", { class: "badge laya-badge", title: badge.label, "aria-label": badge.label, "data-laya-badge": candidate.id }, badge.text) : []) : [],
       heldText(candidate) ? h("div", { class: "commits" }, heldText(candidate)) : [],
       examplesText(candidate) ? h("div", { class: "commits", "data-examples": candidate.id }, examplesText(candidate)) : [],
       h("div", { class: "actions" },
@@ -162,6 +166,8 @@ export function createCompetitorsView(root) {
   }
 
   function paintCandidates() {
+    shadowNote.textContent = shadowText(shadow);
+    shadowNote.hidden = shadowNote.textContent === "";
     const show = loaded && configured && discoverConfigured;
     candidatesPanel.hidden = !show;
     if (!show) return;
@@ -292,11 +298,14 @@ export function createCompetitorsView(root) {
       discoverConfigured = body.configured === true;
       discovery = body.discovery || null;
       holds = body.holds || null;
+      shadow = body.shadow || null;
       candidates = Array.isArray(body.candidates) ? body.candidates : [];
       passedOver = Array.isArray(body.passedOver) ? body.passedOver : [];
     } catch (cause) {
       if (cause?.name === "AbortError") throw cause;
       discoverConfigured = false;
+      holds = null;
+      shadow = null;
       candidates = [];
       passedOver = [];
     }

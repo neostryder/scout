@@ -46,6 +46,7 @@
 .competitors .candidate { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 4px; }
 .competitors .candidate .t { font-weight: 600; }
 .competitors .candidate .summary { margin: 4px 0; overflow-wrap: anywhere; }
+.competitors .candidate .laya-badge { outline: 1px solid var(--muted); outline-offset: 1px; margin-left: 6px; padding: 0 4px; border-radius: 4px; }
 .competitors .candidate .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
 .competitors .passed-over { margin-top: 16px; }
 .competitors .passed-over[hidden] { display: none; }

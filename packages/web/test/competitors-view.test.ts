@@ -539,6 +539,61 @@ test("the hold gauge stays out of the way until something was held", async (t) =
   assert.equal(walk(page.root).find((el) => el.attrs["data-holds"] !== undefined)?.hidden, true);
 });
 
+test("candidate badges appear only for disagreements, including passed-over projects", async (t) => {
+  const judged = (id: string, laya: number, worthTracking: number) => candidate({ id, judgement: { competitor: 0.9, worthTracking, needs: { worthTracking: 0.55 }, shadow: { laya } } });
+  const candidates = [candidate(), judged("agree-yes", 0.8, 0.7), judged("agree-no", 0.2, 0.4), judged("laya-yes", 0.71, 0.4)];
+  const passedOver = [{ ...judged("laya-no", 0.2, 0.55), passedOver: true, status: "dismissed" }];
+  const page = await open(t, (url) => (url.endsWith("/candidates") ? { configured: true, candidates, passedOver } : ok([row()])));
+  const badges = walk(page.root).filter((el) => el.attrs["data-laya-badge"] !== undefined);
+  assert.deepEqual(badges.map((el) => el.attrs["data-laya-badge"]), ["laya-yes", "laya-no"]);
+  for (const badge of badges) {
+    assert.equal(badge.tag, "span");
+    assert.equal(badge.className, "badge laya-badge");
+    assert.equal(badge.attrs["aria-label"], badge.attrs.title);
+    const score = walk(page.root).find((el) => el.children.includes(badge))!;
+    assert.match(allText(score), /Competitor 0\.90/);
+  }
+  assert.match(allText(badges[0]), /Laya: yes, Jev: no/);
+  assert.equal(badges[0]!.attrs.title, "Laya put worth tracking at 71% and says yes; Jev put it at 0.40 of 0.55 needed and says no.");
+  assert.match(allText(badges[1]), /Laya: no, Jev: yes/);
+  assert.equal(badges[1]!.attrs.title, "Laya put worth tracking at 20% and says no; Jev put it at 0.55 of 0.55 needed and says yes.");
+});
+
+test("the shadow line follows the hold line and hides when the response has no reads", async (t) => {
+  let shadow: Record<string, number> | undefined;
+  const page = await open(t, (url) => (url.endsWith("/candidates") ? { configured: true, candidates: [], shadow } : ok([row()])));
+  const note = walk(page.root).find((el) => el.attrs["data-shadow"] !== undefined)!;
+  assert.equal(note.className, "competitors-status");
+  assert.equal(note.hidden, true);
+  assert.equal(note.textContent, "");
+  const section = walk(page.root).find((el) => el.tag === "section")!;
+  const hold = walk(section).find((el) => el.attrs["data-holds"] !== undefined)!;
+  assert.equal(section.children[section.children.indexOf(hold) + 1], note);
+  shadow = { read: 3, layaYes: 1, jevYes: 2, decided: 2, layaRight: 1, jevRight: 2 };
+  await click(button(page.root, "Look for new ones")!);
+  assert.equal(note.hidden, false);
+  assert.equal(note.textContent, "Laya shadow: read 3, yes rate Laya 33% against Jev 67%. On 2 of your choices Laya agreed 1 times and Jev agreed 2 times.");
+  shadow = { read: 0, layaYes: 0, jevYes: 0, decided: 0, layaRight: 0, jevRight: 0 };
+  await click(button(page.root, "Look for new ones")!);
+  assert.equal(note.hidden, true);
+  assert.equal(note.textContent, "");
+  shadow = undefined;
+  await click(button(page.root, "Look for new ones")!);
+  assert.equal(note.hidden, true);
+});
+
+test("a failed candidate refresh clears the shadow line", async (t) => {
+  let failed = false;
+  const shadow = { read: 1, layaYes: 1, jevYes: 0, decided: 0, layaRight: 0, jevRight: 0 };
+  const page = await open(t, (url) => (url.endsWith("/candidates") ? failed ? { status: 503, ok: false } : { configured: true, candidates: [], shadow } : ok([row()])));
+  const note = walk(page.root).find((el) => el.attrs["data-shadow"] !== undefined)!;
+  assert.equal(note.hidden, false);
+  failed = true;
+  await click(button(page.root, "Look for new ones")!);
+  assert.equal(note.hidden, true);
+  assert.equal(note.textContent, "");
+});
+
 test("a row with a dossier folder has an Open dossier link that shows the overview page", async (t) => {
   const page = await open(t, (url) => (url.endsWith("/dossier") ? { folder: "Acme - Tools", files: ["00_Overview.md", "01_Notes.md"], overview: "# Acme Tools\nWhat it is." } : ok([row({ dossierDir: "D:/x/Acme - Tools" }), row({ id: "plain", name: "Plain", dossierDir: null })])));
   const buttons = walk(page.root).filter((el) => el.attrs["data-dossier"]);

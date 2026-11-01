@@ -282,6 +282,28 @@ export function holdText(holds) {
   return last && last.held > 0 ? `History: the last search ${part(last)}; all searches ${part(all)}.` : `History: nothing held back in the last search; all searches ${part(all)}.`;
 }
 
+export function layaBadge(candidate) {
+  const judgement = candidate?.judgement;
+  const laya = judgement?.shadow?.laya;
+  if (typeof laya !== "number") return null;
+  const needed = judgement.needs?.worthTracking ?? 0.5;
+  const layaYes = laya >= 0.5;
+  const jevYes = judgement.worthTracking >= needed;
+  if (layaYes === jevYes) return null;
+  const layaSays = layaYes ? "yes" : "no";
+  const jevSays = jevYes ? "yes" : "no";
+  return {
+    text: `Laya: ${layaSays}, Jev: ${jevSays}`,
+    label: `Laya put worth tracking at ${Math.round(laya * 100)}% and says ${layaSays}; Jev put it at ${Number(judgement.worthTracking).toFixed(2)} of ${Number(needed).toFixed(2)} needed and says ${jevSays}.`,
+  };
+}
+
+export function shadowText(shadow) {
+  if (!shadow || !shadow.read) return "";
+  const line = `Laya shadow: read ${shadow.read}, yes rate Laya ${Math.round(shadow.layaYes / shadow.read * 100)}% against Jev ${Math.round(shadow.jevYes / shadow.read * 100)}%.`;
+  return shadow.decided > 0 ? `${line} On ${shadow.decided} of your choices Laya agreed ${shadow.layaRight} times and Jev agreed ${shadow.jevRight} times.` : line;
+}
+
 /** What a project reads like: the owner's closest earlier decisions, as one sentence. Empty when there are none yet. */
 export function examplesText(candidate) {
   const list = Array.isArray(candidate?.examples) ? candidate.examples : [];
