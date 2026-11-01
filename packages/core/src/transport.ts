@@ -15,12 +15,13 @@ export function shellQuote(arg: string): string {
   return `'${arg.replaceAll("'", `'\\''`)}'`;
 }
 
-/** The remote command line for an ssh probe: the argv, quoted, run under a login zsh so the login PATH is present. */
+/** A login shell supplies the remote PATH; bash is used when zsh is unavailable. */
 export function remoteCommand(argv: string[]): string {
   let words = argv;
   // Homebrew must not update itself or report analytics while it is only being read.
   if (words[0]?.endsWith("/brew")) words = ["env", "HOMEBREW_NO_AUTO_UPDATE=1", "HOMEBREW_NO_ANALYTICS=1", ...words];
-  return `zsh -lc ${shellQuote(words.map(shellQuote).join(" "))}`;
+  const script = `if command -v zsh >/dev/null 2>&1; then exec zsh -lc "$1"; else exec bash -lc "$1"; fi`;
+  return `sh -c ${shellQuote(script)} sh ${shellQuote(words.map(shellQuote).join(" "))}`;
 }
 
 /** `input`, when given, is written to the child's stdin and the pipe is closed; otherwise stdin is closed. */

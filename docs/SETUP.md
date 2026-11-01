@@ -21,7 +21,7 @@ On the hub machine:
 On each remote machine:
 
 - An ssh server you can log in to with a key.
-- zsh. Scout runs every remote command under `zsh -lc` so the login PATH is present. macOS has zsh by default. On Linux, install it from your package manager.
+- zsh or bash. Scout runs every remote command under a login shell so the login PATH is present, using zsh when the remote machine has it and bash otherwise. macOS has zsh by default. Starting, stopping, restarting, enabling, and disabling services from Scout still needs zsh, so on a Linux machine you want to control, install zsh from your package manager.
 
 Check the hub machine with:
 
@@ -102,7 +102,7 @@ cp machines.example.json machines.json
 
 Exactly one machine should use the `local` transport. That machine is the hub machine: the hub runs there, health checks probe its ports, and launch recipes and stacks start there. Write Windows paths with forward slashes (`C:/Projects/*`) so the JSON needs no escaping.
 
-A Windows machine is read through the local transport, because remote commands run under zsh. In practice the Windows machine is your hub machine, and a second Windows machine cannot be scanned over ssh today.
+A Windows machine is read through the local transport, because remote commands need zsh or bash and Windows has neither. In practice the Windows machine is your hub machine, and a second Windows machine cannot be scanned over ssh today.
 
 ## SSH access for remote machines
 
