@@ -50,7 +50,7 @@ export interface Outage {
 }
 
 export interface OutageChange { outage: Outage; change: "confirmed" | "updated" | "recovered" }
-export interface OutageNotice { title: string; body: string; severity: "high" | "info" }
+export interface OutageNotice { title: string; body: string; severity: "high" | "warn" | "info" }
 
 interface OutageRow extends Omit<Outage, "durationMs"> { id: number }
 interface WatchRow { key: string; failures: number; firstFailedAt: string | null; lastState: string; lastCheckedAt: string | null; lastOkAt: string | null; episodes: string }

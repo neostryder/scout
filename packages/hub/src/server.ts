@@ -72,6 +72,7 @@ export interface HubOptions {
   updateWindowSchedule?: boolean;
   /** Where the update-window run sends its finish and failure notices. */
   updateWindowNotifier?: { send(notice: OutageNotice): Promise<unknown> };
+  alertNotifier?: { send(notice: OutageNotice): Promise<unknown> };
   control?: ControlRunnerDeps | false;
   recipeProjects?: () => Project[];
   portsPath?: string;
@@ -239,6 +240,10 @@ export function createHub(options: HubOptions): Server {
   const stacks = new HubStacks(db, stacksPath);
   const registries = { ports: () => portsResponse(db, readPorts()), stacks };
   const alerts = new HubAlerts(db, { tunnelHostsPath: options.tunnelHostsPath, loadPorts: readPorts, ...(options.watch ? { loadWatch: options.watch.configReader() } : {}), ...(options.backup ? { loadBackup: options.backup.read } : {}), ...options.alerts });
+  const unsubscribeAlertNotices = options.alertNotifier ? alerts.subscribe(({ alert, change }) => {
+    if (change !== "created" || alert.kind !== "new-listener" && alert.kind !== "listener-gone") return;
+    void options.alertNotifier!.send({ title: alert.title, body: alert.detail, severity: alert.severity }).catch((error: unknown) => console.error(`listener alert notice failed: ${error instanceof Error ? error.message : "failed"}`));
+  }) : undefined;
   const backupWatch = options.backup ? new HubBackupWatch(alerts, { ...options.backup, machineName: hubMachineName }) : undefined;
   options.watch?.attachAlerts(alerts);
   const unsubscribeWatchLive = options.live?.subscribeStored((read) => { if (read.status === "ok") void options.watch?.observeServices(read.machineId, read.at); });
@@ -385,6 +390,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeAlertNotices?.(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

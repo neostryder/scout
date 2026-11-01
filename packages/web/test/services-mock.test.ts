@@ -45,7 +45,7 @@ test("the mock serves service assets and seeded contract shapes for every machin
 
 test("the alerts mock serves contract kinds, counts, filters and mutations", async () => mock(async (base) => {
   const listing = await get(base, "/api/services/alerts?state=all&limit=100&include=muted");
-  assert.deepEqual(new Set(listing.alerts.map((alert: any) => alert.kind)), new Set(["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash"]));
+  assert.deepEqual(new Set(listing.alerts.map((alert: any) => alert.kind)), new Set(["new-listener", "listener-gone", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash"]));
   assert.deepEqual(listing.alerts.filter((alert: any) => alert.kind === "port-clash").map((alert: any) => alert.severity).sort(), ["high", "high", "warn"]);
   assert.deepEqual(new Set(listing.alerts.map((alert: any) => alert.severity)), new Set(["info", "warn", "high"]));
   assert.ok(listing.alerts.some((alert: any) => alert.state === "acknowledged"));

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 
-const helpers = { ...await import(new URL("../public/lib.js", import.meta.url).href), ...await import(new URL("../public/jobs-model.js", import.meta.url).href) };
+const helpers = { ...await import(new URL("../public/lib.js", import.meta.url).href), ...await import(new URL("../public/jobs-model.js", import.meta.url).href), ...await import(new URL("../public/breaking-lines.js", import.meta.url).href) };
 
 class Element {
   tag: string;
@@ -95,11 +95,13 @@ test("depui hard badges leave the muted update button enabled", () => {
 
 test("depui detail renders dependency edges, support windows and safe release links", async () => {
   const edge = { from: dependent, to: { name: "llhttp", ecosystem: "brew" }, kind: "library", constraint: ">=9", builtAgainst: "9.4.3" };
-  const detail: any = { name: "Node", ecosystem: "brew", key: "node", machineId: "mini", dependencies: { needs: [edge], neededBy: [edge] }, supportWindows: [{ cycle: "26", eol: "2025-12-31", eolPassed: true, lts: true }, { cycle: "27", eol: null, eolPassed: false, lts: false }], changelog: { summary: "A release fixes parsing.\nThe runtime changed.", sourceUrl: "https://example.test/releases", model: "fixture-summary" } };
+  const detail: any = { name: "Node", ecosystem: "brew", key: "node", machineId: "mini", dependencies: { needs: [edge], neededBy: [edge] }, supportWindows: [{ cycle: "26", eol: "2025-12-31", eolPassed: true, lts: true }, { cycle: "27", eol: null, eolPassed: false, lts: false }], changelog: { summary: "A release fixes parsing.\nThis is a breaking change.", sourceUrl: "https://example.test/releases", model: "fixture-summary" } };
   const p = page(async () => ({ ok: true, json: async () => detail }));
   await p.run("openDetail(7)");
   const shown = text(p.byId("detail"));
-  for (const expected of ["Needs", "Needed by", "llhttp", dependent.name, "mini", "library", ">=9", "built against 9.4.3", "Support", "Passed, LTS", "no end date announced", "Release notes", detail.changelog.summary, "fixture-summary"]) assert.ok(shown.includes(expected), expected);
+  for (const expected of ["Needs", "Needed by", "llhttp", dependent.name, "mini", "library", ">=9", "built against 9.4.3", "Support", "Passed, LTS", "no end date announced", "Release notes", "A release fixes parsing.", "This is a breaking change.", "fixture-summary"]) assert.ok(shown.includes(expected), expected);
+  assert.equal(shown.includes("1 lines look like breaking changes"), true);
+  assert.equal(nodes(p.byId("detail")).some((node) => node.attrs.class === "breaking-tag" && node.attrs.role === "note" && text(node).includes("Breaking")), true);
   const link = nodes(p.byId("detail")).find((node) => node.tag === "a")!;
   assert.equal(link.attrs.href, detail.changelog.sourceUrl);
   assert.equal(link.attrs.rel, "noopener noreferrer");

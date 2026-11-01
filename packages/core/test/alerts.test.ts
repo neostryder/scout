@@ -96,6 +96,67 @@ test("new listeners deduplicate, resolve when gone and create a new occurrence w
   assert.equal(all(db).filter((row) => row.key === reopened.alert.key).length, 2);
 });
 
+test("public listener disappearance alerts and its return resolves the alert", (t) => {
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  listen(db, [listener(8080, "all")], T);
+  assert.deepEqual(evaluateAlerts(db, T), []);
+  listen(db, [], T2);
+  const changes = evaluateAlerts(db, T2);
+  assert.deepEqual(changes.map((change) => change.alert.kind), ["listener-gone"]);
+  const gone = changes[0]!;
+  assert.equal(gone.alert.severity, "warn");
+  assert.match(gone.alert.title, /Hub.*8080.*node/);
+  listen(db, [listener(8080, "all")], T3);
+  assert.ok(evaluateAlerts(db, T3).some((change) => change.alert.id === gone.alert.id && change.change === "resolved"));
+});
+
+test("listener disappearance does not alert on first scans or for stale machines", (t) => {
+  const first = openCatalog(":memory:");
+  t.after(() => first.close());
+  upsertMachine(first, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  listen(first, [], T);
+  assert.deepEqual(evaluateAlerts(first, T), []);
+  listen(first, [listener(8080, "all")], T2);
+  assert.deepEqual(evaluateAlerts(first, T2), []);
+
+  const stale = openCatalog(":memory:");
+  t.after(() => stale.close());
+  upsertMachine(stale, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  listen(stale, [listener(8080, "all")], T);
+  evaluateAlerts(stale, T);
+  stale.prepare("UPDATE machines SET state = 'unreachable' WHERE id = 'hub'").run();
+  listen(stale, [], T2);
+  assert.deepEqual(evaluateAlerts(stale, T2).filter((change) => change.alert.kind === "listener-gone"), []);
+
+  const paused = openCatalog(":memory:");
+  t.after(() => paused.close());
+  upsertMachine(paused, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  listen(paused, [listener(8080, "all")], T);
+  evaluateAlerts(paused, T);
+  paused.prepare("UPDATE machines SET state = 'paused' WHERE id = 'hub'").run();
+  listen(paused, [], T2);
+  assert.deepEqual(evaluateAlerts(paused, T2).filter((change) => change.alert.kind === "listener-gone"), []);
+});
+
+test("listener flap guard suppresses the fourth disappearance in one hour", (t) => {
+  const db = openCatalog(":memory:");
+  t.after(() => db.close());
+  upsertMachine(db, { id: "hub", name: "Hub", os: "windows", kind: "host" });
+  listen(db, [listener(8080, "all")], T);
+  evaluateAlerts(db, T);
+  for (let cycle = 1; cycle <= 4; cycle++) {
+    const goneAt = new Date(Date.parse(T) + cycle * 10 * 60_000).toISOString();
+    listen(db, [], goneAt);
+    const changes = evaluateAlerts(db, goneAt).filter((change) => change.alert.kind === "listener-gone" && change.change === "created");
+    assert.equal(changes.length, cycle <= 3 ? 1 : 0);
+    const backAt = new Date(Date.parse(goneAt) + 60_000).toISOString();
+    listen(db, [listener(8080, "all")], backAt);
+    evaluateAlerts(db, backAt);
+  }
+});
+
 test("all-interface listeners warn and narrowing never creates an exposure alert", (t) => {
   const db = seed(t);
   listen(db, [listener(8000), listener(8080, "all")]);

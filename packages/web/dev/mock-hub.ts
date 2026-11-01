@@ -297,8 +297,9 @@ function createServicesMock(options: { noModels?: boolean; controlOff?: boolean;
     [8, "unhealthy", "high", "Hub", "listener", 2, "open"],
     [9, "cert-expiring", "warn", "Hub", "route", 2, "open"],
     [10, "crash-loop", "warn", "Laptop", "service", 13, "open"],
+    [11, "listener-gone", "warn", "Server", "listener", 18, "open"],
   ];
-  const alertLabels: Row = { unhealthy: "Unhealthy target", "cert-expiring": "Certificate expiring", "crash-loop": "Crash loop" };
+  const alertLabels: Row = { "listener-gone": "Listener gone", unhealthy: "Unhealthy target", "cert-expiring": "Certificate expiring", "crash-loop": "Crash loop" };
   const alerts: Row[] = alertSeeds.map(([id, kind, severity, machineName, targetType, targetId, state], index) => ({ id, at: new Date(Date.now() - index * 3600000).toISOString(), kind, severity, machineId: machineName === "Hub" ? "hub" : machineName === "Laptop" ? "laptop" : machineName === "Mini" ? "mini" : "server", machineName, key: `${kind}:${machineName.toLowerCase()}:${targetId}`, title: `${alertLabels[kind] || `${kind[0]!.toUpperCase()}${kind.slice(1).replaceAll("-", " ")}`} on ${machineName}`, detail: kind === "unhealthy" ? "A web endpoint has not answered for 3 checks (timeout)." : kind === "cert-expiring" ? "The certificate for service-5.example.test ends in 9 days." : kind === "crash-loop" ? "ssh restarted 4 times in 30 minutes." : `${machineName} has a ${kind.replaceAll("-", " ")} that needs review.`, target: { type: targetType, id: targetId }, state, acknowledgedAt: state === "acknowledged" ? now() : null, resolvedAt: state === "resolved" ? now() : null, muted: false }));
   let mutes: Row[] = [{ key: "new-listener:hub:8080:*", match: "new-listener:hub:8080:*", reason: "dev ports", source: "file", at: now() }];
   const recipes: Row[] = [
@@ -588,7 +589,7 @@ function createServicesMock(options: { noModels?: boolean; controlOff?: boolean;
         let body: Row; try { body = JSON.parse(raw); } catch { json(res, 400, { error: "Invalid JSON" }); return true; }
         if (path.endsWith("/ack")) {
           const one = Number.isInteger(body?.id) && body.all === undefined && body.kind === undefined;
-          const all = body?.all === true && body.id === undefined && (body.kind === undefined || ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change"].includes(body.kind));
+          const all = body?.all === true && body.id === undefined && (body.kind === undefined || ["new-listener", "listener-gone", "new-daemon", "service-down", "domain-origin-down", "exposure-change"].includes(body.kind));
           if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some((key) => !["id", "all", "kind"].includes(key)) || !(one || all)) { json(res, 400, { error: "Invalid acknowledgement request" }); return true; }
           const targets = body.id !== undefined ? alerts.filter((alert) => alert.id === body.id && alert.state === "open") : alerts.filter((alert) => alert.state === "open" && (!body.kind || alert.kind === body.kind));
           if (body.id !== undefined && !targets.length) { json(res, 404, { error: "not found" }); return true; }
