@@ -4,6 +4,14 @@
 #   aiToolkit           SCOUT_AI_TOOLKIT            Path to ai.ps1. Default: %LOCALAPPDATA%\AiCliToolkit\ai.ps1. Models stay off when the file is missing.
 #   modelRoutePublic    SCOUT_MODEL_ROUTE_PUBLIC    Default: m3
 #   modelRouteInternal  SCOUT_MODEL_ROUTE_INTERNAL  Default: luna
+$script:supervisorMutex = [System.Threading.Mutex]::new($false, 'Global\ScoutHubSupervisor')
+try { $mutexAcquired = $script:supervisorMutex.WaitOne(0) }
+catch [System.Threading.AbandonedMutexException] { $mutexAcquired = $true }
+if (-not $mutexAcquired) {
+    $script:supervisorMutex.Dispose()
+    exit 0
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 New-Item -ItemType Directory -Force (Join-Path $root '.scout-data') | Out-Null
 $log = Join-Path $root '.scout-data/hub.log'
@@ -28,9 +36,15 @@ $env:SCOUT_MODEL_ROUTE_PUBLIC = Resolve-Setting 'SCOUT_MODEL_ROUTE_PUBLIC' 'mode
 $env:SCOUT_MODEL_ROUTE_INTERNAL = Resolve-Setting 'SCOUT_MODEL_ROUTE_INTERNAL' 'modelRouteInternal' 'luna'
 
 Set-Location (Join-Path $root 'packages/hub')
-while ($true) {
-    Write-Supervisor 'starting hub'
-    & node src/main.ts --production --schedule-models @args *>> $log
-    Write-Supervisor "hub exited with code $LASTEXITCODE at"
-    Start-Sleep -Seconds 10
+try {
+    while ($true) {
+        Write-Supervisor 'starting hub'
+        & node src/main.ts --production --schedule-models @args *>> $log
+        Write-Supervisor "hub exited with code $LASTEXITCODE at"
+        Start-Sleep -Seconds 10
+    }
+}
+finally {
+    $script:supervisorMutex.ReleaseMutex()
+    $script:supervisorMutex.Dispose()
 }
