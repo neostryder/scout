@@ -351,9 +351,11 @@ Any host or program reports a failure to the hub as a packet, which is one JSON 
 
 The catalog source turns scanned catalog rows into fleet incidents without per-machine code. Its rules live in core in `fleet-catalog-source.ts` as pure functions. `catalogPackets` classifies rows, and `reconcileCatalog` builds recovery packets. In the hub, `fleet-catalog.ts` runs these rules on a two-minute timer and sends the packets through `FleetService.accept`. It stores the previous packets in the meta table under `fleet_catalog_state`. Because that state persists, a problem that clears while the hub is down still gets its recovery packet after a restart.
 
-Delivery and actions go through the ports in `fleet-ports.ts`. No investigator, triage model, or healer exists yet, so Investigate only records the request. Personal notifiers and secrets belong in the private config, never in the repo.
+Delivery and actions go through the ports in `fleet-ports.ts`. No triage model or healer exists yet. Personal notifiers and secrets belong in the private config, never in the repo.
 
 `tools/fleet/telegram-notify.mjs` is a `command` notifier that reads one notice as JSON on stdin and posts it to the Telegram Bot API, adding buttons with callback data `scout:<action>:<incidentId>` when the notice has an incident id and actions. `tools/fleet/telegram-action.mjs` posts each button tap to `POST /api/fleet/actions`, which takes the bearer ingest token used by `POST /api/fleet/packets` in place of a Cloudflare Access sign-in and accepts a loopback Host header even when Access is configured. For Investigate, the hub runs the `investigator` command from `fleet.json` and passes the incident and its evidence packet to it as JSON on stdin.
+
+`packages/core/src/fleet-local-source.ts` holds the local source as pure functions that turn disk, Event Log, WSL, and log-file observations into fleet incident packets. `packages/hub/src/fleet-local.ts` is the hub class that runs the probes on each tick, passes the observations to those functions, and reconciles open incidents into recovery notices when their conditions clear.
 
 Routes in `packages/hub/src/fleet.ts`:
 - `POST /api/fleet/packets` takes one packet or up to 100 with a bearer ingest token, and it skips Cloudflare Access so headless machines can post.
