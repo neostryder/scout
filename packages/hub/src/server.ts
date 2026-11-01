@@ -398,23 +398,25 @@ export function createHub(options: HubOptions): Server {
       else res.end();
     });
   });
+  let gitTimer: ReturnType<typeof setInterval> | undefined;
   server.once("listening", () => {
     lag.start();
     const address = server.address();
     if (address && typeof address !== "string") { controlPort = address.port; controlRunner?.setContext({ port: address.port }); }
+    if (options.health && options.health.scheduled) health?.start();
+    if (options.watch) options.watch?.start();
+    if (options.meters) options.meters?.start();
+    if (backupWatch) backupWatch.start();
+    if (options.fleet) options.fleet?.start();
+    // Git facts of the projects are read once the hub is listening and every 6 hours after, only where project roots are configured.
+    if (options.recipeProjects) {
+      const readGit = (): void => { void refreshProjectGit(db, options.recipeProjects!()).catch(() => undefined); };
+      readGit();
+      gitTimer = setInterval(readGit, 6 * 3_600_000);
+      gitTimer.unref();
+    }
   });
-  if (options.health && options.health.scheduled) server.once("listening", () => health?.start());
-  if (options.watch) server.once("listening", () => options.watch?.start());
-  if (options.meters) server.once("listening", () => options.meters?.start());
-  if (backupWatch) server.once("listening", () => backupWatch.start());
-  if (options.fleet) server.once("listening", () => options.fleet?.start());
-  // Git facts of the projects are read once the hub is listening and every 6 hours after, only where project roots are configured.
-  let gitTimer: ReturnType<typeof setInterval> | undefined;
-  if (options.recipeProjects) {
-    const readGit = (): void => { void refreshProjectGit(db, options.recipeProjects!()).catch(() => undefined); };
-    server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
-    server.once("close", () => clearInterval(gitTimer));
-  }
+  if (options.recipeProjects) server.once("close", () => clearInterval(gitTimer));
   server.once("close", () => { lag.stop(); options.fleet?.stop(); windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeAlertNotices?.(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }
