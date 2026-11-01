@@ -31,6 +31,7 @@ function scopeFor(config: FleetCatalogConfig): CatalogSourceScope {
     scope[key] = { include: compile(config[key]?.include, scope[key].include), exclude: compile(config[key]?.exclude, scope[key].exclude) };
   }
   scope.windowsServices = { include: compile(config.windowsServices?.include, scope.windowsServices.include) };
+  scope.neverRan = compile(config.neverRan?.tasks, scope.neverRan);
   scope.staleScanMinutes = config.staleScanMinutes ?? scope.staleScanMinutes;
   return scope;
 }

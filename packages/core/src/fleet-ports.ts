@@ -68,6 +68,7 @@ export interface FleetCatalogConfig {
   launchd?: { include?: string[]; exclude?: string[] };
   systemd?: { include?: string[]; exclude?: string[] };
   windowsServices?: { include?: string[] };
+  neverRan?: { tasks: string[] };
 }
 
 export interface FleetFile {
@@ -185,7 +186,7 @@ function expectedRow(value: unknown): ExpectedRun | null {
 
 function catalogConfig(value: unknown): FleetCatalogConfig | null {
   if (!isRecord(value)) return null;
-  const allowed = new Set(["enabled", "staleScanMinutes", "tasks", "launchd", "systemd", "windowsServices"]);
+  const allowed = new Set(["enabled", "staleScanMinutes", "tasks", "launchd", "systemd", "windowsServices", "neverRan"]);
   if (Object.keys(value).some((key) => !allowed.has(key))) return null;
   const result: FleetCatalogConfig = {};
   if (value.enabled !== undefined) {
@@ -211,6 +212,13 @@ function catalogConfig(value: unknown): FleetCatalogConfig | null {
       patterns[name] = list as string[];
     }
     result[key] = patterns;
+  }
+  if (value.neverRan !== undefined) {
+    if (!isRecord(value.neverRan) || Object.keys(value.neverRan).some((key) => key !== "tasks")) return null;
+    const list = value.neverRan.tasks;
+    if (!Array.isArray(list) || list.length > 50 || list.some((item) => typeof item !== "string" || item.length === 0 || item.length > 200)) return null;
+    for (const item of list) new RegExp(item as string, "i");
+    result.neverRan = { tasks: list as string[] };
   }
   return result;
 }

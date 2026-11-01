@@ -18,6 +18,7 @@ export interface CatalogSourceScope {
   launchd: { include: RegExp[]; exclude: RegExp[] };
   systemd: { include: RegExp[]; exclude: RegExp[] };
   windowsServices: { include: RegExp[] };
+  neverRan: RegExp[];
   staleScanMinutes: number;
 }
 
@@ -26,6 +27,7 @@ export const DEFAULT_CATALOG_SCOPE: CatalogSourceScope = {
   launchd: { include: [/.*/i], exclude: [/^com\.apple\./i, /^application\./i, /^gui\//i, /^user\//i] },
   systemd: { include: [], exclude: [] },
   windowsServices: { include: [] },
+  neverRan: [],
   staleScanMinutes: 30,
 };
 
@@ -74,10 +76,15 @@ export function catalogPackets(rows: readonly CatalogServiceRow[], scope: Catalo
       const component = row.name.replace(/^\\/, "");
       if (!inScope(scope.tasks, component)) continue;
       const code = resultCode(row.lastResult);
-      if (code === null || [0n, 267009n, 267010n, 267014n, 267011n].includes(code)) continue;
+      if (code === null || [0n, 267009n, 267010n, 267014n].includes(code)) continue;
       const evidence: IncidentEvidence = { snapshot: { taskResult: row.lastResult, lastRun: row.lastRun, state: row.state, running, kind: row.kind } };
-      if (Number.isSafeInteger(Number(code))) evidence.exitCode = Number(code);
-      next = packet(row, component, "ran-failed", `task result ${row.lastResult}`, evidence, now);
+      if (code === 267011n) {
+        if (!matches(scope.neverRan, component)) continue;
+        next = packet(row, component, "never-ran", "task has never run", evidence, now);
+      } else {
+        if (Number.isSafeInteger(Number(code))) evidence.exitCode = Number(code);
+        next = packet(row, component, "ran-failed", `task result ${row.lastResult}`, evidence, now);
+      }
     } else if (row.kind === "launchd") {
       if (!inScope(scope.launchd, row.name)) continue;
       const evidence: IncidentEvidence = { snapshot: { launchdStatus: row.lastResult, state: row.state, running, kind: row.kind } };
