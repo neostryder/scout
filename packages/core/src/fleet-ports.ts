@@ -9,7 +9,7 @@ export interface FleetNotice {
   body: string;
   severity: Severity;
   incidentId: number | null;
-  kind: "incident" | "recovered" | "escalation" | "digest" | "flapping";
+  kind: "incident" | "recovered" | "escalation" | "digest" | "flapping" | "healed" | "heal-failed";
   actions: { id: "investigate" | "snooze" | "mute"; label: string }[];
 }
 
@@ -60,7 +60,16 @@ export interface FleetNotifierConfig {
 
 export interface FleetCommandHook { command: string[] }
 
-export interface FleetHealerConfig { id: string; command: string[] | null }
+export interface FleetHealerConfig {
+  id: string;
+  command: string[];
+  host: string;
+  component: string;
+  failureClass: FailureClass;
+  cooldownMinutes: number;
+  maxPerDay: number;
+  timeoutSeconds: number;
+}
 
 export interface FleetCatalogConfig {
   enabled?: boolean;
@@ -440,11 +449,19 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
     const healers: FleetHealerConfig[] = [];
     if (data.healers !== undefined) {
       if (!Array.isArray(data.healers)) return broken();
+      const allowed = new Set(["id", "command", "host", "component", "failureClass", "cooldownMinutes", "maxPerDay", "timeoutSeconds"]);
+      const exact = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f*?^$]/.test(value) && !/^\/.*\/[a-z]*$/.test(value);
+      const integer = (value: unknown, max: number): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= max;
       for (const row of data.healers) {
         if (!isRecord(row) || typeof row.id !== "string" || row.id.length === 0 || row.id.length > 80) return broken();
-        const command = row.command === undefined ? null : commandList(row.command);
-        if (row.command !== undefined && command === null) return broken();
-        healers.push({ id: row.id, command });
+        if (Object.keys(row).some((key) => !allowed.has(key)) || healers.some((healer) => healer.id === row.id)) return broken();
+        const command = commandList(row.command);
+        if (!command || !exact(row.host, 200) || !exact(row.component, 180) || !FAILURE_CLASSES.includes(row.failureClass as FailureClass)) return broken();
+        const cooldownMinutes = row.cooldownMinutes === undefined ? 60 : row.cooldownMinutes;
+        const maxPerDay = row.maxPerDay === undefined ? 3 : row.maxPerDay;
+        const timeoutSeconds = row.timeoutSeconds === undefined ? 120 : row.timeoutSeconds;
+        if (!integer(cooldownMinutes, 1440) || !integer(maxPerDay, 24) || !integer(timeoutSeconds, 300)) return broken();
+        healers.push({ id: row.id, command, host: row.host, component: row.component, failureClass: row.failureClass as FailureClass, cooldownMinutes, maxPerDay, timeoutSeconds });
       }
     }
     const expected: ExpectedRun[] = [];

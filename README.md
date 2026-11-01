@@ -41,7 +41,7 @@ Three terminal commands report on your machines:
 
 An MCP server gives agents such as Claude Desktop and Claude Code the same information and lets them start a stopped service. They cannot stop or restart one.
 
-Scout never runs an update or a control action on its own. Every change to a machine starts with a click or a command from you, and every one is written to an audit table.
+Updates and control actions start with a click or a command from you, and each one is written to an audit table. Fleet healers are the one exception: they run only commands you list in the fleet file for an exact host, component, and failure class, and every attempt is written to the audit events.
 
 ## Quick start
 
