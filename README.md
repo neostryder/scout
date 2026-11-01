@@ -68,11 +68,11 @@ Open http://127.0.0.1:4870/ in a browser on the same machine. The hub listens on
 
 ## Platform support
 
-The hub and the full feature set target a Windows hub machine. Other machines are reached over ssh, and remote commands run under `zsh -lc`, so a remote machine needs zsh (the default shell on macOS).
+The hub and the full feature set target a Windows hub machine. Other machines are reached over ssh, and remote commands run under a login zsh, or a login bash when zsh is missing, so a remote machine needs zsh or bash (controlling its services still needs zsh).
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| How Scout reaches it | As the local hub machine | ssh | ssh (with zsh installed) or local |
+| How Scout reaches it | As the local hub machine | ssh | ssh (with zsh or bash installed) or local |
 | Installed software | Registry, winget, Store apps, npm, pipx, uv tools, Python and Node runtimes, WSL and Docker Sandboxes guests | Apps, Homebrew, casks, pkgutil, npm, pipx, uv tools, Go and local binaries, container images | dpkg, pacman, and AUR packages |
 | Listeners and services | Listeners, services, scheduled tasks | Listeners, launchd jobs | Listeners, published container ports, systemd services (read-only) |
 | Usage signals | UserAssist, running processes | Spotlight, running processes | Running processes, file access times |

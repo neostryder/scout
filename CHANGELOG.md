@@ -72,6 +72,7 @@
 
 ### Fixed
 
+- [Visible] [Software] **Probes, meter reads, and fleet remote checks no longer fail on Linux machines without zsh.** Scout runs remote commands under a login bash when zsh is missing, so a machine such as Bazzite can now be read. Start, stop, restart, enable, and disable still need zsh on the remote machine.
 - [Visible] [Software] **Signed-in requests no longer get a 403 when a Cloudflare Access key refresh times out and the hub already has cached keys.** The hub keeps using cached keys for up to 24 hours after a failed refresh and retries the download after 15 seconds. The log recorded 132 of these refusals since 2026-09-30.
 - [Visible] [Software] **Updating npm packages on a Windows hub no longer fails at the first step.** Update jobs for npm packages such as the global @pnpm/exe stopped with "spawn npm ENOENT" when the hub ran on Windows. Scout now starts npm with the hub's own Node, so these updates run.
 - [Visible] [Services] **A launchd job no longer records a change on every scan.** The cheap live reader sees a job's state but not its program or enabled flag, and each pass overwrote what the fuller scan had stored, so the events table filled with `service_changed` rows. A launchd job now keeps its stored program and enabled flag when the cheap reader omits them, and only a real change is recorded.
