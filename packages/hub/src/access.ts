@@ -52,18 +52,37 @@ function parsePart(part: string): Record<string, unknown> | null {
 }
 
 /** Fetch and cache the team's signing keys. A miss on an unknown kid forces one refresh, at most once a minute. */
-export function certsKeySource(teamDomain: string, fetcher: (url: string) => Promise<{ status: number; json(): Promise<unknown> }> = (u) => fetch(u, { signal: AbortSignal.timeout(10_000) })): KeySource {
+export function certsKeySource(teamDomain: string, fetcher: (url: string) => Promise<{ status: number; json(): Promise<unknown> }> = (u) => fetch(u, { signal: AbortSignal.timeout(10_000) }), now: () => number = Date.now): KeySource {
   let keys: Jwk[] = [];
   let fetchedAt = 0;
+  let inFlight: Promise<Jwk[]> | null = null;
+  let failedAt: number | null = null;
+  let lastError: unknown;
   return async (force) => {
-    const age = Date.now() - fetchedAt;
+    const age = now() - fetchedAt;
     if (keys.length > 0 && !(force && age > 60_000) && age < 3_600_000) return keys;
-    const res = await fetcher(`https://${teamDomain}/cdn-cgi/access/certs`);
-    if (res.status !== 200) throw new Error(`Access key fetch returned HTTP ${res.status}`);
-    const doc = (await res.json()) as { keys?: Jwk[] };
-    keys = Array.isArray(doc.keys) ? doc.keys : [];
-    fetchedAt = Date.now();
-    return keys;
+    if (inFlight) return inFlight;
+    if (failedAt !== null && now() - failedAt < 15_000) {
+      if (keys.length > 0 && age < 86_400_000) return keys;
+      throw lastError;
+    }
+    inFlight = (async () => {
+      try {
+        const res = await fetcher(`https://${teamDomain}/cdn-cgi/access/certs`);
+        if (res.status !== 200) throw new Error(`Access key fetch returned HTTP ${res.status}`);
+        const doc = (await res.json()) as { keys?: Jwk[] };
+        keys = Array.isArray(doc.keys) ? doc.keys : [];
+        fetchedAt = now();
+        failedAt = null;
+        return keys;
+      } catch (err) {
+        failedAt = now();
+        lastError = err;
+        if (keys.length > 0 && now() - fetchedAt < 86_400_000) return keys;
+        throw err;
+      }
+    })().finally(() => { inFlight = null; });
+    return inFlight;
   };
 }
 
