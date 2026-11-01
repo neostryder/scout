@@ -237,3 +237,9 @@ test("an owner names a listener the process name alone leaves unclear, and it su
   assert.equal(rows[0]!.owner, "Example Service service");
   assert.equal(rows[0]!.pid, 3100);
 });
+
+test("present listeners of one machine are read through the partial index", (t) => {
+  const db = seed(t);
+  const plan = db.prepare("EXPLAIN QUERY PLAN SELECT l.id FROM listeners l JOIN machines m ON m.id = l.machine_id WHERE l.machine_id = ? AND l.gone_at IS NULL ORDER BY m.name, l.port, l.id").all("hub") as { detail: string }[];
+  assert.ok(plan.some((row) => row.detail.includes("listeners_present")), plan.map((row) => row.detail).join(" | "));
+});

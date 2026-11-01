@@ -349,6 +349,7 @@ CREATE TABLE IF NOT EXISTS listeners (
   expected_down   INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS listener_identity ON listeners(machine_id, port, protocol, COALESCE(container_name, ''), COALESCE(process_name, ''));
+CREATE INDEX IF NOT EXISTS listeners_present ON listeners(machine_id, port, id) WHERE gone_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS descriptions (
   subject       TEXT NOT NULL,
