@@ -93,6 +93,49 @@ test("local tick opens all four sources, repeats fingerprints, and recovers once
   assert.deepEqual(f.logs, []);
 });
 
+test("task probe uses PowerShell with a longer timeout and recovers failed tasks", async (t) => {
+  const f = fixture();
+  t.after(() => f.db.close());
+  f.healthy();
+  f.local.tasks.enabled = true;
+  const task = { path: "\\Example\\Watchdog", name: "Watchdog", state: "Ready", enabled: true, lastRun: T, lastResult: 2147942402, nextRun: null };
+  const capture = f.options.runCapture!;
+  let result = { code: 0 as number | null, stdout: JSON.stringify([task]), error: null as string | null };
+  f.options.runCapture = async (program, args, stdin, timeoutMs) => {
+    if (program !== "pwsh.exe") return capture(program, args, stdin, timeoutMs);
+    f.calls.push({ program, args, stdin, timeoutMs });
+    return result;
+  };
+  const source = new FleetLocalSource(f.db, f.fleet, f.options);
+  await source.tick();
+  const call = f.calls.find((item) => item.program === "pwsh.exe")!;
+  assert.deepEqual(call.args.slice(0, 3), ["-NoProfile", "-NonInteractive", "-Command"]);
+  assert.match(call.args[3]!, /ConvertTo-Json -Compress -InputObject @\(Get-ScheduledTask \| ForEach-Object/);
+  assert.match(call.args[3]!, /Get-ScheduledTaskInfo/);
+  assert.match(call.args[3]!, /\$ErrorActionPreference = 'Stop'/);
+  assert.equal(call.stdin, "");
+  assert.equal(call.timeoutMs, 40_000);
+  assert.ok(f.calls.filter((item) => item.program !== "pwsh.exe").every((item) => item.timeoutMs === 15_000));
+  assert.equal(f.batches[0]?.[0]?.component, `task:${task.path}`);
+  assert.equal(f.batches[0]?.[0]?.failureClass, "ran-failed");
+  await source.tick();
+  assert.equal(f.batches[1]?.[0]?.fingerprint, f.batches[0]?.[0]?.fingerprint);
+  result = { ...result, stdout: JSON.stringify([{ ...task, lastResult: 0 }]) };
+  const restarted = new FleetLocalSource(f.db, f.fleet, f.options);
+  await restarted.tick();
+  assert.equal(f.batches[2]?.[0]?.recovered, true);
+  await restarted.tick();
+  assert.equal(f.batches.length, 3);
+  result = { code: null, stdout: "", error: "timeout" };
+  await restarted.tick();
+  assert.equal(f.batches[3]?.[0]?.component, "tasks");
+  assert.equal(f.batches[3]?.[0]?.failureClass, "watcher-failure");
+  result = { code: 0, stdout: "[]", error: null };
+  await restarted.tick();
+  assert.equal(f.batches[4]?.[0]?.recovered, true);
+  assert.deepEqual(f.logs, []);
+});
+
 test("query failure produces one watcher fingerprint and recovers when the query succeeds", async (t) => {
   const f = fixture();
   t.after(() => f.db.close());

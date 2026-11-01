@@ -107,6 +107,7 @@ export interface FleetLocalConfig {
   host: string;
   disk: { paths: string[]; warnFreePercent: number; criticalFreePercent: number };
   windowsEvents: FleetLocalEventConfig[];
+  tasks: { enabled: boolean; ignore: string[]; expected: { name: string; maxAgeHours: number }[]; failureClass: FailureClass };
   wsl: { enabled: boolean };
   logs: FleetLocalLogConfig[];
 }
@@ -291,13 +292,14 @@ export function localConfig(value: unknown): FleetLocalConfig | null {
     if (typeof item !== "string" || item.length > 200) return false;
     try { new RegExp(item, "i"); return true; } catch { return false; }
   };
-  if (!isRecord(value) || !keys(value, ["enabled", "host", "disk", "windowsEvents", "wsl", "logs"]) || JSON.stringify(value).length > 65_536) return null;
+  if (!isRecord(value) || !keys(value, ["enabled", "host", "disk", "windowsEvents", "tasks", "wsl", "logs"]) || JSON.stringify(value).length > 65_536) return null;
   if (value.enabled !== undefined && typeof value.enabled !== "boolean") return null;
   if (value.host !== undefined && !text(value.host, 64)) return null;
   const result: FleetLocalConfig = {
     host: typeof value.host === "string" ? value.host : hostname(),
     disk: { paths: [`${process.env.SystemDrive ?? "C:"}/`], warnFreePercent: 10, criticalFreePercent: 5 },
     windowsEvents: [],
+    tasks: { enabled: false, ignore: [], expected: [], failureClass: "ran-failed" },
     wsl: { enabled: false },
     logs: [],
   };
@@ -315,6 +317,21 @@ export function localConfig(value: unknown): FleetLocalConfig | null {
       result.disk[key] = disk[key];
     }
     if (result.disk.warnFreePercent <= result.disk.criticalFreePercent) return null;
+  }
+  if (value.tasks !== undefined) {
+    const tasks = value.tasks;
+    if (!isRecord(tasks) || !keys(tasks, ["enabled", "ignore", "expected", "failureClass"])) return null;
+    if (tasks.enabled !== undefined && typeof tasks.enabled !== "boolean") return null;
+    const ignore = tasks.ignore === undefined ? [] : tasks.ignore;
+    const expected = tasks.expected === undefined ? [] : tasks.expected;
+    const failureClass = tasks.failureClass === undefined ? "ran-failed" : tasks.failureClass;
+    if (!Array.isArray(ignore) || ignore.length > 50 || !ignore.every(regex)) return null;
+    if (!Array.isArray(expected) || expected.length > 50 || !FAILURE_CLASSES.includes(failureClass as FailureClass)) return null;
+    result.tasks = { enabled: tasks.enabled === true, ignore, expected: [], failureClass: failureClass as FailureClass };
+    for (const row of expected) {
+      if (!isRecord(row) || !keys(row, ["name", "maxAgeHours"]) || !text(row.name, 195) || !integer(row.maxAgeHours, 8760)) return null;
+      result.tasks.expected.push({ name: row.name, maxAgeHours: row.maxAgeHours });
+    }
   }
   if (value.wsl !== undefined) {
     if (!isRecord(value.wsl) || !keys(value.wsl, ["enabled"]) || (value.wsl.enabled !== undefined && typeof value.wsl.enabled !== "boolean")) return null;
