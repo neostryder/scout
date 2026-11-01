@@ -39,6 +39,9 @@ if (-not $NoTasks) {
 
 function Stop-Scout {
     Step 'stopping the Scout tasks, supervisors, and hub processes'
+    foreach ($name in $hubTask, $watchdogTask) {
+        if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Disable-ScheduledTask -TaskName $name | Out-Null }
+    }
     foreach ($name in $hubTask, $watchdogTask) { Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue }
     # Stopping a task ends only its wrapper, so the supervisor loops are stopped before the node processes they restart.
     foreach ($process in @(Find-Processes @('*run-hub.ps1*', '*run-watchdog.ps1*'))) { Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -46,58 +49,76 @@ function Stop-Scout {
     Start-Sleep -Seconds 2
 }
 
-if (-not $NoTasks) { Stop-Scout }
-
-Step "copying the code to $Target"
-New-Item -ItemType Directory -Force $Target | Out-Null
-$firstInstall = -not (Test-Path -LiteralPath (Join-Path $Target '.scout-data/catalog.db'))
-& robocopy $source $Target /MIR /XD node_modules .git .scout-data target dist /XF access.json machines.json /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
-if ($LASTEXITCODE -ge 8) { throw "robocopy of the code failed with exit code $LASTEXITCODE" }
-
-Step 'installing production dependencies'
-Push-Location $Target
 try {
-    & pnpm install --prod --frozen-lockfile --reporter=silent
-    if ($LASTEXITCODE -ne 0) { throw "pnpm install failed with exit code $LASTEXITCODE" }
-}
-finally { Pop-Location }
+    if (-not $NoTasks) { Stop-Scout }
 
-$dataDir = Join-Path $Target '.scout-data'
-New-Item -ItemType Directory -Force $dataDir | Out-Null
-if ($firstInstall -and -not $NoData -and ((-not $NoTasks) -or $Data) -and (Test-Path -LiteralPath (Join-Path $source '.scout-data'))) {
-    Step 'migrating .scout-data (scratch files named _* and profiling leftovers stay behind)'
-    & robocopy (Join-Path $source '.scout-data') $dataDir /E /XD '_*' /XF '_*' 'flaky*' 'hub-prof*' 'cl.crlf' '*.bak-*' 'catalog-backup-*' 'preview.db*' /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "robocopy of the data failed with exit code $LASTEXITCODE" }
-}
-foreach ($config in 'machines.json', 'access.json') {
-    $from = Join-Path $source $config
-    $to = Join-Path $Target $config
-    if ((Test-Path -LiteralPath $from) -and -not (Test-Path -LiteralPath $to)) { Copy-Item -LiteralPath $from -Destination $to }
-}
+    Step "copying the code to $Target"
+    New-Item -ItemType Directory -Force $Target | Out-Null
+    $firstInstall = -not (Test-Path -LiteralPath (Join-Path $Target '.scout-data/catalog.db'))
+    & robocopy $source $Target /MIR /XD node_modules .git .scout-data target dist /XF access.json machines.json /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy of the code failed with exit code $LASTEXITCODE" }
 
-if ($NoTasks) { Step "copy built at $Target; no task was touched"; return }
-
-$pwsh = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe'
-if (-not (Test-Path -LiteralPath $pwsh)) { $pwsh = (Get-Command pwsh).Source }
-function New-ScoutAction([string]$Script) {
-    $arguments = "--headless `"$pwsh`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$(Join-Path $Target "tools\$Script")`""
-    New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\conhost.exe') -Argument $arguments -WorkingDirectory $Target
-}
-function Set-ScoutTask([string]$Name, [string]$Script, [int]$RestartCount) {
-    $action = New-ScoutAction $Script
-    if (Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue) {
-        Set-ScheduledTask -TaskName $Name -Action $action | Out-Null
-        return
+    Step 'installing production dependencies'
+    Push-Location $Target
+    try {
+        & pnpm install --prod --frozen-lockfile --reporter=silent
+        if ($LASTEXITCODE -ne 0) { throw "pnpm install failed with exit code $LASTEXITCODE" }
     }
-    $user = "$env:USERDOMAIN\$env:USERNAME"
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount $RestartCount -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $Name -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) -Settings $settings -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited) | Out-Null
-}
-Step "registering the $hubTask and $watchdogTask tasks"
-Set-ScoutTask $hubTask 'run-hub.ps1' 999
-Set-ScoutTask $watchdogTask 'run-watchdog.ps1' 3
+    finally { Pop-Location }
 
-[ordered]@{ installedAt = (Get-Date).ToUniversalTime().ToString('o'); source = $sourceFull; target = $targetFull; hubTask = $hubTask; watchdogTask = $watchdogTask } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataDir 'install.json') -Encoding utf8
+    $dataDir = Join-Path $Target '.scout-data'
+    New-Item -ItemType Directory -Force $dataDir | Out-Null
+    if ($firstInstall -and -not $NoData -and ((-not $NoTasks) -or $Data) -and (Test-Path -LiteralPath (Join-Path $source '.scout-data'))) {
+        Step 'migrating .scout-data (scratch files named _* and profiling leftovers stay behind)'
+        & robocopy (Join-Path $source '.scout-data') $dataDir /E /XD '_*' /XF '_*' 'flaky*' 'hub-prof*' 'cl.crlf' '*.bak-*' 'catalog-backup-*' 'preview.db*' /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "robocopy of the data failed with exit code $LASTEXITCODE" }
+    }
+    foreach ($config in 'machines.json', 'access.json') {
+        $from = Join-Path $source $config
+        $to = Join-Path $Target $config
+        if ((Test-Path -LiteralPath $from) -and -not (Test-Path -LiteralPath $to)) { Copy-Item -LiteralPath $from -Destination $to }
+    }
+
+    if ($NoTasks) { Step "copy built at $Target; no task was touched"; return }
+
+    $pwsh = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe'
+    if (-not (Test-Path -LiteralPath $pwsh)) { $pwsh = (Get-Command pwsh).Source }
+    function New-ScoutAction([string]$Script) {
+        $arguments = "--headless `"$pwsh`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$(Join-Path $Target "tools\$Script")`""
+        New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\conhost.exe') -Argument $arguments -WorkingDirectory $Target
+    }
+    function Set-ScoutTask([string]$Name, [string]$Script, [int]$RestartCount) {
+        $action = New-ScoutAction $Script
+        $user = "$env:USERDOMAIN\$env:USERNAME"
+        # Repetition brings stopped tasks back within five minutes.
+        $repeat = New-ScheduledTaskTrigger -Daily -At (Get-Date)
+        $repeat.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 1)).Repetition
+        $triggers = @((New-ScheduledTaskTrigger -AtLogOn -User $user), $repeat)
+        $settings = New-ScheduledTaskSettingsSet -Disable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount $RestartCount -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        if (Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue) {
+            Set-ScheduledTask -TaskName $Name -Action $action -Trigger $triggers -Settings $settings | Out-Null
+            return
+        }
+        Register-ScheduledTask -TaskName $Name -Action $action -Trigger $triggers -Settings $settings -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited) | Out-Null
+    }
+    Step "registering the $hubTask and $watchdogTask tasks"
+    Set-ScoutTask $hubTask 'run-hub.ps1' 999
+    Set-ScoutTask $watchdogTask 'run-watchdog.ps1' 3
+
+    [ordered]@{ installedAt = (Get-Date).ToUniversalTime().ToString('o'); source = $sourceFull; target = $targetFull; hubTask = $hubTask; watchdogTask = $watchdogTask } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataDir 'install.json') -Encoding utf8
+}
+finally {
+    if (-not $NoTasks) {
+        $enableError = $null
+        foreach ($name in $hubTask, $watchdogTask) {
+            try {
+                if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Enable-ScheduledTask -TaskName $name | Out-Null }
+            }
+            catch { if (-not $enableError) { $enableError = $_ } }
+        }
+        if ($enableError) { throw $enableError }
+    }
+}
 
 if (-not $NoStart) {
     Step 'starting the tasks'
