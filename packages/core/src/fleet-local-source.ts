@@ -7,11 +7,14 @@ export type LocalObservation =
   | { kind: "disk"; path: string; bsize: number; blocks: number; bavail: number }
   | { kind: "disk-error"; path: string; error: string }
   | { kind: "windowsEvents"; index: number; result: LocalCommandResult }
+  | { kind: "tasks"; result: LocalCommandResult }
   | { kind: "wsl"; result: LocalCommandResult }
   | { kind: "log"; index: number; text: string; mtimeMs: number }
   | { kind: "log-error"; index: number; error: string };
 
 export interface LocalWindowsEvent { id: number; provider: string; time: string; text: string }
+
+interface LocalTask { path: string; name: string; state: string; lastRun: string | null; lastResult: number; nextRun: string | null; enabled: boolean }
 
 export function windowsEventQuery(config: FleetLocalEventConfig): string {
   const clauses: string[] = [];
@@ -102,6 +105,47 @@ export function localPackets(config: FleetLocalConfig, observations: readonly Lo
       packets.push(packet(config, entry.component, entry.failureClass, `newest event ${events[0]!.id}; ${events.length} events`, {
         journalTail: journal(events.slice(0, 5).map((event) => `${event.time} ${event.provider} EventID=${event.id} ${event.text}`)),
       }, now));
+    } else if (observation.kind === "tasks") {
+      if (!config.tasks.enabled) continue;
+      const { result } = observation;
+      if (result.error || result.code !== 0) {
+        failure("tasks", result.error ?? `exit ${result.code ?? "null"}`);
+        continue;
+      }
+      let tasks: LocalTask[];
+      try {
+        tasks = JSON.parse(result.stdout);
+        if (!Array.isArray(tasks) || tasks.some((task) => !task || typeof task.path !== "string" || typeof task.name !== "string" || typeof task.state !== "string" || typeof task.enabled !== "boolean" || !Number.isSafeInteger(task.lastResult) || (task.lastRun !== null && (typeof task.lastRun !== "string" || !Number.isFinite(Date.parse(task.lastRun)))) || (task.nextRun !== null && (typeof task.nextRun !== "string" || !Number.isFinite(Date.parse(task.nextRun)))))) throw new Error("invalid task output");
+      } catch {
+        failure("tasks", "invalid task output");
+        continue;
+      }
+      const ignore = config.tasks.ignore.map((pattern) => new RegExp(pattern, "i"));
+      const skipped = (task: LocalTask): boolean => !task.enabled || task.state.toLowerCase() === "disabled" || ignore.some((pattern) => pattern.test(task.path));
+      const normalResults = new Set([0, 267008, 267009, 267010, 267011, 267012, 267014, 267015, 2147946720]);
+      for (const task of tasks) {
+        if (skipped(task) || task.lastRun === null) continue;
+        const age = nowMs - Date.parse(task.lastRun);
+        // Task Scheduler returns the same HRESULT as signed or unsigned integers.
+        const lastResult = task.lastResult >>> 0;
+        if (age < 0 || age > 7 * 24 * 60 * 60_000 || normalResults.has(lastResult)) continue;
+        const lastResultHex = `0x${lastResult.toString(16).toUpperCase().padStart(8, "0")}`;
+        packets.push(packet(config, `task:${task.path}`, config.tasks.failureClass, `task exited ${lastResultHex}`, {
+          snapshot: { path: task.path, state: task.state, lastRun: task.lastRun, nextRun: task.nextRun, lastResultHex },
+        }, now));
+      }
+      for (const entry of config.tasks.expected) {
+        const name = entry.name.toLowerCase();
+        const task = tasks.find((task) => task.name.toLowerCase() === name || task.path.toLowerCase() === name);
+        if (!task) {
+          if (!ignore.some((pattern) => pattern.test(entry.name))) packets.push(packet(config, `task:${entry.name}`, "never-ran", "expected task is missing", { snapshot: { path: entry.name } }, now));
+          continue;
+        }
+        if (skipped(task) || (task.lastRun !== null && nowMs - Date.parse(task.lastRun) <= entry.maxAgeHours * 60 * 60_000)) continue;
+        packets.push(packet(config, `task:${task.path}`, "never-ran", task.lastRun === null ? "task has never run" : `task has not run in ${entry.maxAgeHours} hours`, {
+          snapshot: { path: task.path, state: task.state, lastRun: task.lastRun, nextRun: task.nextRun },
+        }, now));
+      }
     } else if (observation.kind === "wsl") {
       const { result } = observation;
       if (/\bENOENT\b/.test(result.error ?? "")) continue;

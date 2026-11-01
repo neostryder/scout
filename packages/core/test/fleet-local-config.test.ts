@@ -19,6 +19,7 @@ test("local config supplies bounded defaults and requires explicit enablement", 
   assert.deepEqual(config.windowsEvents, []);
   assert.deepEqual(config.logs, []);
   assert.deepEqual(config.wsl, { enabled: false });
+  assert.deepEqual(config.tasks, { enabled: false, ignore: [], expected: [], failureClass: "ran-failed" });
   const full = localConfig({ enabled: true, host: "Example", disk: { paths: ["C:/"], warnFreePercent: 20, criticalFreePercent: 10 }, windowsEvents: [event], wsl: { enabled: true }, logs: [{ ...log, ignore: "noise", staleAfterMinutes: 60 }] });
   assert.ok(full);
   assert.equal(full.enabled, true);
@@ -42,6 +43,26 @@ test("local config rejects unknown keys and invalid scalar, list, regex, and thr
   assert.equal(localConfig({ logs: Array(30).fill({ ...log, path: "x".repeat(1024), pattern: "x".repeat(200), ignore: "x".repeat(200), component: "x".repeat(180) }), windowsEvents: Array(20).fill({ ...event, providers: Array(20).fill("x".repeat(100)) }) }), null);
 });
 
+test("local task config accepts bounded settings and defaults", () => {
+  const defaults = { enabled: false, ignore: [], expected: [], failureClass: "ran-failed" };
+  assert.deepEqual(localConfig({ tasks: {} })?.tasks, defaults);
+  assert.deepEqual(localConfig({ tasks: { enabled: false } })?.tasks, defaults);
+  const tasks = { enabled: true, ignore: ["^\\\\Microsoft\\\\Windows\\\\"], expected: [{ name: "Watchdog", maxAgeHours: 1 }, { name: "x".repeat(195), maxAgeHours: 8760 }], failureClass: "dead" };
+  assert.deepEqual(localConfig({ tasks })?.tasks, tasks);
+  assert.ok(localConfig({ tasks: { ignore: Array(50).fill("x".repeat(200)), expected: Array(50).fill({ name: "Example", maxAgeHours: 24 }) } }));
+  for (const failureClass of FAILURE_CLASSES) assert.equal(localConfig({ tasks: { failureClass } })?.tasks.failureClass, failureClass);
+});
+
+test("local task config rejects unknown keys, bad regexes, and invalid expected ages", () => {
+  for (const tasks of [null, [], true, { unknown: true }, { enabled: "true" }, { ignore: "Example" }, { ignore: [null] }, { ignore: ["["] }, { ignore: ["x".repeat(201)] }, { ignore: Array(51).fill("Example") }, { expected: {} }, { expected: [null] }, { expected: Array(51).fill({ name: "Example", maxAgeHours: 1 }) }, { failureClass: "invalid" }, { failureClass: null }]) {
+    assert.equal(localConfig({ tasks }), null, JSON.stringify(tasks));
+  }
+  for (const bad of [{ name: "" }, { name: " " }, { name: "x".repeat(196) }, { name: "line\nbreak" }, { unknown: true }, { maxAgeHours: 0 }, { maxAgeHours: -1 }, { maxAgeHours: 1.5 }, { maxAgeHours: 8761 }, { maxAgeHours: "24" }, { maxAgeHours: null }, { maxAgeHours: undefined }]) {
+    const tasks = { expected: [{ name: "Example", maxAgeHours: 24, ...bad }] };
+    assert.equal(localConfig({ tasks }), null, JSON.stringify(tasks));
+  }
+});
+
 test("fleet file accepts local and catalog together and rejects a malformed local block", () => {
   const dir = mkdtempSync(join(root, "scout-fleet-local-"));
   try {
@@ -52,7 +73,7 @@ test("fleet file accepts local and catalog together and rejects a malformed loca
     assert.equal(file.sources?.catalog?.enabled, true);
     assert.equal(file.sources?.local?.enabled, true);
     assert.equal(file.sources?.local?.host, "Example");
-    for (const local of [{ unknown: true }, { logs: [{ ...log, pattern: "[" }] }, { windowsEvents: [{ ...event, failureClass: "other" }] }]) {
+    for (const local of [{ unknown: true }, { logs: [{ ...log, pattern: "[" }] }, { windowsEvents: [{ ...event, failureClass: "other" }] }, { tasks: { ignore: ["["] } }]) {
       writeFileSync(path, JSON.stringify({ ingestTokenEnv: "FLEET_TOKEN", sources: { local } }), "utf8");
       const broken = loadFleetConfig(path);
       assert.match(broken.fileError ?? "", /malformed/);

@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **Scout can now alert when a Windows scheduled task fails, with no event log to switch on and no administrator rights.** Turn on `tasks` under `sources.local` and the hub opens an incident for each failing task, then resolves it when the task next succeeds. You can also list tasks you expect to run and get an incident when one goes missing or overdue.
 - [Visible] [Software] **Windows services that a winget or Microsoft Store update stops on the hub computer now start again after the update.** Scout records the package's automatic, running services before the update and starts any that stopped once the installer exits, giving up after 60 seconds. If a service will not start, the job keeps a "service" note naming it with the `Start-Service` command to run.
 - [Visible] [Services] **You can now review, filter, and act on fleet incidents from the new Incidents tab on the Services page.** Opening a row shows its evidence and latest events, and each row has Investigate, Acknowledge, Snooze, and Mute. Filters live in the page address, so you can share a filtered view.
 - [Visible] [Services] **You can now pass fleet packets through your own triage command to drop noise, and run allowlisted repair commands when a matching incident is announced.** Both are optional, and every repair attempt is written to the fleet events table.

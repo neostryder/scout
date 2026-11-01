@@ -7,6 +7,8 @@ const config = localConfig({ enabled: true, host: "Example", windowsEvents: [{ c
 const success = { code: 0, stdout: "", error: null };
 const disk: LocalObservation = { kind: "disk", path: "C:/", bsize: 1024 ** 3, blocks: 100, bavail: 4 };
 const log: LocalObservation = { kind: "log", index: 0, text: "ERROR failed", mtimeMs: Date.parse(T) };
+const taskConfig = localConfig({ host: "Example", tasks: { enabled: true } })!;
+const scheduledTask = { path: "\\Example\\Watchdog", name: "Watchdog", state: "Ready", lastRun: T, lastResult: 0, nextRun: "2026-10-31T19:00:00.000Z", enabled: true };
 
 function event(id: number, time: string, text = "task failed", provider = "Example"): string {
   return `<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="${provider}"/><EventID Qualifiers="0">${id}</EventID><TimeCreated SystemTime="${time}"/></System><EventData><Data Name="Error">${text}</Data></EventData></Event>`;
@@ -134,6 +136,77 @@ test("stale logs open critical wedged incidents and missing logs open watcher fa
   assert.equal(failure.component, "log:Example app");
   assert.equal(failure.failureClass, "watcher-failure");
   assert.equal(packets([missing, missing], settings).length, 1);
+});
+
+function taskPackets(tasks: unknown[], settings: FleetLocalConfig = taskConfig) {
+  return packets([{ kind: "tasks", result: { ...success, stdout: JSON.stringify(tasks) } }], settings);
+}
+
+test("task failures normalize signed results and preserve task evidence", () => {
+  for (const lastResult of [2147942402, -2147024894]) {
+    const result = taskPackets([{ ...scheduledTask, lastResult }]);
+    assert.equal(result.length, 1);
+    const item = result[0]!;
+    assert.equal(item.component, `task:${scheduledTask.path}`);
+    assert.equal(item.failureClass, "ran-failed");
+    assert.equal(item.summary, "task exited 0x80070002");
+    assert.deepEqual(item.evidence.snapshot, { path: scheduledTask.path, state: "Ready", lastRun: T, nextRun: scheduledTask.nextRun, lastResultHex: "0x80070002" });
+  }
+  const settings = localConfig({ host: "Example", tasks: { enabled: true, failureClass: "dead" } })!;
+  assert.equal(taskPackets([{ ...scheduledTask, lastResult: 1 }], settings)[0]?.failureClass, "dead");
+});
+
+test("task status codes and instance-already-running results do not open incidents", () => {
+  const codes = [0, 267008, 267009, 267010, 267011, 267012, 267014, 267015, 2147946720, 2147946720 | 0];
+  assert.deepEqual(taskPackets(codes.map((lastResult) => ({ ...scheduledTask, lastResult }))), []);
+  for (const lastResult of [267013, 267016]) assert.equal(taskPackets([{ ...scheduledTask, lastResult }]).length, 1);
+});
+
+test("task failures skip ignored, disabled, never-run, old, and future tasks", () => {
+  const settings = localConfig({ host: "Example", tasks: { enabled: true, ignore: ["^\\\\EXAMPLE\\\\WATCH"] } })!;
+  assert.deepEqual(taskPackets([{ ...scheduledTask, lastResult: 1 }], settings), []);
+  assert.deepEqual(taskPackets([
+    { ...scheduledTask, lastResult: 1, enabled: false, state: "Disabled" },
+    { ...scheduledTask, lastResult: 1, lastRun: null },
+    { ...scheduledTask, lastResult: 1, lastRun: "2026-10-24T17:59:59.999Z" },
+    { ...scheduledTask, lastResult: 1, lastRun: "2026-10-31T18:00:00.001Z" },
+  ]), []);
+  assert.equal(taskPackets([{ ...scheduledTask, lastResult: 1, lastRun: "2026-10-24T18:00:00.000Z" }]).length, 1);
+  assert.deepEqual(taskPackets([{ ...scheduledTask, lastResult: 1 }], config), []);
+});
+
+test("expected tasks report missing, never-run, and stale tasks by case-insensitive name or path", () => {
+  for (const name of ["WATCHDOG", "\\EXAMPLE\\WATCHDOG"]) {
+    const settings = localConfig({ host: "Example", tasks: { enabled: true, expected: [{ name, maxAgeHours: 24 }] } })!;
+    const missing = taskPackets([], settings);
+    assert.equal(missing.length, 1);
+    assert.equal(missing[0]?.component, `task:${name}`);
+    assert.equal(missing[0]?.failureClass, "never-ran");
+    assert.equal(missing[0]?.summary, "expected task is missing");
+    const never = taskPackets([{ ...scheduledTask, lastRun: null, lastResult: 267011 }], settings);
+    assert.equal(never[0]?.component, `task:${scheduledTask.path}`);
+    assert.equal(never[0]?.failureClass, "never-ran");
+    assert.equal(never[0]?.summary, "task has never run");
+    const stale = taskPackets([{ ...scheduledTask, lastRun: "2026-10-30T17:59:59.999Z" }], settings);
+    assert.equal(stale[0]?.failureClass, "never-ran");
+    assert.equal(stale[0]?.summary, "task has not run in 24 hours");
+    assert.deepEqual(taskPackets([{ ...scheduledTask, lastRun: "2026-10-30T18:00:00.000Z" }], settings), []);
+    assert.deepEqual(taskPackets([scheduledTask], settings), []);
+    assert.deepEqual(taskPackets([{ ...scheduledTask, enabled: false, state: "Disabled", lastRun: null }], settings), []);
+    settings.tasks.ignore = ["^\\\\example\\\\"];
+    assert.deepEqual(taskPackets([{ ...scheduledTask, lastRun: null }], settings), []);
+  }
+});
+
+test("task probe errors and malformed output produce one watcher failure", () => {
+  for (const result of [{ code: 1, stdout: "[]", error: null }, { code: 0, stdout: "[]", error: "access denied" }, { code: null, stdout: "", error: "timeout" }, ...["{", "{}", "null", "", "[null]", JSON.stringify(scheduledTask)].map((stdout) => ({ ...success, stdout }))]) {
+    const observation: LocalObservation = { kind: "tasks", result };
+    const failure = packets([observation, observation], taskConfig);
+    assert.equal(failure.length, 1);
+    assert.equal(failure[0]?.component, "tasks");
+    assert.equal(failure[0]?.failureClass, "watcher-failure");
+  }
+  assert.deepEqual(taskPackets([]), []);
 });
 
 test("each local source reconciles recovery once with its original fingerprint", () => {

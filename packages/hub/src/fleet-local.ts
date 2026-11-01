@@ -93,9 +93,9 @@ export class FleetLocalSource {
           previous.set(parsed.packet.fingerprint, parsed.packet);
         }
       }
-      const run = async (program: string, args: string[]) => {
+      const run = async (program: string, args: string[], timeoutMs = 15_000) => {
         try {
-          return await this.runCapture(program, args, "", 15_000);
+          return await this.runCapture(program, args, "", timeoutMs);
         } catch (error) {
           return { code: null, stdout: "", error: (error as NodeJS.ErrnoException | null)?.code === "ENOENT" ? "ENOENT" : safeError(error) };
         }
@@ -106,6 +106,10 @@ export class FleetLocalSource {
       });
       for (const [index, entry] of config.windowsEvents.entries()) {
         probes.push(run("wevtutil.exe", ["qe", entry.log, `/q:${windowsEventQuery(entry)}`, "/c:20", "/rd:true", "/f:xml"]).then((result) => ({ kind: "windowsEvents", index, result })));
+      }
+      if (config.tasks.enabled) {
+        const script = "$ErrorActionPreference = 'Stop'; ConvertTo-Json -Compress -InputObject @(Get-ScheduledTask | ForEach-Object { $i = $_ | Get-ScheduledTaskInfo; [pscustomobject]@{ path = ($_.TaskPath + $_.TaskName); name = $_.TaskName; state = [string]$_.State; enabled = ($_.State -ne 'Disabled'); lastRun = if ($i.LastRunTime -and $i.LastRunTime.Year -gt 1999) { $i.LastRunTime.ToUniversalTime().ToString('o') } else { $null }; lastResult = [int64]$i.LastTaskResult; nextRun = if ($i.NextRunTime -and $i.NextRunTime.Year -gt 1999) { $i.NextRunTime.ToUniversalTime().ToString('o') } else { $null } } })";
+        probes.push(run("pwsh.exe", ["-NoProfile", "-NonInteractive", "-Command", script], 40_000).then((result) => ({ kind: "tasks", result })));
       }
       if (config.wsl.enabled) probes.push(run("wsl.exe", ["--status"]).then((result) => ({ kind: "wsl", result })));
       for (const [index, entry] of config.logs.entries()) {
