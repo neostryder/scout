@@ -105,6 +105,8 @@ td.status .note { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2
 .detail .mono { font-family: var(--mono); font-size: 12px; }
 .detail table { font-size: 13px; }
 .release-summary { white-space: pre-wrap; }
+.breaking-count { margin: 0 0 6px; color: var(--muted); font-size: 12px; }
+.breaking-tag { display: inline-block; border-left: 3px solid var(--accent); padding: 0 5px; font-size: 11px; font-weight: 700; }
 .detail pre { background: var(--bg); padding: 8px; border-radius: 6px; overflow: auto; font-size: 12px; }
 .detail .close { float: right; }
 .detail ul { margin: 0; padding-left: 18px; }

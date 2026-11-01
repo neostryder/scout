@@ -22,6 +22,7 @@ export * from "./download-link.ts";
 export * from "./download-source.ts";
 export * from "./support-windows.ts";
 export * from "./changelog.ts";
+export * from "./breaking-lines.ts";
 export * from "./dependencies.ts";
 export * from "./listeners.ts";
 export * from "./services.ts";

@@ -12,7 +12,7 @@ import { listenerWatchKey, listOutages, serviceWatchable, serviceWatchKey, watch
 import { isWatched, type WatchConfig } from "./watch-file.ts";
 import { backupAlert, backupAlertState, type BackupReading } from "./backup-health.ts";
 
-export const ALERT_KINDS = ["new-listener", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "machine-outage", "service-outage", "backup-unhealthy"] as const;
+export const ALERT_KINDS = ["new-listener", "listener-gone", "new-daemon", "service-down", "domain-origin-down", "exposure-change", "unhealthy", "cert-expiring", "crash-loop", "port-clash", "machine-outage", "service-outage", "backup-unhealthy"] as const;
 export const ALERT_STATES = ["open", "acknowledged", "resolved"] as const;
 export type AlertKind = typeof ALERT_KINDS[number];
 export type AlertState = typeof ALERT_STATES[number];
@@ -189,7 +189,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
       const baseline = db.prepare("SELECT event_id AS id FROM alert_baseline WHERE machine_id = ?").get(machine.id) as { id: number } | undefined;
       if (!baseline) initialized.add(machine.id);
       else {
-        const events = db.prepare("SELECT kind, detail_json AS detail FROM events WHERE machine_id = ? AND id > ? AND id <= ? ORDER BY id").all(machine.id, baseline.id, latest) as { kind: string; detail: string }[];
+        const events = db.prepare("SELECT at, kind, detail_json AS detail FROM events WHERE machine_id = ? AND id > ? AND id <= ? ORDER BY id").all(machine.id, baseline.id, latest) as { at: string; kind: string; detail: string }[];
         for (const event of events) {
           let detail: EventDetail;
           try { detail = JSON.parse(event.detail); } catch { continue; }
@@ -198,10 +198,21 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
             const row = listeners.find((row) => row.machineId === machine.id && row.port === detail.port && (row.processName ?? row.containerName) === detail.process && (detail.container === undefined || row.containerName === detail.container));
             if (!row || !visible(row)) continue;
             if (event.kind === "listener_new" && row.goneAt === null) add("new-listener", row, row.bind === "all" ? "warn" : "info", `New listener on ${row.machineName}: port ${row.port} (${row.processName ?? row.containerName ?? "unknown"})`, `Port ${row.port} listens on ${row.bind} interfaces.`);
+            if (event.kind === "listener_gone" && row.goneAt !== null && !expected("listener", row.id) && (detail.oldBind === "all" || detail.oldBind === "lan") && !["paused", "unreachable", "stopped"].includes((db.prepare("SELECT state FROM machines WHERE id = ?").get(machine.id) as { state: string }).state)) {
+              const cutoff = new Date(Date.parse(event.at) - 60 * 60 * 1000).toISOString();
+              const goneEvents = db.prepare("SELECT detail_json AS detail FROM events WHERE machine_id = ? AND kind = 'listener_gone' AND at >= ? AND at <= ?").all(machine.id, cutoff, event.at) as { detail: string }[];
+              const flaps = goneEvents.filter((item) => {
+                try {
+                  const gone = JSON.parse(item.detail) as EventDetail;
+                  return gone.port === detail.port && gone.process === detail.process && (gone.container ?? null) === (detail.container ?? null);
+                } catch { return false; }
+              }).length;
+              if (flaps <= 3) add("listener-gone", row, routeTarget(row) ? "high" : "warn", `Listener gone from ${row.machineName}: port ${row.port} (${row.processName ?? row.containerName ?? "unknown"})`, `Port ${row.port} is no longer listening on ${detail.oldBind} interfaces.`);
+            }
             const oldBind = detail.oldBind as keyof typeof WIDTH;
             const newBind = detail.newBind as keyof typeof WIDTH;
             if (event.kind === "listener_changed" && Object.hasOwn(WIDTH, oldBind) && Object.hasOwn(WIDTH, newBind) && WIDTH[newBind] > WIDTH[oldBind] && row.goneAt === null && WIDTH[row.bind] > WIDTH[oldBind]) add("exposure-change", row, row.bind === "all" ? "high" : "warn", `Listener exposure widened on ${row.machineName}: port ${row.port}`, `Port ${row.port} changed from ${oldBind} to ${row.bind}.`, { fromBind: oldBind, hostnames: routes.filter((route) => route.listener?.id === row.id).map((route) => route.hostname) });
-            if (event.kind === "listener_gone" && down(row) && !expected("listener", row.id)) add("service-down", row, routeTarget(row) ? "high" : "warn", `Listener stopped on ${row.machineName}: port ${row.port}`, `Port ${row.port} is no longer listening.`);
+            if (event.kind === "listener_gone" && detail.oldBind === "loopback" && down(row) && !expected("listener", row.id)) add("service-down", row, routeTarget(row) ? "high" : "warn", `Listener stopped on ${row.machineName}: port ${row.port}`, `Port ${row.port} is no longer listening.`);
           } else if (event.kind.startsWith("service_")) {
             const row = services.find((row) => row.machineId === machine.id && row.name === detail.name && row.kind === detail.kind && row.domain === detail.domain);
             if (!row || !visible(row)) continue;
@@ -233,7 +244,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
         row.kind === "cert-expiring" ? !health || health.tlsDaysLeft !== null && health.tlsDaysLeft > 14 :
         row.kind === "crash-loop" ? !healthCandidates.some((candidate) => candidate.key === row.key) :
         row.kind === "domain-origin-down" ? !route || route.state === "ok" :
-        !target || !visible(target) || (row.kind === "service-down" ? !down(target) || expected(row.targetType as "service" | "listener", target.id) : target.goneAt !== null || row.kind === "exposure-change" && "bind" in target && WIDTH[target.bind] <= WIDTH[condition.fromBind!]);
+        !target || !visible(target) || (row.kind === "service-down" ? !down(target) || expected(row.targetType as "service" | "listener", target.id) : row.kind === "listener-gone" ? target.goneAt === null : target.goneAt !== null || row.kind === "exposure-change" && "bind" in target && WIDTH[target.bind] <= WIDTH[condition.fromBind!]);
       if (!clears) continue;
       db.prepare("UPDATE alerts SET state = 'resolved', resolved_at = ? WHERE id = ?").run(now, row.id);
       changes.push({ alert: { ...alertObject(row), state: "resolved", resolvedAt: now }, change: "resolved" });

@@ -3,6 +3,7 @@ import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 import { upstreamSections } from "./intel-detail.js";
 import { isLive, jobProgress, jobSummary } from "./jobs-model.js";
+import { breakingLines } from "./breaking-lines.js";
 
 let windowPanel;
 let servicesView;
@@ -213,7 +214,14 @@ async function openDetail(id) {
   if (d.supportWindows?.length) sections.push(h("h3", {}, "Support"), h("table", {}, h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Cycle"), h("th", { scope: "col" }, "End date"), h("th", { scope: "col" }, "Status"))), h("tbody", {}, d.supportWindows.map((window) => h("tr", {}, h("td", {}, window.cycle), h("td", {}, window.eol || "no end date announced"), h("td", {}, [window.eolPassed && "Passed", window.lts && "LTS"].filter(Boolean).join(", ")))))));
   if (d.changelog) {
     const source = safeUrl(d.changelog.sourceUrl);
-    sections.push(h("h3", {}, "Release notes"), h("p", { class: "release-summary" }, d.changelog.summary), source ? h("p", {}, h("a", { href: source, target: "_blank", rel: "noopener noreferrer" }, "Source")) : [], h("small", { class: "muted" }, d.changelog.model));
+    const matches = breakingLines(d.changelog.summary);
+    const matchedLines = new Map(matches.map((match) => [match.line, match]));
+    const summaryLines = d.changelog.summary.split(/\r?\n/);
+    const summary = summaryLines.map((line, index) => {
+      const match = matchedLines.get(index + 1);
+      return [match ? h("span", { class: "breaking-line" }, h("span", { class: "breaking-tag", role: "note", "aria-label": `Breaking change: ${match.reason}` }, "Breaking"), " ", line) : line, index < summaryLines.length - 1 ? "\n" : ""];
+    });
+    sections.push(h("h3", {}, "Release notes"), matches.length ? h("p", { class: "breaking-count", role: "status" }, `${matches.length} lines look like breaking changes`) : [], h("p", { class: "release-summary" }, summary), source ? h("p", {}, h("a", { href: source, target: "_blank", rel: "noopener noreferrer" }, "Source")) : [], h("small", { class: "muted" }, d.changelog.model));
   }
   if (d.flags?.length) sections.push(h("h3", {}, "Provenance"), h("ul", {}, d.flags.map((flag) => h("li", {}, `${flag.label}: ${flag.evidence}`))));
   sections.push(...upstreamSections(d));
