@@ -9,6 +9,7 @@ export interface UpdatePlan {
 
 const ID = /^(?:@?[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)?)$/;
 const VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+const WINDOWS_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._+-]+)*(?: \([A-Za-z0-9._+-]+(?: [A-Za-z0-9._+-]+)*\))?$/;
 // pacman names may carry + and @, and its versions an epoch such as 1:2.3-1.
 const PACMAN_ID = /^[A-Za-z0-9][A-Za-z0-9@._+-]*$/;
 const PACMAN_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+:~-]*$/;
@@ -20,13 +21,23 @@ const parseBrew = (key: string, stdout: string): string | null => {
   return versions.reduce<string | null>((best, v) => best === null || (compareVersions(v, best) ?? 0) > 0 ? v : best, null);
 };
 const parseWinget = (key: string, stdout: string): string | null => {
-  // Columns are fixed-width with a single space when a value fills its column, so split on any whitespace: an id has no spaces and the version follows it.
-  for (const line of stdout.split(/\r?\n/)) {
+  // A full column leaves only one separator; a parenthesized build still belongs to the version.
+  const lines = stdout.split(/\r?\n/);
+  const header = lines.find((line) => /\bId\s+Version\b/.test(line));
+  const start = header?.indexOf("Version") ?? -1;
+  const end = header?.search(/\b(?:Available|Source)\b/) ?? -1;
+  for (const line of lines) {
     const tokens = line.trim().split(/\s+/);
     const at = tokens.indexOf(key);
     if (at < 0) continue;
-    const version = tokens.slice(at + 1).find((t) => t !== "<" && t !== ">");
-    return versionMatch(version ?? "");
+    if (start >= 0 && line.slice(0, start).trimEnd().endsWith(key)) {
+      const column = line.slice(start, end > start ? end : undefined).trim().replace(/^[<>]\s*/, "");
+      if (WINDOWS_VERSION.test(column)) return column;
+    }
+    const rest = tokens.slice(at + 1).filter((t) => t !== "<" && t !== ">");
+    const suffix = rest[1]?.startsWith("(") ? rest.slice(1).join(" ").match(/^\([A-Za-z0-9._+-]+(?: [A-Za-z0-9._+-]+)*\)/)?.[0] : undefined;
+    const version = `${rest[0] ?? ""}${suffix ? ` ${suffix}` : ""}`;
+    return WINDOWS_VERSION.test(version) ? version : null;
   }
   return null;
 };
@@ -68,7 +79,7 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   let argv: string[] = [];
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
   if (!machine) refusal = "machine is not configured";
-  else if (!(arch ? PACMAN_ID.test(install.key) && PACMAN_VERSION.test(target) : ID.test(install.key) && VERSION.test(target))) refusal = "invalid package id or version";
+  else if (!(arch ? PACMAN_ID.test(install.key) && PACMAN_VERSION.test(target) : ID.test(install.key) && (["winget", "msstore"].includes(install.ecosystem) ? WINDOWS_VERSION : VERSION).test(target))) refusal = "invalid package id or version";
   // winget raises the Windows administrator prompt itself, so Scout can run it only where someone can answer: on this computer.
   else if (needsAdmin && !(["winget", "msstore"].includes(install.ecosystem) && machine.transport.type === "local")) refusal = "needs admin; Scout cannot elevate yet";
   else {

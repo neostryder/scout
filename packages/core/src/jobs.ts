@@ -5,9 +5,9 @@ import type { ConfirmedDownload } from "./download-source.ts";
 export type JobState = "queued" | "preflight" | "running" | "done" | "failed" | "stopped";
 export const JOB_PHASES = ["download", "verify", "install", "finish"] as const;
 export type JobPhase = typeof JOB_PHASES[number];
-export const JOB_ATTENTION = ["uac", "window"] as const;
+export const JOB_ATTENTION = ["uac", "window", "service"] as const;
 export type JobAttentionKind = typeof JOB_ATTENTION[number];
-/** What a running job is waiting on a person for: the Windows administrator prompt, or a window the installer opened. */
+/** Service recovery can still need a person after the installer exits. */
 export interface JobAttention { kind: JobAttentionKind; detail: string | null; since: string }
 export interface JobStep { seq: number; name: string; state: string; output: string | null; at: string }
 export interface Job {
@@ -101,8 +101,12 @@ export function recordStep(db: Db, id: number, name: string, state: string, outp
 
 export function setJobState(db: Db, id: number, state: JobState, message: string | null = null): void {
   const finished = ["done", "failed", "stopped"].includes(state) ? new Date().toISOString() : null;
-  // A finished job waits on no one.
-  if (finished) db.prepare("UPDATE jobs SET attention = NULL, attention_detail = NULL, attention_at = NULL WHERE id = ?").run(id);
+  // A stopped service still needs attention after the installer exits.
+  if (finished) {
+    const service = db.prepare("SELECT attention_detail AS detail FROM jobs WHERE id = ? AND attention = 'service'").get(id) as { detail: string } | undefined;
+    if (service) message = message ? `${message}; ${service.detail}` : service.detail;
+    else db.prepare("UPDATE jobs SET attention = NULL, attention_detail = NULL, attention_at = NULL WHERE id = ?").run(id);
+  }
   db.prepare("UPDATE jobs SET state = ?, message = ?, finished_at = ? WHERE id = ?").run(state, message, finished, id);
 }
 
@@ -119,8 +123,8 @@ export function setJobAttention(db: Db, id: number, attention: { kind: JobAttent
   }
   const detail = attention.detail ?? null;
   const same = db.prepare("SELECT 1 FROM jobs WHERE id = ? AND attention = ?").get(id, attention.kind);
-  if (same) db.prepare("UPDATE jobs SET attention_detail = ? WHERE id = ? AND state IN ('preflight','running')").run(detail, id);
-  else db.prepare("UPDATE jobs SET attention = ?, attention_detail = ?, attention_at = ? WHERE id = ? AND state IN ('preflight','running')").run(attention.kind, detail, at, id);
+  if (same) db.prepare("UPDATE jobs SET attention_detail = ? WHERE id = ? AND (state IN ('preflight','running') OR attention = 'service')").run(detail, id);
+  else db.prepare("UPDATE jobs SET attention = ?, attention_detail = ?, attention_at = ? WHERE id = ? AND (state IN ('preflight','running') OR ? = 'service')").run(attention.kind, detail, at, id, attention.kind);
 }
 
 export function stopJob(db: Db, id: number): boolean {
@@ -137,7 +141,7 @@ export function stopBatch(db: Db, batchId: string): void {
 
 export function failInterruptedJobs(db: Db): void {
   const batches = db.prepare("SELECT DISTINCT batch_id AS batchId FROM jobs WHERE state IN ('preflight','running')").all() as { batchId: string }[];
-  db.prepare("UPDATE jobs SET state = 'failed', message = 'interrupted by a restart', finished_at = ? WHERE state IN ('preflight','running')")
+  db.prepare("UPDATE jobs SET message = 'interrupted by a restart during ' || COALESCE(phase, state) || '; check the installed version, then retry the update', state = 'failed', attention = NULL, attention_detail = NULL, attention_at = NULL, finished_at = ? WHERE state IN ('preflight','running')")
     .run(new Date().toISOString());
   for (const batch of batches) stopBatch(db, batch.batchId);
 }

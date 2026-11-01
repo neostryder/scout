@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Software] **Windows services that a winget or Microsoft Store update stops on the hub computer now start again after the update.** Scout records the package's automatic, running services before the update and starts any that stopped once the installer exits, giving up after 60 seconds. If a service will not start, the job keeps a "service" note naming it with the `Start-Service` command to run.
 - [Visible] [Services] **You can now review, filter, and act on fleet incidents from the new Incidents tab on the Services page.** Opening a row shows its evidence and latest events, and each row has Investigate, Acknowledge, Snooze, and Mute. Filters live in the page address, so you can share a filtered view.
 - [Visible] [Services] **You can now pass fleet packets through your own triage command to drop noise, and run allowlisted repair commands when a matching incident is announced.** Both are optional, and every repair attempt is written to the fleet events table.
 - [Visible] [Services] **You can now have the hub run read-only commands on your other machines over ssh and open fleet incidents from the results, such as an exited container or a stopped container runtime.** Nothing is installed on those machines.
@@ -68,11 +69,14 @@
 
 ### Changed
 
+- [Visible] [Software] **Failed updates name the cause and the next step in more cases.** An installer-type mismatch (Audacity), a package winget cannot upgrade (MSYS2), MSI error 1603 (Epic Games Launcher), and an app that keeps its old version until its own updater runs (itch, Epic) each get their own message. A job interrupted by a hub restart names the stage it reached, says to check the installed version and retry, and clears any waiting note.
 - [Visible] [Services] **Automatic-start updater services are no longer watched for outages.** A Windows service with "update" or "updater" in its name or display name, such as the Google Updater services, starts automatically, checks for a new version, and exits, so a stopped one is its normal state. Each of these used to open an outage when it finished. A watch switch set to true in `watch.json` still watches one.
 - [Visible] [Services] **Dynamic-range listeners no longer raise alerts on any interface.** Listeners on ports 49152 and up no longer produce "new listener" or "listener exposure widened" alerts, whether they bind to loopback, the LAN, or all interfaces; before, only loopback listeners in that range were ignored. Apps such as Telegram and Thunderbird open temporary ports there, which filled the Alerts tab with noise. A listener in that range that a Cloudflare route or tunnel points at still alerts, and any open alert for an ignored listener resolves on the next check.
 
 ### Fixed
 
+- [Visible] [Software] **Zoom and other apps with winget versions such as `7.2.5 (51704)` update again.** Scout used to refuse these versions with "invalid package id or version". It now accepts winget and Microsoft Store versions with spaces and a build number in parentheses and reads them correctly from `winget list`.
+- [Visible] [Software] **npm and pnpm updates now work on a hub that its supervisor starts with a short PATH.** Scout finds `npm`, `npx`, and `pnpm` beside its own Node, in `PNPM_HOME`, `%APPDATA%\npm`, `%LOCALAPPDATA%\pnpm`, and `%ProgramFiles%\nodejs`, where it used to fail with "spawn npm ENOENT". A program briefly locked as it starts (EACCES or EBUSY, as when winget updates itself) is retried up to 5 times, 3 seconds apart.
 - [Visible] [Software] **Probes, meter reads, and fleet remote checks no longer fail on Linux machines without zsh.** Scout runs remote commands under a login bash when zsh is missing, so a machine such as Bazzite can now be read. Start, stop, restart, enable, and disable still need zsh on the remote machine.
 - [Visible] [Software] **Signed-in requests no longer get a 403 when a Cloudflare Access key refresh times out and the hub already has cached keys.** The hub keeps using cached keys for up to 24 hours after a failed refresh and retries the download after 15 seconds. The log recorded 132 of these refusals since 2026-09-30.
 - [Visible] [Software] **Updating npm packages on a Windows hub no longer fails at the first step.** Update jobs for npm packages such as the global @pnpm/exe stopped with "spawn npm ENOENT" when the hub ran on Windows. Scout now starts npm with the hub's own Node, so these updates run.

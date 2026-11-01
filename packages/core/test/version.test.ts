@@ -38,3 +38,10 @@ test("isNewer and maxVersion", () => {
   assert.equal(maxVersion(["1.2", "1.10", "1.9", "1.10-rc1"]), "1.10");
   assert.equal(maxVersion([]), null);
 });
+
+test("Zoom parenthesized builds compare through an update", () => {
+  assert.equal(c("7.2.1 (48556)", "7.2.5 (51704)"), -1);
+  assert.equal(c("7.2.5 (51704)", "7.2.1 (48556)"), 1);
+  assert.equal(c("7.2.5 (51704)", "7.2.5 (51704)"), 0);
+  assert.equal(c("7.2.5 (51705)", "7.2.5 (51704)"), 1);
+});
