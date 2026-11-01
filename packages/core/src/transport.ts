@@ -5,7 +5,7 @@ import type { Probe, ProbeOutput } from "./adapter.ts";
 
 export interface ExecResult { exitCode: number; stdout: string; stderr: string }
 /** Live views of a running command: `onOutput` gets each chunk as it arrives, `onSpawn` the local child's process id. */
-export interface ExecHooks { onOutput?: (chunk: string) => void; onSpawn?: (pid: number) => void }
+export interface ExecHooks { onOutput?: (chunk: string) => void; onSpawn?: (pid: number) => void; maxOutputBytes?: number }
 export type Exec = (transport: Transport, argv: string[], timeoutMs: number, signal?: AbortSignal, env?: Record<string, string>, hooks?: ExecHooks) => Promise<ExecResult>;
 
 export type Transport = { type: "local" } | { type: "ssh"; target: string; options?: string[]; guest?: string[] };
@@ -31,6 +31,12 @@ function run(file: string, args: string[], timeoutMs: number, signal?: AbortSign
     const child = spawn(file, args, { windowsHide: true, detached: process.platform !== "win32", stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env: { ...process.env, ...env } } : {}) });
     let stdout = "";
     let stderr = "";
+    const append = (current: string, chunk: string): string => {
+      if (hooks?.maxOutputBytes === undefined) return current + chunk;
+      const remaining = Math.max(0, hooks.maxOutputBytes - Buffer.byteLength(current));
+      const bytes = Buffer.from(chunk);
+      return current + (bytes.length <= remaining ? chunk : new TextDecoder().decode(bytes.subarray(0, remaining), { stream: true }));
+    };
     if (child.pid !== undefined) hooks?.onSpawn?.(child.pid);
     const stop = () => child.kill();
     if (input !== undefined) {
@@ -40,12 +46,12 @@ function run(file: string, args: string[], timeoutMs: number, signal?: AbortSign
     signal?.addEventListener("abort", stop, { once: true });
     if (signal?.aborted) stop();
     const timer = setTimeout(stop, timeoutMs);
-    child.stdout?.setEncoding("utf8").on("data", (d: string) => { stdout += d; hooks?.onOutput?.(d); });
-    child.stderr?.setEncoding("utf8").on("data", (d: string) => { stderr += d; hooks?.onOutput?.(d); });
+    child.stdout?.setEncoding("utf8").on("data", (d: string) => { stdout = append(stdout, d); hooks?.onOutput?.(d); });
+    child.stderr?.setEncoding("utf8").on("data", (d: string) => { stderr = append(stderr, d); hooks?.onOutput?.(d); });
     child.on("error", (err) => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", stop);
-      resolve({ exitCode: 127, stdout, stderr: stderr + String(err.message) });
+      resolve({ exitCode: 127, stdout, stderr: append(stderr, String(err.message)) });
     });
     child.on("close", (code) => {
       clearTimeout(timer);

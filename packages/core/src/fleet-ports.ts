@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import type { ExpectedRun } from "./fleet-expected.ts";
 import type { FleetIncident, FleetPolicy } from "./fleet-incidents.ts";
-import { FAILURE_CLASSES, type FailureClass, type IncidentPacket, type Severity } from "./fleet-packet.ts";
+import { FAILURE_CLASSES, SEVERITIES, type FailureClass, type IncidentPacket, type Severity } from "./fleet-packet.ts";
 
 export interface FleetNotice {
   title: string;
@@ -102,6 +102,24 @@ export interface FleetLocalConfig {
   logs: FleetLocalLogConfig[];
 }
 
+export interface FleetRemoteCheckConfig {
+  machine: string;
+  component: string;
+  argv: string[];
+  timeoutSeconds: number;
+  failureClass: FailureClass;
+  severity?: Severity;
+  pattern?: string;
+  ignore?: string;
+  mustMatch?: string;
+  unreachable: "report" | "ignore";
+}
+
+export interface FleetRemoteConfig {
+  enabled?: boolean;
+  checks: FleetRemoteCheckConfig[];
+}
+
 export interface FleetFile {
   policy: Partial<FleetPolicy> | null;
   notifiers: FleetNotifierConfig[];
@@ -112,7 +130,7 @@ export interface FleetFile {
   ingestTokenEnv: string | null;
   digestTimes: string[];
   fileError: string | null;
-  sources?: { catalog?: FleetCatalogConfig; local?: FleetLocalConfig };
+  sources?: { catalog?: FleetCatalogConfig; local?: FleetLocalConfig; remote?: FleetRemoteConfig };
 }
 
 const EMPTY: FleetFile = {
@@ -326,6 +344,45 @@ export function localConfig(value: unknown): FleetLocalConfig | null {
   return result;
 }
 
+export function remoteConfig(value: unknown): FleetRemoteConfig | null {
+  const keys = (row: Record<string, unknown>, allowed: string[]): boolean => Object.keys(row).every((key) => allowed.includes(key));
+  const text = (item: unknown, max: number): item is string => typeof item === "string" && item.trim().length > 0 && item.length <= max && !/[\x00-\x1f\x7f-\x9f]/.test(item);
+  const regex = (item: unknown): item is string => {
+    if (typeof item !== "string" || item.length > 200) return false;
+    try { new RegExp(item, "i"); return true; } catch { return false; }
+  };
+  if (!isRecord(value) || !keys(value, ["enabled", "checks"]) || JSON.stringify(value).length > 65_536) return null;
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") return null;
+  const result: FleetRemoteConfig = { checks: [] };
+  if (typeof value.enabled === "boolean") result.enabled = value.enabled;
+  const checks = value.checks === undefined ? [] : value.checks;
+  if (!Array.isArray(checks) || checks.length > 60) return null;
+  const seen = new Set<string>();
+  for (const row of checks) {
+    if (!isRecord(row) || !keys(row, ["machine", "component", "argv", "timeoutSeconds", "failureClass", "severity", "pattern", "ignore", "mustMatch", "unreachable"])) return null;
+    if (!text(row.machine, 64) || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(row.machine) || !text(row.component, 180)) return null;
+    if (!Array.isArray(row.argv) || row.argv.length < 1 || row.argv.length > 20 || !row.argv.every((part) => typeof part === "string" && part.length >= 1 && part.length <= 500 && !/[\x00-\x1f\x7f-\x9f]/.test(part))) return null;
+    const timeoutSeconds = row.timeoutSeconds === undefined ? 20 : row.timeoutSeconds;
+    const failureClass = row.failureClass === undefined ? "ran-failed" : row.failureClass;
+    const unreachable = row.unreachable === undefined ? "report" : row.unreachable;
+    if (typeof timeoutSeconds !== "number" || !Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 120) return null;
+    if (!FAILURE_CLASSES.includes(failureClass as FailureClass) || (row.severity !== undefined && !SEVERITIES.includes(row.severity as Severity))) return null;
+    if (unreachable !== "report" && unreachable !== "ignore") return null;
+    const entry: FleetRemoteCheckConfig = { machine: row.machine, component: row.component, argv: row.argv, timeoutSeconds, failureClass: failureClass as FailureClass, unreachable };
+    if (row.severity !== undefined) entry.severity = row.severity as Severity;
+    for (const key of ["pattern", "ignore", "mustMatch"] as const) {
+      if (row[key] === undefined) continue;
+      if (!regex(row[key])) return null;
+      entry[key] = row[key];
+    }
+    const key = `${entry.machine}\n${entry.component}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    result.checks.push(entry);
+  }
+  return result;
+}
+
 export function loadFleetConfig(path: string, env: (name: string) => string | undefined = (name) => process.env[name]): FleetFile {
   let text: string;
   try {
@@ -341,7 +398,7 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
     if (Object.keys(data).some((key) => !allowed.has(key))) return broken();
     let sources: FleetFile["sources"];
     if (data.sources !== undefined) {
-      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog" && key !== "local")) return broken();
+      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog" && key !== "local" && key !== "remote")) return broken();
       sources = {};
       if (data.sources.catalog !== undefined) {
         const catalog = catalogConfig(data.sources.catalog);
@@ -352,6 +409,11 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
         const local = localConfig(data.sources.local);
         if (!local) return broken();
         sources.local = local;
+      }
+      if (data.sources.remote !== undefined) {
+        const remote = remoteConfig(data.sources.remote);
+        if (!remote) return broken();
+        sources.remote = remote;
       }
     }
     const parsedPolicy = data.policy === undefined ? null : policy(data.policy);
