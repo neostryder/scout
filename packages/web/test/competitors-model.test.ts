@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates, filterRows, batchOptions, flagOptions, sortBy, addedText, BATCH_ORIGINAL, TRACK_CONFIRM, examplesText, heldText, holdText } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
+const { GATE_FIELDS, gateChange, isWatched, watchFromForm, watchText, sortCompetitors, filterCompetitors, defaultNewOnly, countLine, statusText, commitsText, runText, analyzedText, baselineSource, latestParts, checkedText, syncedText, pendingText, triggerText, updateAction, NOT_CONFIGURED, UPDATE_CONFIRM, NO_MIRROR, discoveryText, trackedText, scoreText, candidateFacts, candidateSummary, overlapText, sortCandidates, filterRows, batchOptions, flagOptions, sortBy, addedText, BATCH_ORIGINAL, TRACK_CONFIRM, examplesText, heldText, holdText, layaBadge, shadowText } = await import(new URL("../public/competitors-model.js", import.meta.url).href);
 
 const row = (over: Record<string, unknown> = {}) => ({ id: "acme-tools", name: "Acme Tools", org: "Acme", status: "current", newBasis: null, mirrorPresent: true, run: null, baseline: { version: "1.2.0", at: "2026-05-05", source: "analysis" }, latest: { version: "1.2.0", prerelease: null, error: null }, ...over });
 
@@ -226,4 +226,50 @@ test("the hold line is empty until something was held, then counts the last sear
   assert.equal(holdText({ lastRun: null, all: { held: 0, rescued: 0 } }), "");
   assert.equal(holdText({ lastRun: { at: "2026-10-26T03:30:00.000Z", held: 2, rescued: 1 }, all: { held: 19, rescued: 3 } }), "History: the last search 2 held back, 1 of them rescued; all searches 19 held back, 3 of them rescued.");
   assert.equal(holdText({ lastRun: { at: "2026-10-26T03:30:00.000Z", held: 0, rescued: 0 }, all: { held: 4, rescued: 0 } }), "History: nothing held back in the last search; all searches 4 held back, 0 of them rescued.");
+});
+
+test("the Laya badge is absent without a numeric shadow score or when both judges agree", () => {
+  for (const candidate of [undefined, {}, { judgement: {} }, { judgement: { shadow: {} } }, { judgement: { shadow: { laya: "0.7" } } }, { judgement: { shadow: { laya: null } } }]) {
+    assert.equal(layaBadge(candidate), null);
+  }
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.8 }, worthTracking: 0.7, needs: { worthTracking: 0.55 } } }), null);
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.2 }, worthTracking: 0.4, needs: { worthTracking: 0.55 } } }), null);
+});
+
+test("the Laya badge names each disagreement and explains both scores and Jev's bar", () => {
+  assert.deepEqual(layaBadge({ judgement: { shadow: { laya: 0.714 }, worthTracking: 0.4, needs: { worthTracking: 0.55 } } }), {
+    text: "Laya: yes, Jev: no",
+    label: "Laya put worth tracking at 71% and says yes; Jev put it at 0.40 of 0.55 needed and says no.",
+  });
+  assert.deepEqual(layaBadge({ judgement: { shadow: { laya: 0.286 }, worthTracking: 0.6, needs: { worthTracking: 0.55 } } }), {
+    text: "Laya: no, Jev: yes",
+    label: "Laya put worth tracking at 29% and says no; Jev put it at 0.60 of 0.55 needed and says yes.",
+  });
+});
+
+test("the Laya badge includes the 0.5 boundary and Jev's exact bar, defaulting only a missing bar", () => {
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.5 }, worthTracking: 0.55, needs: { worthTracking: 0.55 } } }), null);
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.5 }, worthTracking: 0.549, needs: { worthTracking: 0.55 } } })?.text, "Laya: yes, Jev: no");
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.499 }, worthTracking: 0.55, needs: { worthTracking: 0.55 } } })?.text, "Laya: no, Jev: yes");
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.5 }, worthTracking: 0.5 } }), null);
+  assert.deepEqual(layaBadge({ judgement: { shadow: { laya: 0.5 }, worthTracking: 0.49 } }), {
+    text: "Laya: yes, Jev: no",
+    label: "Laya put worth tracking at 50% and says yes; Jev put it at 0.49 of 0.50 needed and says no.",
+  });
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.2 }, worthTracking: 0.5, needs: {} } })?.text, "Laya: no, Jev: yes");
+  assert.equal(layaBadge({ judgement: { shadow: { laya: 0.2 }, worthTracking: 0, needs: { worthTracking: 0 } } })?.text, "Laya: no, Jev: yes");
+});
+
+test("the shadow line is empty until Laya has read a project", () => {
+  assert.equal(shadowText(null), "");
+  assert.equal(shadowText(undefined), "");
+  assert.equal(shadowText({ read: 0, layaYes: 0, jevYes: 0, decided: 0, layaRight: 0, jevRight: 0 }), "");
+});
+
+test("the shadow line reports rates and adds agreement counts only after decisions", () => {
+  const shadow = { read: 10, layaYes: 7, jevYes: 4, decided: 0, layaRight: 0, jevRight: 0 };
+  assert.equal(shadowText(shadow), "Laya shadow: read 10, yes rate Laya 70% against Jev 40%.");
+  assert.equal(shadowText({ ...shadow, decided: 3, layaRight: 2, jevRight: 0 }), "Laya shadow: read 10, yes rate Laya 70% against Jev 40%. On 3 of your choices Laya agreed 2 times and Jev agreed 0 times.");
+  assert.equal(shadowText({ ...shadow, read: 3, layaYes: 1, jevYes: 2 }), "Laya shadow: read 3, yes rate Laya 33% against Jev 67%.");
+  assert.equal(shadowText({ ...shadow, read: 8, layaYes: 1, jevYes: 7 }), "Laya shadow: read 8, yes rate Laya 13% against Jev 88%.");
 });
