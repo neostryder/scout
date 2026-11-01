@@ -12,6 +12,7 @@ import {
   fingerprint,
   heartbeatMetaKey,
   inQuietHours,
+  incidentByFingerprint,
   incidentById,
   ingest,
   listIncidents,
@@ -31,6 +32,7 @@ import {
   type FleetNotice,
   type FleetNotifier,
   type FleetTriage,
+  type FleetTriageResult,
   type IncidentPacket,
   type Severity,
 } from "@scout/core";
@@ -57,6 +59,7 @@ export interface FleetServiceOptions {
 type SendJson = (res: ServerResponse, status: number, value: unknown) => void;
 
 interface Outbound { notice: FleetNotice; incidentId: number | null }
+interface TriageCacheEntry { result: FleetTriageResult; expires: number; noiseRecorded?: boolean }
 
 const ACTIONS: FleetNotice["actions"] = [
   { id: "investigate", label: "Investigate" },
@@ -69,6 +72,7 @@ const SWEEP_MS = 60_000;
 const RETRY_MS = 60_000;
 const CLASSES = new Set<string>(FAILURE_CLASSES);
 const SEVERITY_SET = new Set<string>(SEVERITIES);
+const TRIAGE_CACHES = new WeakMap<FleetTriage, Map<string, TriageCacheEntry>>();
 
 function safeError(error: string): string {
   return error
@@ -194,6 +198,61 @@ export function commandInvestigator(config: { command: string[]; run?: FleetServ
   };
 }
 
+function triageKey(packet: IncidentPacket): string {
+  return JSON.stringify([packet.fingerprint, packet.summary.slice(0, 200).replace(/\d+/g, "#")]);
+}
+
+export function commandTriage(config: { command: string[]; run?: FleetServiceOptions["runCapture"]; now?: () => Date; ttlMs?: number; timeoutMs?: number }): FleetTriage {
+  const run = config.run ?? runCommandCapture;
+  const now = config.now ?? (() => new Date());
+  const ttlMs = config.ttlMs ?? 6 * 60 * 60_000;
+  const [program, ...args] = config.command;
+  const cache = new Map<string, TriageCacheEntry>();
+  const pending = new Map<string, Promise<FleetTriageResult>>();
+  const classify = async (packet: IncidentPacket): Promise<FleetTriageResult> => {
+    let verdict: FleetTriageResult = { noise: false };
+    let success = false;
+    try {
+      if (!program) throw new Error("command is empty");
+      const result = await run(program, args, JSON.stringify({ packet }), config.timeoutMs ?? 30_000);
+      if (result.error || result.code !== 0) throw new Error("triage failed");
+      const last = result.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1) ?? "";
+      const parsed: unknown = JSON.parse(last);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !("noise" in parsed) || typeof parsed.noise !== "boolean") throw new Error("invalid triage response");
+      const row = parsed as Record<string, unknown>;
+      verdict = { noise: parsed.noise };
+      if (typeof row.failureClass === "string" && CLASSES.has(row.failureClass)) verdict.failureClass = row.failureClass as FailureClass;
+      if (typeof row.severity === "string" && SEVERITY_SET.has(row.severity)) verdict.severity = row.severity as Severity;
+      if (typeof row.ownerChat === "string") verdict.ownerChat = row.ownerChat.slice(0, 200);
+      if (typeof row.groupWith === "string") verdict.groupWith = row.groupWith;
+      if (typeof row.healSafe === "boolean") verdict.healSafe = row.healSafe;
+      if (typeof row.cause === "string") verdict.cause = row.cause.slice(0, 300);
+      success = true;
+    } catch {
+      verdict = { noise: false };
+    }
+    const key = triageKey(packet);
+    cache.delete(key);
+    cache.set(key, { result: verdict, expires: now().getTime() + (success ? ttlMs : 5 * 60_000) });
+    if (cache.size > 500) cache.delete(cache.keys().next().value!);
+    return verdict;
+  };
+  const triage: FleetTriage = {
+    classify(packet) {
+      const key = triageKey(packet);
+      const hit = cache.get(key);
+      if (hit && hit.expires > now().getTime()) return Promise.resolve(hit.result);
+      const active = pending.get(key);
+      if (active) return active;
+      const promise = classify(packet).finally(() => { pending.delete(key); });
+      pending.set(key, promise);
+      return promise;
+    },
+  };
+  TRIAGE_CACHES.set(triage, cache);
+  return triage;
+}
+
 export function webhookNotifier(config: { id: string; url: () => string | undefined; fetch?: typeof fetch }): FleetNotifier {
   const fetchImpl = config.fetch ?? fetch;
   return {
@@ -277,6 +336,9 @@ export class FleetService {
   private every: NonNullable<FleetServiceOptions["every"]>;
   private investigator: FleetInvestigator | undefined;
   private triage: FleetTriage | undefined;
+  private configuredTriage: { key: string; triage: FleetTriage } | undefined;
+  private triageNoise = new Map<string, number>();
+  private healing = new Set<number>();
   private cached: FleetFile | null = null;
   private stamp = "";
   private timer: TimerHandle | undefined;
@@ -427,6 +489,18 @@ export class FleetService {
     return config ? commandInvestigator({ command: config.command, run: this.runCapture }) : undefined;
   }
 
+  private currentTriage(): FleetTriage | undefined {
+    if (this.triage) return this.triage;
+    const config = this.config().triage;
+    if (!config) {
+      this.configuredTriage = undefined;
+      return undefined;
+    }
+    const key = JSON.stringify(config.command);
+    if (this.configuredTriage?.key !== key) this.configuredTriage = { key, triage: commandTriage({ command: config.command, run: this.runCapture, now: this.now }) };
+    return this.configuredTriage.triage;
+  }
+
   private tickInner(): void {
     const file = this.config();
     const nowDate = this.now();
@@ -475,16 +549,37 @@ export class FleetService {
       return this.recoverHost(packet.host, packet.component, now, new Set());
     }
     let next = packet;
-    if (this.triage) {
-      const result = await this.triage.classify(packet);
-      if (result.noise) return [];
+    let cause: string | undefined;
+    const triage = this.currentTriage();
+    if (triage) {
+      const result = await triage.classify(packet);
+      if (result.noise) {
+        const key = triageKey(packet);
+        const cached = TRIAGE_CACHES.get(triage)?.get(key);
+        if (cached ? !cached.noiseRecorded : (this.triageNoise.get(key) ?? 0) <= this.now().getTime()) {
+          this.record(null, "triage-noise", `${packet.host} ${packet.component}: ${result.cause ?? ""}`);
+          if (cached) cached.noiseRecorded = true;
+          else {
+            this.triageNoise.delete(key);
+            this.triageNoise.set(key, this.now().getTime() + 6 * 60 * 60_000);
+            if (this.triageNoise.size > 500) this.triageNoise.delete(this.triageNoise.keys().next().value!);
+          }
+        }
+        return [];
+      }
+      cause = result.cause?.slice(0, 300);
       if (result.failureClass && CLASSES.has(result.failureClass) && result.failureClass !== next.failureClass) {
         next = { ...next, failureClass: result.failureClass, fingerprint: fingerprint(next.host, next.component, result.failureClass) };
       }
       if (result.severity && SEVERITY_SET.has(result.severity)) next = { ...next, severity: result.severity };
       if (typeof result.ownerChat === "string" && result.ownerChat.length > 0 && result.ownerChat.length <= 200) next = { ...next, ownerChat: result.ownerChat };
     }
-    return ingest(this.db, next, now, file.policy);
+    const decisions = ingest(this.db, next, now, file.policy);
+    if (cause) {
+      const incident = incidentByFingerprint(this.db, next.fingerprint);
+      if (incident && !this.db.prepare("SELECT 1 FROM fleet_events WHERE incident_id = ? AND kind = 'triage' AND detail = ?").get(incident.id, cause)) this.record(incident.id, "triage", cause);
+    }
+    return decisions;
   }
 
   private recoverHost(host: string, component: string, now: string, keep: ReadonlySet<string>): FleetDecision[] {
@@ -560,6 +655,64 @@ export class FleetService {
       if (notice) outbound.push(notice);
     }
     await Promise.allSettled(outbound.map((item) => this.sendNotice(item, true)));
+    for (const decision of decisions) {
+      if (decision.kind !== "notify-now" && decision.kind !== "escalate") continue;
+      void this.heal(decision.incident.id).catch((error: unknown) => {
+        this.log(`fleet heal failed: ${safeError(error instanceof Error ? error.message : "failed")}`);
+      });
+    }
+  }
+
+  private async heal(incidentId: number): Promise<void> {
+    if (this.healing.has(incidentId)) return;
+    const incident = incidentById(this.db, incidentId);
+    if (!incident || incident.state !== "open") return;
+    const healer = this.config().healers.find((row) => row.host === incident.host && row.component === incident.component && row.failureClass === incident.failureClass);
+    if (!healer) return;
+    const now = this.now();
+    const key = `${ruleKey(incident.host, incident.component, incident.failureClass)} `;
+    const attempts = this.db.prepare("SELECT at FROM fleet_events WHERE kind IN ('heal', 'heal-failed') AND instr(detail, ?) = 1 AND at > ? ORDER BY at DESC").all(key, new Date(now.getTime() - 24 * 60 * 60_000).toISOString()) as { at: string }[];
+    if (attempts.length >= healer.maxPerDay) {
+      const day = `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
+      if (!this.db.prepare("SELECT 1 FROM fleet_events WHERE incident_id = ? AND kind = 'heal-skipped' AND at >= ?").get(incidentId, day)) this.record(incidentId, "heal-skipped", `${key}daily limit`);
+      return;
+    }
+    if (attempts[0] && now.getTime() - Date.parse(attempts[0].at) < healer.cooldownMinutes * 60_000) return;
+    this.healing.add(incidentId);
+    try {
+      this.record(incidentId, "heal-start", `${key}${healer.id}`);
+      const { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count, packet } = incident;
+      let ok = false;
+      let error: string | null = null;
+      try {
+        const [program, ...args] = healer.command;
+        if (!program) throw new Error("command is empty");
+        const result = await this.runCapture(program, args, JSON.stringify({ incident: { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count }, packet }), healer.timeoutSeconds * 1000);
+        if (result.error || result.code !== 0) throw new Error(result.error ?? `exit ${result.code ?? "null"}`);
+        const last = result.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1) ?? "";
+        let parsed: unknown;
+        try { parsed = JSON.parse(last); } catch { ok = true; }
+        if (!ok) {
+          if (!parsed || typeof parsed !== "object" || !("ok" in parsed) || typeof parsed.ok !== "boolean") throw new Error("invalid healer response");
+          ok = parsed.ok;
+          if (!ok) error = "error" in parsed && typeof parsed.error === "string" ? parsed.error : "heal failed";
+        }
+      } catch (caught) {
+        error = caught instanceof Error ? caught.message : "heal failed";
+      }
+      error = error === null ? null : safeError(error);
+      this.record(incidentId, ok ? "heal" : "heal-failed", `${key}${ok ? healer.id : error}`);
+      await this.sendNotice({ incidentId, notice: {
+        title: `${ok ? "healed attempt" : "heal failed"}: ${host} ${component}`.slice(0, 200),
+        body: ok ? "The heal command completed. The next check will determine recovery." : error ?? "heal failed",
+        severity: ok ? "info" : "warning",
+        incidentId,
+        kind: ok ? "healed" : "heal-failed",
+        actions: ok ? [] : ACTIONS,
+      } }, true);
+    } finally {
+      this.healing.delete(incidentId);
+    }
   }
 
   private async sendNotice(outbound: Outbound, retry: boolean): Promise<void> {

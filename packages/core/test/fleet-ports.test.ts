@@ -159,3 +159,38 @@ test("fleet file accepts remote alongside other sources and rejects malformed re
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("healers require an exact allowlist and apply bounded rate and timeout defaults", () => {
+  const dir = mkdtempSync(join(root, "scout-fleet-file-"));
+  try {
+    const path = join(dir, "fleet.json");
+    const healer = { id: "restart-backup", command: ["restart", "backup"], host: "desktop", component: "backup", failureClass: "dead" };
+    const load = (healers: unknown) => {
+      writeFileSync(path, JSON.stringify({ healers }), "utf8");
+      return loadFleetConfig(path);
+    };
+    assert.equal(load([healer]).fileError, null);
+    assert.deepEqual(load([healer]).healers, [{ ...healer, cooldownMinutes: 60, maxPerDay: 3, timeoutSeconds: 120 }]);
+    for (const limits of [{ cooldownMinutes: 1, maxPerDay: 1, timeoutSeconds: 1 }, { cooldownMinutes: 1440, maxPerDay: 24, timeoutSeconds: 300 }]) {
+      assert.deepEqual(load([{ ...healer, ...limits }]).healers, [{ ...healer, ...limits }]);
+    }
+    const bad: Record<string, unknown[]> = {
+      id: [undefined, null, 1, "", "x".repeat(81)],
+      command: [undefined, null, [], "restart", [1], [""], ["x".repeat(501)], ["a\nb"], ["a\0b"], Array(33).fill("x")],
+      host: [undefined, null, 1, "", " ", "x".repeat(201), "*", "desk?", "^desktop$", "/desktop/i", "desk\ntop"],
+      component: [undefined, null, 1, "", " ", "x".repeat(181), "*", "back?", "^backup$", "/backup/", "back\0up"],
+      failureClass: [undefined, null, 1, "", "unknown", "*"],
+      cooldownMinutes: [null, 0, -1, 1441, 1.5, "60", true],
+      maxPerDay: [null, 0, -1, 25, 1.5, "3", true],
+      timeoutSeconds: [null, 0, -1, 301, 1.5, "120", true],
+      unknown: [true],
+    };
+    for (const [key, values] of Object.entries(bad)) {
+      for (const value of values) assert.match(load([{ ...healer, [key]: value }]).fileError ?? "", /malformed/, `${key}: ${JSON.stringify(value)}`);
+    }
+    for (const healers of [null, {}, [null], [healer, healer]]) assert.match(load(healers).fileError ?? "", /malformed/);
+    assert.deepEqual(load([healer, { ...healer, id: "other" }]).healers.map((row) => row.id), [healer.id, "other"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

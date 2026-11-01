@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **You can now pass fleet packets through your own triage command to drop noise, and run allowlisted repair commands when a matching incident is announced.** Both are optional, and every repair attempt is written to the fleet events table.
 - [Visible] [Services] **You can now have the hub run read-only commands on your other machines over ssh and open fleet incidents from the results, such as an exited container or a stopped container runtime.** Nothing is installed on those machines.
 - [Visible] [Services] **You can now give a newly registered scheduled task time for its first run before Scout reports that it has never run.** If a raised setting puts a task back inside that window, its open incident resolves with a recovery notice.
 - [Visible] [Services] **You can now get fleet incidents for low disk space, Windows Event Log errors, a broken WSL, and matching log lines on the machine that runs the hub.** Each incident resolves with a recovery notice when the problem clears.

@@ -369,6 +369,59 @@ To make Investigate do something, set `investigator` in `fleet.json` to a comman
 }
 ```
 
+### Triage and healers
+
+Two optional settings in `.scout-data/fleet.json` act on fleet packets. `triage` runs your command on each incoming packet to drop noise or correct its failure class and severity. `healers` lists repair commands the hub may run on its own for an exact host, component, and failure class.
+
+```json
+{
+  "triage": { "command": ["node", "C:/scout-tools/triage.js"] },
+  "healers": [
+    {
+      "id": "restart-backup-agent",
+      "command": ["pwsh", "-File", "C:/scout-tools/restart-backup-agent.ps1"],
+      "host": "nas-01",
+      "component": "backup-agent",
+      "failureClass": "dead",
+      "cooldownMinutes": 60,
+      "maxPerDay": 3,
+      "timeoutSeconds": 120
+    }
+  ]
+}
+```
+
+The hub runs the triage command for each incoming fleet packet before the packet becomes an incident, with `{"packet": <the evidence packet>}` on stdin. The last line the command prints to stdout must be JSON of this shape: `{"noise": true|false, "failureClass": optional, "severity": optional, "ownerChat": optional text up to 200 characters, "healSafe": optional boolean, "cause": optional text up to 300 characters}`. Only `noise` is required.
+
+With `noise: true` the packet is dropped: no incident opens, and the hub writes one `triage-noise` event with the host, component, and cause. A valid `failureClass` or `severity` replaces the packet's own. A `cause` is saved as a `triage` event on the incident, once per distinct text.
+
+Triage fails open. A non-zero exit, a timeout after 30 seconds, a spawn error, or output that is not a valid verdict leaves the packet treated as not noise, and it goes through unchanged.
+
+Every source sends all its open packets every two minutes, so the hub caches verdicts in memory to keep a slow or paid command from running on every tick. Successful verdicts are kept for 6 hours and failures for 5 minutes. The cache key is the packet's fingerprint plus the first 200 characters of its summary with digit runs replaced by `#`, so a changing count does not start a new run. The cache holds at most 500 entries, overlapping calls for the same key share one run, and the cache is lost when the hub restarts. The hub re-reads the setting when the file changes.
+
+Each `healers` row takes these fields:
+
+- `id`: 1 to 80 characters, unique across rows.
+- `command`: a list of strings.
+- `host`: exact host text, up to 200 characters.
+- `component`: exact component text, up to 180 characters.
+- `failureClass`: one of the known failure classes.
+- `cooldownMinutes`: optional, 1 to 1440, default 60.
+- `maxPerDay`: optional, 1 to 24, default 3.
+- `timeoutSeconds`: optional, 1 to 300, default 120.
+
+Host and component match exactly. Wildcards, regular expressions, or control characters in either field make the file malformed, and so does an unknown key or a missing required key.
+
+A healer runs only after the hub announces an open incident whose host, component, and failureClass all equal the row's values, either as a notify-now or as an escalation. Digests, suppressed incidents, and recovered incidents never start a healer. The hub sends the incident notice first and then runs the command with `{"incident": {id, host, component, failureClass, severity, state, firstSeen, lastSeen, count}, "packet": <the packet>}` on stdin. No packet text is passed to the command as arguments.
+
+The command's last stdout line may be `{"ok": true|false, "error": optional text}`. An exit code of 0 with no JSON counts as success. A non-zero exit, a timeout, or `ok: false` counts as a failure.
+
+Rate limits apply per host, component, and class. No new attempt starts within `cooldownMinutes` of the last one, and at most `maxPerDay` attempts run in 24 hours. Hitting the daily limit writes one `heal-skipped` event per incident per day. Only one attempt per incident runs at a time.
+
+Every attempt is written to the fleet events table as `heal-start`, then `heal` or `heal-failed`, and the hub sends a follow-up notice. A successful command sends "healed attempt: <host> <component>" with severity info and no buttons. A failed one sends "heal failed: <host> <component>" with severity warning and the usual buttons. The success notice does not claim the problem is fixed. The next check decides, and the incident resolves with its recovery notice when the condition clears.
+
+Healers are the one case where Scout changes a machine on its own. With no `healers` rows, Scout never runs a control action by itself, and updates never run automatically in any configuration.
+
 ### Catalog source
 
 The `sources.catalog` block in `.scout-data/fleet.json` makes the hub open fleet incidents for failed services, scheduled tasks, launchd jobs, and systemd units, using the rows it already scans from each machine. It reads those rows every two minutes and needs no setup on the machines themselves. The block is off until `sources.catalog.enabled` is `true`. By default it skips rows from any machine whose last scan is more than 30 minutes old (`staleScanMinutes`) and any disabled row. It also skips Windows scheduled tasks outside the root task folder, the vendor updaters from Brave, Google, Adobe, CCleaner, Driver Easy, OneDrive, and MicrosoftEdge, and launchd jobs with Apple, application, gui, or user labels. Systemd units and Windows services report nothing until an include pattern names them.
