@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **You can now get fleet incidents for low disk space, Windows Event Log errors, a broken WSL, and matching log lines on the machine that runs the hub.** Each incident resolves with a recovery notice when the problem clears.
 - [Visible] [Services] **You can now investigate, snooze, and mute fleet incidents from Telegram buttons with the gateway on the hub machine, and Investigate can run a command you choose.** Button taps from a gateway on the hub machine used to fail.
 - [Visible] [Services] **You can now get a warning incident for a Windows scheduled task that is set up but has never run.** Name the tasks in the new `neverRan` list in `.scout-data/fleet.json`. The Catalog source section of SETUP.md gives the format and limits.
 - [Visible] [Services] **You can now get fleet incident alerts in Telegram and investigate, snooze, or mute an incident from the message.** Info notices and digests arrive without a notification sound. See Telegram delivery in SETUP.md to set it up.

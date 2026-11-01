@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import { hostname } from "node:os";
 import type { ExpectedRun } from "./fleet-expected.ts";
 import type { FleetIncident, FleetPolicy } from "./fleet-incidents.ts";
-import type { FailureClass, IncidentPacket, Severity } from "./fleet-packet.ts";
+import { FAILURE_CLASSES, type FailureClass, type IncidentPacket, type Severity } from "./fleet-packet.ts";
 
 export interface FleetNotice {
   title: string;
@@ -71,6 +72,36 @@ export interface FleetCatalogConfig {
   neverRan?: { tasks: string[] };
 }
 
+export interface FleetLocalEventConfig {
+  component: string;
+  log: string;
+  ids: number[];
+  levels: number[];
+  providers: string[];
+  maxAgeMinutes: number;
+  failureClass: FailureClass;
+}
+
+export interface FleetLocalLogConfig {
+  component: string;
+  path: string;
+  pattern: string;
+  ignore?: string;
+  tailKilobytes: number;
+  maxAgeMinutes: number;
+  staleAfterMinutes: number | null;
+  failureClass: FailureClass;
+}
+
+export interface FleetLocalConfig {
+  enabled?: boolean;
+  host: string;
+  disk: { paths: string[]; warnFreePercent: number; criticalFreePercent: number };
+  windowsEvents: FleetLocalEventConfig[];
+  wsl: { enabled: boolean };
+  logs: FleetLocalLogConfig[];
+}
+
 export interface FleetFile {
   policy: Partial<FleetPolicy> | null;
   notifiers: FleetNotifierConfig[];
@@ -81,7 +112,7 @@ export interface FleetFile {
   ingestTokenEnv: string | null;
   digestTimes: string[];
   fileError: string | null;
-  sources?: { catalog?: FleetCatalogConfig };
+  sources?: { catalog?: FleetCatalogConfig; local?: FleetLocalConfig };
 }
 
 const EMPTY: FleetFile = {
@@ -223,6 +254,76 @@ function catalogConfig(value: unknown): FleetCatalogConfig | null {
   return result;
 }
 
+export function localConfig(value: unknown): FleetLocalConfig | null {
+  const keys = (row: Record<string, unknown>, allowed: string[]): boolean => Object.keys(row).every((key) => allowed.includes(key));
+  const text = (item: unknown, max: number): item is string => typeof item === "string" && item.trim().length > 0 && item.length <= max && !/[\x00-\x1f]/.test(item);
+  const integer = (item: unknown, max: number): item is number => typeof item === "number" && Number.isSafeInteger(item) && item >= 1 && item <= max;
+  const regex = (item: unknown): item is string => {
+    if (typeof item !== "string" || item.length > 200) return false;
+    try { new RegExp(item, "i"); return true; } catch { return false; }
+  };
+  if (!isRecord(value) || !keys(value, ["enabled", "host", "disk", "windowsEvents", "wsl", "logs"]) || JSON.stringify(value).length > 65_536) return null;
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") return null;
+  if (value.host !== undefined && !text(value.host, 64)) return null;
+  const result: FleetLocalConfig = {
+    host: typeof value.host === "string" ? value.host : hostname(),
+    disk: { paths: [`${process.env.SystemDrive ?? "C:"}/`], warnFreePercent: 10, criticalFreePercent: 5 },
+    windowsEvents: [],
+    wsl: { enabled: false },
+    logs: [],
+  };
+  if (typeof value.enabled === "boolean") result.enabled = value.enabled;
+  if (value.disk !== undefined) {
+    const disk = value.disk;
+    if (!isRecord(disk) || !keys(disk, ["paths", "warnFreePercent", "criticalFreePercent"])) return null;
+    if (disk.paths !== undefined) {
+      if (!Array.isArray(disk.paths) || disk.paths.length > 20 || !disk.paths.every((path) => text(path, 195))) return null;
+      result.disk.paths = disk.paths;
+    }
+    for (const key of ["warnFreePercent", "criticalFreePercent"] as const) {
+      if (disk[key] === undefined) continue;
+      if (typeof disk[key] !== "number" || !Number.isFinite(disk[key]) || disk[key] < 1 || disk[key] > 90) return null;
+      result.disk[key] = disk[key];
+    }
+    if (result.disk.warnFreePercent <= result.disk.criticalFreePercent) return null;
+  }
+  if (value.wsl !== undefined) {
+    if (!isRecord(value.wsl) || !keys(value.wsl, ["enabled"]) || (value.wsl.enabled !== undefined && typeof value.wsl.enabled !== "boolean")) return null;
+    result.wsl.enabled = value.wsl.enabled === true;
+  }
+  for (const key of ["windowsEvents", "logs"] as const) {
+    const list = value[key];
+    if (list === undefined) continue;
+    if (!Array.isArray(list) || list.length > (key === "windowsEvents" ? 20 : 30)) return null;
+    for (const row of list) {
+      const allowed = key === "windowsEvents" ? ["component", "log", "ids", "levels", "providers", "maxAgeMinutes", "failureClass"] : ["component", "path", "pattern", "ignore", "tailKilobytes", "maxAgeMinutes", "staleAfterMinutes", "failureClass"];
+      if (!isRecord(row) || !keys(row, allowed) || !text(row.component, 180)) return null;
+      const maxAgeMinutes = row.maxAgeMinutes === undefined ? 30 : row.maxAgeMinutes;
+      const failureClass = row.failureClass === undefined ? "ran-failed" : row.failureClass;
+      if (!integer(maxAgeMinutes, 10080) || !FAILURE_CLASSES.includes(failureClass as FailureClass)) return null;
+      if (key === "windowsEvents") {
+        if (!text(row.log, 200) || !/^[A-Za-z0-9][A-Za-z0-9 ._\/-]*$/.test(row.log)) return null;
+        const lists: { ids: number[]; levels: number[] } = { ids: [], levels: [] };
+        for (const name of ["ids", "levels"] as const) {
+          if (row[name] === undefined) continue;
+          if (!Array.isArray(row[name]) || row[name].length > 50 || !row[name].every((item) => integer(item, 2_147_483_647))) return null;
+          lists[name] = row[name];
+        }
+        const providers = row.providers === undefined ? [] : row.providers;
+        if (!Array.isArray(providers) || providers.length > 20 || !providers.every((item) => typeof item === "string" && /^[A-Za-z0-9 ._-]{1,100}$/.test(item))) return null;
+        result.windowsEvents.push({ component: row.component, log: row.log, ...lists, providers, maxAgeMinutes, failureClass: failureClass as FailureClass });
+      } else {
+        const tailKilobytes = row.tailKilobytes === undefined ? 64 : row.tailKilobytes;
+        const staleAfterMinutes = row.staleAfterMinutes === undefined ? null : row.staleAfterMinutes;
+        if (!text(row.path, 1024) || !regex(row.pattern) || (row.ignore !== undefined && !regex(row.ignore)) || !integer(tailKilobytes, 512)) return null;
+        if (staleAfterMinutes !== null && !integer(staleAfterMinutes, 10080)) return null;
+        result.logs.push({ component: row.component, path: row.path, pattern: row.pattern, ...(typeof row.ignore === "string" ? { ignore: row.ignore } : {}), tailKilobytes, maxAgeMinutes, staleAfterMinutes, failureClass: failureClass as FailureClass });
+      }
+    }
+  }
+  return result;
+}
+
 export function loadFleetConfig(path: string, env: (name: string) => string | undefined = (name) => process.env[name]): FleetFile {
   let text: string;
   try {
@@ -238,12 +339,17 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
     if (Object.keys(data).some((key) => !allowed.has(key))) return broken();
     let sources: FleetFile["sources"];
     if (data.sources !== undefined) {
-      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog")) return broken();
+      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog" && key !== "local")) return broken();
       sources = {};
       if (data.sources.catalog !== undefined) {
         const catalog = catalogConfig(data.sources.catalog);
         if (!catalog) return broken();
         sources.catalog = catalog;
+      }
+      if (data.sources.local !== undefined) {
+        const local = localConfig(data.sources.local);
+        if (!local) return broken();
+        sources.local = local;
       }
     }
     const parsedPolicy = data.policy === undefined ? null : policy(data.policy);

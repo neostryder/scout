@@ -69,5 +69,6 @@ export * from "./fleet-redact.ts";
 export * from "./fleet-spool.ts";
 export * from "./fleet-expected.ts";
 export * from "./fleet-catalog-source.ts";
+export * from "./fleet-local-source.ts";
 export * from "./fleet-incidents.ts";
 export * from "./fleet-ports.ts";

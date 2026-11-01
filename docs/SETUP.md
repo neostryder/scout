@@ -398,6 +398,34 @@ The Resources view sits beside Services in the page's top navigation and shows h
 
 Each card lists its meters as rows: Processor, Memory, one row per disk, Video memory and Graphics for each graphics card (NVIDIA cards only), and Network, which shows the download and upload rate. A row has a name, a detail line such as "24.0 GB of 64.0 GB", a bar, a large number, and a line chart of the last half hour. Disk and video memory rows have no chart.
 
+### Local source
+
+The local source runs inside the hub, with no token or scripts to install, and checks the hub's own machine every two minutes for failures the service catalog cannot see. To turn it on, add a `local` block under `sources` in `.scout-data/fleet.json` with `enabled` set to `true` and any of the optional settings below, keeping in mind that an unknown key or bad value makes the fleet file malformed, as with the catalog settings.
+
+```json
+{
+  "sources": {
+    "local": {
+      "enabled": true,
+      "disk": { "paths": ["C:/", "D:/"] },
+      "windowsEvents": [
+        { "component": "task-scheduler", "log": "Microsoft-Windows-TaskScheduler/Operational", "ids": [101] }
+      ],
+      "wsl": { "enabled": true },
+      "logs": [
+        { "component": "backup", "path": "D:/backup/backup.log", "pattern": "error|failed", "staleAfterMinutes": 1440 }
+      ]
+    }
+  }
+}
+```
+
+- `host` is the name shown on the incidents, 1 to 64 characters, and defaults to the computer's hostname.
+- `disk` watches free space on up to 20 `paths`, by default the system drive root, and reports each one as the component `disk:<path>`. Free space under `warnFreePercent` (default 10) opens a warning incident of class `resources`, and free space under `criticalFreePercent` (default 5) makes it critical. Both take 1 to 90, and the warn value must be higher than the critical one.
+- `windowsEvents` takes up to 20 entries, each with a `component` and a `log`, the name of a Windows Event Log channel such as `Microsoft-Windows-TaskScheduler/Operational`. A channel name must start with a letter or digit and use only letters, digits, spaces, dots, dashes, underscores, and slashes. You can narrow the match with `ids` and `levels` (up to 50 positive integers each) and `providers`, and `maxAgeMinutes` (default 30, up to 10080) sets how far back to look. Scout asks `wevtutil.exe` for the newest 20 matching events and opens one incident per entry, with the newest event id and the count in the summary and up to five short event lines as evidence. `failureClass` sets the incident class and defaults to `ran-failed`. If `wevtutil.exe` fails, the entry opens a `watcher-failure` incident instead.
+- `wsl`, set to `{ "enabled": true }`, runs `wsl.exe --status` and opens a `dead` incident named `wsl` on a failing exit or a timeout. Machines without `wsl.exe` skip the check silently.
+- `logs` takes up to 30 entries, each with a `component`, a `path`, and a `pattern`, which is a case-insensitive regular expression of up to 200 characters. Scout reads the last `tailKilobytes` of the file (default 64, up to 512) and keeps lines that match `pattern`, do not match the optional `ignore` expression, and are newer than `maxAgeMinutes` (default 30). Lines that do not start with a timestamp count as current. Matches open one incident per entry with the count and the newest five matching lines, classed by `failureClass` (default `ran-failed`). If you set `staleAfterMinutes` (1 to 10080, or `null` to turn the check off) and the file goes unwritten for that long, Scout opens a critical `wedged` incident. A missing or unreadable file opens a `watcher-failure` incident.
+
 ### Reading a meter
 
 Each bar has a tick at 85 percent. At 70 percent and above, the bar and the number turn amber and the row says "High". At 85 percent and above they turn red, the bar is striped, and the row says "Very high". The number and the word are always shown, so color is never the only signal.
