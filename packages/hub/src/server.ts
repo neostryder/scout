@@ -110,6 +110,8 @@ export interface HubOptions {
   watch?: HubWatch;
   /** Heartbeat comment interval for /api/services/live. Tests pass a short one. */
   streamHeartbeatMs?: number;
+  /** How long /api/risk reuses its computed response. Defaults to one minute. */
+  riskTtlMs?: number;
   changelog?: Pick<ChangelogOptions, "summarize" | "fetch">;
   discoverModel?: ModelRunner;
   descriptions?: DescriptionRun;
@@ -261,6 +263,8 @@ export function createHub(options: HubOptions): Server {
   const control = { runner: controlRunner, protectedFile, context: () => controlRunner?.context() ?? { machineId: hubMachineId(), pid: process.pid, parentPid: process.ppid, ...(controlPort !== undefined ? { port: controlPort } : {}), config: protectedFile().config } };
   const downloadKinds = deps?.resolveDownload ? createDownloadKinds(db, deps.resolveDownload) : null;
   const hostAllowed = (host: string | undefined): boolean => (access ? host === access.config.host : isLoopbackHost(host));
+  let riskCache: { machines: ReturnType<typeof machineRisks>; generatedAt: string } | undefined;
+  let riskCacheAt = 0;
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (!hostAllowed(req.headers.host)) return send(res, 421, "misdirected request", "text/plain");
     if (access && !isPublicInstallAsset(req.method, new URL(req.url ?? "/", "http://localhost").pathname)) {
@@ -314,7 +318,15 @@ export function createHub(options: HubOptions): Server {
         if (!options.claude) return json(res, 404, { error: "the Claude monitor is off" });
         try { return json(res, 200, await options.claude.read()); } catch (error) { return json(res, 503, { error: `The process table could not be read: ${(error as Error).message}` }); }
       }
-      if (url.pathname === "/api/risk") return json(res, 200, { machines: machineRisks(db), generatedAt: new Date().toISOString() });
+      if (url.pathname === "/api/risk") {
+        const now = Date.now();
+        if (!riskCache || now - riskCacheAt >= (options.riskTtlMs ?? 60_000)) {
+          const machines = machineRisks(db);
+          riskCacheAt = Date.now();
+          riskCache = { machines, generatedAt: new Date(riskCacheAt).toISOString() };
+        }
+        return json(res, 200, riskCache);
+      }
       if (url.pathname === "/api/summary") return json(res, 200, summaryResponse(db));
       if (url.pathname === "/api/installs") return json(res, 200, installsResponse(db, url.searchParams, provenance()));
       if (url.pathname === "/api/provenance") return json(res, 200, provenanceResponse(db, mineFile()));
