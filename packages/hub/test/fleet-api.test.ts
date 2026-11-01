@@ -92,8 +92,38 @@ async function listen(t: TestContext, options: { token?: string; access?: boolea
     const p = Buffer.from(JSON.stringify({ iss: "https://team.example.test", aud: ["aud-tag-1"], email: "user@example.test", sub: "u1", exp: now + 3600, nbf: now - 10 })).toString("base64url");
     return `${h}.${p}.${sign("RSA-SHA256", Buffer.from(`${h}.${p}`), pair.privateKey).toString("base64url")}`;
   };
-  return { call, liveToken, service };
+  return { call, liveToken, service, db };
 }
+
+test("incident detail reads return the latest 200 events oldest first and accept only GET and HEAD", async (t) => {
+  const app = await listen(t, {});
+  await app.service.accept([packet()]);
+  const incident = app.service.incidents({})[0]!;
+  const path = `/api/fleet/incidents/${incident.id}`;
+  const found = await app.call(path);
+  assert.equal(found.status, 200);
+  assert.equal(found.body.incident.id, incident.id);
+  assert.ok(found.body.events.some((event: { kind: string }) => event.kind === "opened"));
+  app.db.prepare("DELETE FROM fleet_events").run();
+  const insert = app.db.prepare("INSERT INTO fleet_events (incident_id, at, kind, detail) VALUES (?, ?, ?, ?)");
+  for (let index = 204; index >= 0; index -= 1) {
+    const at = new Date(Date.parse(T) + Math.floor(index / 2) * 1000).toISOString();
+    insert.run(incident.id, at, "sample", String(index));
+  }
+  insert.run(null, new Date(Date.parse(T) + 999_000).toISOString(), "unrelated", "not this incident");
+  const detail = await app.call(path);
+  assert.equal(detail.body.events.length, 200);
+  const expected = Array.from({ length: 205 }, (_, index) => ({ at: new Date(Date.parse(T) + Math.floor(index / 2) * 1000).toISOString(), kind: "sample", detail: String(index) })).sort((a, b) => a.at.localeCompare(b.at) || Number(b.detail) - Number(a.detail)).slice(-200);
+  assert.deepEqual(detail.body.events, expected);
+  const head = await app.call(path, undefined, {}, "HEAD");
+  assert.equal(head.status, 200);
+  assert.equal(head.body, null);
+  assert.equal((await app.call("/api/fleet/incidents/999")).status, 404);
+  assert.equal((await app.call("/api/fleet/incidents/0")).status, 404);
+  assert.equal((await app.call("/api/fleet/incidents/999999999999999999999")).status, 404);
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) assert.equal((await app.call(path, undefined, {}, method)).status, 405);
+  assert.equal((await app.call(path, undefined, { host: "untrusted.example.test" })).status, 421);
+});
 
 test("packet ingest requires a configured bearer and accepts a mixed batch", async (t) => {
   const missing = await listen(t, {});
@@ -159,6 +189,12 @@ test("production access gates incident reads and leaves packet ingest on the bea
   assert.equal(shown.status, 200);
   assert.equal(shown.body.incidents.length, 1);
   const id = shown.body.incidents[0].id as number;
+  const path = `/api/fleet/incidents/${id}`;
+  assert.equal((await app.call(path)).status, 403);
+  assert.equal((await app.call(path, undefined, { authorization: "Bearer ingest-secret" })).status, 403);
+  assert.equal((await app.call(path, undefined, {}, "HEAD")).status, 403);
+  assert.equal((await app.call(path, undefined, { "cf-access-jwt-assertion": app.liveToken() })).status, 200);
+  assert.equal((await app.call(path, undefined, { host: "127.0.0.1", "cf-access-jwt-assertion": app.liveToken() })).status, 421);
   const investigated = await app.call(`/api/fleet/incidents/${id}/investigate`, {}, { "cf-access-jwt-assertion": app.liveToken() });
   assert.equal(investigated.status, 200);
   assert.equal(investigated.body.reference, "note-1");

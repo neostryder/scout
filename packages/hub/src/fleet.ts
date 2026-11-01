@@ -463,6 +463,15 @@ export class FleetService {
     return listIncidents(this.db, filter);
   }
 
+  incident(id: number): { incident: FleetIncident; events: { at: string; kind: string; detail: string }[] } | null {
+    const incident = incidentById(this.db, id);
+    if (!incident) return null;
+    const events = this.db.prepare(`SELECT at, kind, detail FROM (
+      SELECT id, at, kind, detail FROM fleet_events WHERE incident_id = ? ORDER BY at DESC, id DESC LIMIT 200
+    ) ORDER BY at, id`).all(id) as { at: string; kind: string; detail: string }[];
+    return { incident, events };
+  }
+
   ack(id: number): FleetIncident | null {
     return acknowledge(this.db, id, this.now().toISOString());
   }
@@ -805,6 +814,14 @@ export async function fleetApi(service: FleetService, req: IncomingMessage, url:
       limit,
     });
     return json(res, 200, { incidents });
+  }
+  const detail = /^\/api\/fleet\/incidents\/(\d+)$/.exec(url.pathname);
+  if (detail?.[1]) {
+    if (req.method !== "GET" && req.method !== "HEAD") return json(res, 405, { error: "method not allowed" });
+    const id = Number(detail[1]);
+    if (!Number.isSafeInteger(id) || id <= 0) return json(res, 404, { error: "not found" });
+    const result = service.incident(id);
+    return result ? json(res, 200, result) : json(res, 404, { error: "not found" });
   }
   const match = /^\/api\/fleet\/incidents\/(\d+)\/(ack|snooze|mute|investigate)$/.exec(url.pathname);
   if (!match || !match[1] || !match[2]) return json(res, 404, { error: "no such route" });

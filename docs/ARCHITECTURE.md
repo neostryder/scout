@@ -360,6 +360,7 @@ Delivery and actions go through the ports in `fleet-ports.ts`. The hub's `comman
 Routes in `packages/hub/src/fleet.ts`:
 - `POST /api/fleet/packets` takes one packet or up to 100 with a bearer ingest token, and it skips Cloudflare Access so headless machines can post.
 - `GET /api/fleet/incidents` lists incidents filtered by state.
+- `GET /api/fleet/incidents/<id>` returns `{incident, events}` for one incident, with its latest 200 events in chronological order, behind the same Cloudflare Access gate as the other fleet routes.
 - `POST /api/fleet/incidents/<id>/ack`, `/snooze`, `/mute`, `/investigate` act on one incident.
 
 Without a fleet config the routes answer 404 or 503.
