@@ -66,7 +66,7 @@ test("catalog source config is optional and validates flags, ages, and regex lis
   try {
     const path = join(dir, "fleet.json");
     assert.equal(loadFleetConfig(path).sources?.catalog?.enabled, undefined);
-    for (const data of [{}, { sources: {} }, { sources: { catalog: {} } }, { sources: { catalog: { enabled: false } } }]) {
+    for (const data of [{}, { sources: {} }, { sources: { catalog: {} } }, { sources: { catalog: { enabled: false } } }, { sources: { catalog: { neverRan: { tasks: [] } } } }]) {
       writeFileSync(path, JSON.stringify(data), "utf8");
       const file = loadFleetConfig(path);
       assert.equal(file.fileError, null);
@@ -77,6 +77,12 @@ test("catalog source config is optional and validates flags, ages, and regex lis
     const file = loadFleetConfig(path);
     assert.equal(file.fileError, null);
     assert.deepEqual(file.sources?.catalog, catalog);
+    for (const tasks of [["^backup$", "^folder\\\\task$"], Array(50).fill("x".repeat(200))]) {
+      writeFileSync(path, JSON.stringify({ sources: { catalog: { neverRan: { tasks } } } }), "utf8");
+      const file = loadFleetConfig(path);
+      assert.equal(file.fileError, null);
+      assert.deepEqual(file.sources?.catalog?.neverRan, { tasks });
+    }
     for (const invalid of [
       { tasks: { include: ["["] } },
       { launchd: { exclude: ["("] } },
@@ -88,6 +94,17 @@ test("catalog source config is optional and validates flags, ages, and regex lis
       { tasks: { include: "backup" } },
       { tasks: { include: [1] } },
       { windowsServices: { exclude: [] } },
+      { neverRan: null },
+      { neverRan: [] },
+      { neverRan: "backup" },
+      { neverRan: {} },
+      { neverRan: { tasks: "backup" } },
+      { neverRan: { tasks: ["["] } },
+      { neverRan: { tasks: Array(51).fill("backup") } },
+      { neverRan: { tasks: [""] } },
+      { neverRan: { tasks: ["x".repeat(201)] } },
+      { neverRan: { tasks: [1] } },
+      { neverRan: { tasks: [], unknown: true } },
       { unknown: true },
     ]) {
       writeFileSync(path, JSON.stringify({ ingestTokenEnv: "FLEET_TOKEN", sources: { catalog: { enabled: true, ...invalid } } }), "utf8");

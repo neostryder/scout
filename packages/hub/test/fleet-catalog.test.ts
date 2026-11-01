@@ -84,6 +84,33 @@ test("catalog rows map integer flags, exclude gone services, and obey configured
   assert.deepEqual(f.logs, []);
 });
 
+test("configured never-run tasks open incidents and recover after running", async (t) => {
+  const f = fixture({ enabled: true });
+  t.after(() => f.db.close());
+  f.db.prepare("UPDATE services SET last_result = '267011'").run();
+  const source = new FleetCatalogSource(f.db, f.fleet, f.options);
+  await source.tick();
+  assert.equal(f.batches.length, 0);
+  f.file.sources = { catalog: { enabled: true, neverRan: { tasks: ["^other$"] } } };
+  await source.tick();
+  assert.equal(f.batches.length, 0);
+  f.file.sources = { catalog: { enabled: true, neverRan: { tasks: ["^backup$"] } } };
+  await source.tick();
+  assert.equal(f.batches.length, 1);
+  assert.equal(f.batches[0]?.length, 1);
+  assert.equal(f.batches[0]?.[0]?.component, "Backup");
+  assert.equal(f.batches[0]?.[0]?.failureClass, "never-ran");
+  assert.equal(f.batches[0]?.[0]?.summary, "task has never run");
+  assert.equal(f.batches[0]?.[0]?.severity, "warning");
+  f.db.prepare("UPDATE services SET last_result = '0', last_run = ?").run(T);
+  await source.tick();
+  assert.deepEqual(f.batches[1], [{ ...f.batches[0]?.[0], recovered: true, lastSeen: T, summary: "recovered" }]);
+  await source.tick();
+  assert.equal(f.batches.length, 2);
+  assert.equal((f.db.prepare("SELECT value FROM meta WHERE key = 'fleet_catalog_state'").get() as { value: string }).value, "[]");
+  assert.deepEqual(f.logs, []);
+});
+
 test("the configured scan age and task exclusions apply to catalog rows", async (t) => {
   const f = fixture({ enabled: true, staleScanMinutes: 1 });
   t.after(() => f.db.close());

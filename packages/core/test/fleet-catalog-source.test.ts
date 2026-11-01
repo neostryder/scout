@@ -37,6 +37,34 @@ test("folder tasks and vendor updaters are outside the default task scope", () =
   }
 });
 
+test("matching never-run tasks carry a warning and catalog evidence", () => {
+  const scope = { ...DEFAULT_CATALOG_SCOPE, neverRan: [/^backup$/i] };
+  for (const lastResult of ["267011", "0x41303"]) {
+    const packets = catalogPackets([{ ...row, lastResult, lastRun: null }], scope, T);
+    assert.equal(packets.length, 1);
+    const item = packets[0]!;
+    assert.equal(item.component, "Backup");
+    assert.equal(item.failureClass, "never-ran");
+    assert.equal(item.severity, "warning");
+    assert.equal(item.summary, "task has never run");
+    assert.equal(item.fingerprint, fingerprint("desktop", "Backup", "never-ran"));
+    assert.deepEqual(item.evidence, { snapshot: { taskResult: lastResult, lastRun: null, state: "stopped", running: false, kind: "scheduled-task" } });
+    assert.equal(parsePacket(item).ok, true);
+  }
+});
+
+test("never-run tasks stay silent without a match or outside the enabled fresh task scope", () => {
+  const task = { ...row, lastResult: "267011", lastRun: null };
+  const scope = { ...DEFAULT_CATALOG_SCOPE, neverRan: [/^backup$/i] };
+  assert.deepEqual(catalogPackets([task], DEFAULT_CATALOG_SCOPE, T), []);
+  assert.deepEqual(catalogPackets([{ ...task, name: "\\Other" }], scope, T), []);
+  assert.deepEqual(catalogPackets([{ ...task, enabled: false }], scope, T), []);
+  assert.deepEqual(catalogPackets([{ ...task, lastSeenAt: "2026-10-31T17:29:59.999Z" }], scope, T), []);
+  assert.equal(catalogPackets([{ ...task, lastSeenAt: "2026-10-31T17:30:00.000Z" }], scope, T).length, 1);
+  assert.deepEqual(catalogPackets([task], { ...scope, tasks: { include: [], exclude: [] } }, T), []);
+  assert.deepEqual(catalogPackets([task], { ...scope, tasks: { include: [/backup/i], exclude: [/backup/i] } }, T), []);
+});
+
 test("Task Scheduler refusals while running and minute watchdog refusals are false alarms", () => {
   const alarm = FALSE_ALARMS.find((item) => item.id === "task-found-running");
   assert.ok(alarm);
