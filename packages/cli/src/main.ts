@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hubMachineId, setHubMachine, findHubMachine, listRoutes, loadTunnelHosts, openCatalog, type RouteState } from "@scout/core";
+import { hubMachineId, setHubMachine, findHubMachine, listRoutes, loadFleetConfig, loadTunnelHosts, openCatalog, type RouteState } from "@scout/core";
 import { configureHubMachine, loadMachines, localPaths, lookupCloudflareSecrets, readCloudflare } from "@scout/ops";
 import { describeCommand } from "./describe.ts";
 import { recipesCommand } from "./recipes.ts";
@@ -84,6 +84,20 @@ async function main(): Promise<void> {
   if (existsSync(resolve(root, "machines.json"))) configureHubMachine(resolve(root, "machines.json"));
   const requestedDb = value(args, "--db") ?? `${root}/.scout-data/catalog.db`;
   const dbPath = requestedDb === ":memory:" ? requestedDb : resolve(requestedDb);
+  if (args[0] === "fleet" && args[1] === "check-config") {
+    const file = loadFleetConfig(resolve(args[2] ?? `${root}/.scout-data/fleet.json`));
+    if (file.fileError) {
+      console.error(`fleet config invalid: ${file.fileErrorDetail ?? file.fileError}`);
+      process.exitCode = 1;
+    } else {
+      const remote = file.sources?.remote;
+      const local = file.sources?.local;
+      const remoteChecks = remote?.enabled === true ? remote.checks.length : 0;
+      const localProbes = local?.enabled === true ? local.disk.paths.length + local.windowsEvents.length + Number(local.tasks.enabled) + Number(local.wsl.enabled) + local.logs.length : 0;
+      console.log(`fleet config ok: ${remoteChecks} remote checks, ${localProbes} local probes enabled`);
+    }
+    return;
+  }
   if (args[0] === "status" || args[0] === "whois" || args[0] === "map") {
     const db = openCatalog(dbPath);
     try {
@@ -177,6 +191,7 @@ async function main(): Promise<void> {
   console.error("       node packages/cli/src/main.ts status [--json] [--db path]");
   console.error("       node packages/cli/src/main.ts whois <port|name> [--json] [--db path]");
   console.error("       node packages/cli/src/main.ts map [--out file] [--db path]");
+  console.error("       node packages/cli/src/main.ts fleet check-config [path]");
   process.exitCode = 1;
 }
 
