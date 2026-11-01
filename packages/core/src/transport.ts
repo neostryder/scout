@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Probe, ProbeOutput } from "./adapter.ts";
 
 export interface ExecResult { exitCode: number; stdout: string; stderr: string }
@@ -70,11 +70,20 @@ export function sshProgram(env: NodeJS.ProcessEnv = process.env, platform: strin
   return "ssh";
 }
 
+/** Resolve npm and npx to the JavaScript CLI shipped beside Node on Windows. */
+export function windowsNodeCli(file: string, execPath: string, platform: string, exists: (path: string) => boolean): { file: string; args: string[] } | null {
+  if (platform !== "win32" || (file !== "npm" && file !== "npx")) return null;
+  const script = join(dirname(execPath), "node_modules", "npm", "bin", file === "npm" ? "npm-cli.js" : "npx-cli.js");
+  return exists(script) ? { file: execPath, args: [script] } : null;
+}
+
 /** Run one argv locally or through SSH, with no stdin and an abortable child. */
 export const runArgv: Exec = (transport, argv, timeoutMs, signal, env, hooks) => {
   if (transport.type === "local") {
     const [file, ...args] = argv;
-    return file ? run(file, args, timeoutMs, signal, env, undefined, hooks) : Promise.resolve({ exitCode: 127, stdout: "", stderr: "empty argv" });
+    if (!file) return Promise.resolve({ exitCode: 127, stdout: "", stderr: "empty argv" });
+    const cli = windowsNodeCli(file, process.execPath, process.platform, existsSync);
+    return cli ? run(cli.file, [...cli.args, ...args], timeoutMs, signal, env, undefined, hooks) : run(file, args, timeoutMs, signal, env, undefined, hooks);
   }
   const words = transport.guest ? [...transport.guest, ...argv] : argv;
   const remote = env ? ["env", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), ...words] : words;
