@@ -185,12 +185,12 @@ test("a failed transaction rolls back listener rows and events", (t) => {
   assert.deepEqual(events(db), []);
 });
 
-test("the additive listeners schema leaves version 3 and existing data intact", (t) => {
+test("the additive listeners schema leaves version 4 and existing data intact", (t) => {
   const db = seed(t);
   recordListeners(db, "hub", result([listener]), T);
   db.exec(SCHEMA_SQL);
-  assert.equal(SCHEMA_VERSION, 3);
-  assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "3");
+  assert.equal(SCHEMA_VERSION, 4);
+  assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "4");
   assert.equal(listListeners(db).length, 1);
 });
 

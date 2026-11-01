@@ -33,6 +33,7 @@ import { HubBackupWatch, type BackupWatchOptions } from "./backup-watch.ts";
 import type { HubWatch } from "./watch.ts";
 import { portsFileReader, portsResponse } from "@scout/core";
 import { HubStacks } from "./stacks.ts";
+import { fleetApi, fleetPackets, type FleetService } from "./fleet.ts";
 
 // Development server: loopback only and no sign-in. It refuses any Host header that is not a loopback name, which
 // stops a web page in another tab from reaching it through DNS rebinding. Proposal decisions and update jobs need a
@@ -116,6 +117,8 @@ export interface HubOptions {
   changelog?: Pick<ChangelogOptions, "summarize" | "fetch">;
   discoverModel?: ModelRunner;
   descriptions?: DescriptionRun;
+  /** Fleet incident ingest and the read and action routes. Omit it and those routes answer 404. */
+  fleet?: FleetService;
 }
 
 function send(res: ServerResponse, status: number, body: string | Buffer, type: string, headers: Record<string, string> = {}): void {
@@ -271,20 +274,25 @@ export function createHub(options: HubOptions): Server {
   let riskCache: { machines: ReturnType<typeof machineRisks>; generatedAt: string } | undefined;
   let riskCacheAt = 0;
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const url = new URL(req.url ?? "/", "http://localhost");
     if (!hostAllowed(req.headers.host)) return send(res, 421, "misdirected request", "text/plain");
-    if (access && !isPublicInstallAsset(req.method, new URL(req.url ?? "/", "http://localhost").pathname)) {
+    // Posting machines authenticate with the ingest token. They do not carry a Cloudflare Access JWT.
+    if (req.method === "POST" && url.pathname === "/api/fleet/packets") {
+      if (!options.fleet) return json(res, 404, { error: "no such route" });
+      return fleetPackets(options.fleet, req, res, json);
+    }
+    if (access && !isPublicInstallAsset(req.method, url.pathname)) {
       const header = req.headers["cf-access-jwt-assertion"];
       const checked = await verifyAccessJwt(Array.isArray(header) ? header[0] : header, access.config, access.keys);
       if (!checked.ok) {
         access.log?.(`refused ${req.method} ${req.url}: ${checked.reason}`);
         return send(res, 403, "forbidden", "text/plain");
       }
-      if (checked.claims.serviceToken !== undefined && !serviceTokenMayReach(req.method, new URL(req.url ?? "/", "http://localhost").pathname)) {
+      if (checked.claims.serviceToken !== undefined && !serviceTokenMayReach(req.method, url.pathname)) {
         access.log?.(`refused ${req.method} ${req.url}: a service token may reach only the tray and control actions`);
         return send(res, 403, "forbidden", "text/plain");
       }
     }
-    const url = new URL(req.url ?? "/", "http://localhost");
     if (url.pathname === "/api/tray" || url.pathname.startsWith("/api/tray/")) return trayApi(db, req, url, res, hostAllowed, json, { rulesPath: trayPath, read: trayFile, stacks: () => stacks.response().stacks, provenance, live: options.live, control: { context: () => control.context() } });
     if (url.pathname === "/api/resources/alerts") {
       if (!options.meterAlerts) return json(res, 404, { error: "meter alerts are off" });
@@ -305,6 +313,10 @@ export function createHub(options: HubOptions): Server {
     }
     if (url.pathname === "/api/competitors" || url.pathname.startsWith("/api/competitors/")) {
       return competitorsApi(db, req, url, res, hostAllowed, json, options.competitors, options.discovery, options.semantic);
+    }
+    if (url.pathname === "/api/fleet/incidents" || url.pathname.startsWith("/api/fleet/incidents/")) {
+      if (!options.fleet) return json(res, 404, { error: "no such route" });
+      return fleetApi(options.fleet, req, url, res, hostAllowed, json);
     }
     if (req.method === "POST") return decide(db, req, url, res, hostAllowed, runner, options.research, options.changelog, options.discoverModel, options.scans, windowRun);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");
@@ -383,6 +395,7 @@ export function createHub(options: HubOptions): Server {
   if (options.watch) server.once("listening", () => options.watch?.start());
   if (options.meters) server.once("listening", () => options.meters?.start());
   if (backupWatch) server.once("listening", () => backupWatch.start());
+  if (options.fleet) server.once("listening", () => options.fleet?.start());
   // Git facts of the projects are read once the hub is listening and every 6 hours after, only where project roots are configured.
   let gitTimer: ReturnType<typeof setInterval> | undefined;
   if (options.recipeProjects) {
@@ -390,6 +403,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeAlertNotices?.(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { options.fleet?.stop(); windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeAlertNotices?.(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }

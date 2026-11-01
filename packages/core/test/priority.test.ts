@@ -176,8 +176,8 @@ test("priority cache upgrades previous catalogs in place without changing packag
       prior.close();
       const db = openCatalog(path);
       try {
-        assert.equal(SCHEMA_VERSION, 3);
-        assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "3");
+        assert.equal(SCHEMA_VERSION, 4);
+        assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "4");
         assert.equal((db.prepare("SELECT name FROM packages WHERE id = 1").get() as { name: string }).name, "Kept");
         assert.deepEqual({ ...db.prepare("SELECT version, first_seen, last_seen FROM installs WHERE id = 1").get() }, { version: "1.0.0", first_seen: T, last_seen: T });
         assert.deepEqual((db.prepare("PRAGMA table_info(priority_flags)").all() as { name: string }[]).map((column) => column.name), ["package_id", "version", "flags_json", "source", "observed_at"]);

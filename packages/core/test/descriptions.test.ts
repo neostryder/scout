@@ -50,9 +50,9 @@ test("the resolver follows hand, project, install, public and os order", (t) => 
   db.prepare("DELETE FROM descriptions WHERE source = 'public'").run();
   assert.equal(describeRow(db, { ...row, displayName: row.name }), null);
   assert.equal(describeRow(db, { ...row, displayName: "   " }), null);
-  assert.equal(SCHEMA_VERSION, 3);
+  assert.equal(SCHEMA_VERSION, 4);
   db.exec(SCHEMA_SQL);
-  assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "3");
+  assert.equal((db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value, "4");
 });
 
 test("the prefix join uses the machine, longest location, slash normalization and path boundaries", (t) => {

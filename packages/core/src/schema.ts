@@ -1,5 +1,5 @@
 // SQLite catalog schema. Times are ISO 8601 UTC strings; *_json columns hold JSON text.
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -662,6 +662,48 @@ CREATE TABLE IF NOT EXISTS workspace_installs (
   gone_at        TEXT,
   UNIQUE (machine_id, kind, location, name)
 );
+
+-- Fleet incidents. One row per fingerprint. packet_json is redacted before it is stored.
+CREATE TABLE IF NOT EXISTS fleet_incidents (
+  id INTEGER PRIMARY KEY,
+  fingerprint TEXT NOT NULL UNIQUE,
+  host TEXT NOT NULL,
+  component TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  failure_class TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('open','acknowledged','resolved')),
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  summary TEXT NOT NULL,
+  packet_json TEXT NOT NULL,
+  owner_chat TEXT,
+  runbook TEXT,
+  opened_at TEXT NOT NULL,
+  acknowledged_at TEXT,
+  resolved_at TEXT,
+  snoozed_until TEXT,
+  muted INTEGER NOT NULL DEFAULT 0,
+  last_notified_at TEXT,
+  notify_count INTEGER NOT NULL DEFAULT 0,
+  flap_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS fleet_incidents_state ON fleet_incidents(state, last_seen);
+
+CREATE TABLE IF NOT EXISTS fleet_rules (
+  rule_key TEXT PRIMARY KEY,
+  muted_at TEXT NOT NULL,
+  reason TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fleet_events (
+  id INTEGER PRIMARY KEY,
+  incident_id INTEGER,
+  at TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS fleet_events_incident ON fleet_events(incident_id, id);
 `;
 
 /** Columns added to `packages` in version 2, applied to a version 1 catalog. */
