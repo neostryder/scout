@@ -90,7 +90,7 @@ test("competitor routes list, check, update, claim, complete, and fail", async (
   assert.deepEqual(listedAcme.sync, { at: null, head: null, error: "mirror has uncommitted changes" });
   assert.equal(listedAcme.run, null);
   assert.equal(listed.body.configured, true);
-  assert.equal(listed.body.intervalSeconds, 21600);
+  assert.equal(listed.body.intervalSeconds, 1800);
   assert.deepEqual(listed.body.competitors.map((row: { name: string }) => row.name), ["Acme Tools", "Solo Tool"]);
   assert.equal(JSON.stringify(listed.body).includes(mirror), false);
   assert.equal((await call("/api/competitors", "POST", "{}")).status, 405);

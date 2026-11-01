@@ -3,7 +3,7 @@ import { applyAddChange, applyCompetitorCheck, applyGateChange, applyRemoveChang
 import type { Notifier } from "./notify.ts";
 import type { ScheduleClock } from "./schedule.ts";
 
-export const COMPETITOR_INTERVAL_MS = 6 * 3_600_000;
+export const COMPETITOR_INTERVAL_MS = 30 * 60_000;
 export const COMPETITOR_START_DELAY_MS = 5 * 60_000;
 export const COMPETITOR_SYNC_INTERVAL_MS = 12 * 3_600_000;
 export const COMPETITOR_SYNC_PAUSE_MS = 2_000;

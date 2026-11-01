@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { claimCompetitorRun, completeCompetitorRun, failCompetitorRun, dossierStub, getCandidate, holdStats, shadowStats, listCandidates, listOwnerDecisions, listPassedOver, listCompetitorRuns, listCompetitors, nearestWithCloseness, releaseHeld, setCandidateStatus, type Candidate, type Db, type RunState } from "@scout/core";
-import type { CompetitorSchedule } from "./competitor-schedule.ts";
+import { COMPETITOR_INTERVAL_MS, type CompetitorSchedule } from "./competitor-schedule.ts";
 import type { DiscoverySchedule } from "./discovery-schedule.ts";
 
 /** Ranks competitors by meaning for the search; the hub passes MiniMax, a test passes a stub. */
@@ -72,7 +72,7 @@ export async function competitorsApi(db: Db, req: IncomingMessage, url: URL, res
   const read = req.method === "GET" || req.method === "HEAD";
   if (path === "/api/competitors") {
     if (!read) return json(res, 405, { error: "method not allowed" });
-    const status = schedule?.status() ?? { configured: false, intervalSeconds: 21_600, checkedAt: null, running: false };
+    const status = schedule?.status() ?? { configured: false, intervalSeconds: COMPETITOR_INTERVAL_MS / 1000, checkedAt: null, running: false };
     return json(res, 200, { configured: status.configured, intervalSeconds: status.intervalSeconds, checkedAt: status.checkedAt, competitors: status.configured ? listCompetitors(db) : [] });
   }
   if (path === "/api/competitors/gate" && read) {
