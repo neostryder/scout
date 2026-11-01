@@ -61,6 +61,15 @@ export interface FleetCommandHook { command: string[] }
 
 export interface FleetHealerConfig { id: string; command: string[] | null }
 
+export interface FleetCatalogConfig {
+  enabled?: boolean;
+  staleScanMinutes?: number;
+  tasks?: { include?: string[]; exclude?: string[] };
+  launchd?: { include?: string[]; exclude?: string[] };
+  systemd?: { include?: string[]; exclude?: string[] };
+  windowsServices?: { include?: string[] };
+}
+
 export interface FleetFile {
   policy: Partial<FleetPolicy> | null;
   notifiers: FleetNotifierConfig[];
@@ -71,6 +80,7 @@ export interface FleetFile {
   ingestTokenEnv: string | null;
   digestTimes: string[];
   fileError: string | null;
+  sources?: { catalog?: FleetCatalogConfig };
 }
 
 const EMPTY: FleetFile = {
@@ -173,6 +183,38 @@ function expectedRow(value: unknown): ExpectedRun | null {
   return row;
 }
 
+function catalogConfig(value: unknown): FleetCatalogConfig | null {
+  if (!isRecord(value)) return null;
+  const allowed = new Set(["enabled", "staleScanMinutes", "tasks", "launchd", "systemd", "windowsServices"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) return null;
+  const result: FleetCatalogConfig = {};
+  if (value.enabled !== undefined) {
+    if (typeof value.enabled !== "boolean") return null;
+    result.enabled = value.enabled;
+  }
+  if (value.staleScanMinutes !== undefined) {
+    if (typeof value.staleScanMinutes !== "number" || !Number.isFinite(value.staleScanMinutes) || value.staleScanMinutes <= 0) return null;
+    result.staleScanMinutes = value.staleScanMinutes;
+  }
+  for (const key of ["tasks", "launchd", "systemd", "windowsServices"] as const) {
+    const group = value[key];
+    if (group === undefined) continue;
+    if (!isRecord(group)) return null;
+    const keys = key === "windowsServices" ? ["include"] as const : ["include", "exclude"] as const;
+    if (Object.keys(group).some((name) => !(keys as readonly string[]).includes(name))) return null;
+    const patterns: { include?: string[]; exclude?: string[] } = {};
+    for (const name of keys) {
+      const list = group[name];
+      if (list === undefined) continue;
+      if (!Array.isArray(list) || list.some((item) => typeof item !== "string")) return null;
+      for (const item of list) new RegExp(item as string, "i");
+      patterns[name] = list as string[];
+    }
+    result[key] = patterns;
+  }
+  return result;
+}
+
 export function loadFleetConfig(path: string, env: (name: string) => string | undefined = (name) => process.env[name]): FleetFile {
   let text: string;
   try {
@@ -184,8 +226,18 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
     const data: unknown = JSON.parse(text);
     if (!isRecord(data)) return broken();
     if (Object.keys(data).some((key) => SECRET_FIELDS.has(key))) return broken();
-    const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes"]);
+    const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources"]);
     if (Object.keys(data).some((key) => !allowed.has(key))) return broken();
+    let sources: FleetFile["sources"];
+    if (data.sources !== undefined) {
+      if (!isRecord(data.sources) || Object.keys(data.sources).some((key) => key !== "catalog")) return broken();
+      sources = {};
+      if (data.sources.catalog !== undefined) {
+        const catalog = catalogConfig(data.sources.catalog);
+        if (!catalog) return broken();
+        sources.catalog = catalog;
+      }
+    }
     const parsedPolicy = data.policy === undefined ? null : policy(data.policy);
     if (data.policy !== undefined && parsedPolicy === null) return broken();
     const notifiers: FleetNotifierConfig[] = [];
@@ -236,7 +288,7 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
       if (!Array.isArray(data.digestTimes) || data.digestTimes.length === 0 || data.digestTimes.length > 24 || data.digestTimes.some((item) => typeof item !== "string" || !HM.test(item))) return broken();
       digestTimes = data.digestTimes as string[];
     }
-    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null };
+    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null, ...(sources ? { sources } : {}) };
   } catch {
     return broken();
   }

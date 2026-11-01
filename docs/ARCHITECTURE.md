@@ -349,6 +349,8 @@ Any host or program reports a failure to the hub as a packet, which is one JSON 
 
 `fleet-expected.ts` lists jobs that must report on a schedule. A job still silent at the end of its grace period becomes a `never-ran` or `wedged` packet, and heartbeat packets keep the table fresh.
 
+The catalog source turns scanned catalog rows into fleet incidents without per-machine code. Its rules live in core in `fleet-catalog-source.ts` as pure functions. `catalogPackets` classifies rows, and `reconcileCatalog` builds recovery packets. In the hub, `fleet-catalog.ts` runs these rules on a two-minute timer and sends the packets through `FleetService.accept`. It stores the previous packets in the meta table under `fleet_catalog_state`. Because that state persists, a problem that clears while the hub is down still gets its recovery packet after a restart.
+
 Delivery and actions go through the ports in `fleet-ports.ts`. No investigator, triage model, or healer exists yet, so Investigate only records the request. Personal notifiers and secrets belong in the private config, never in the repo.
 
 Routes in `packages/hub/src/fleet.ts`:
