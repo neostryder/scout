@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **The hub can open fleet incidents when a scanned service, scheduled task, launchd job, or systemd unit fails, and resolves them when the problem clears.** Turn it on with `sources.catalog.enabled` in the private fleet settings. Systemd units and Windows services report only after you name them in the include list.
 - [Visible] [Services] **The competitor watch now checks tracked repositories for new releases every 30 minutes instead of every six hours.** A new release is queued for research and shown as a notice within about 30 minutes of appearing. The check only reads tags from each remote and changes nothing on your machine.
 - [Visible] [Software] **On Windows, the hub and the outage watchdog now start again within five minutes after they stop.** Before this, a stopped task stayed down until the next logon. Running the installer again updates the triggers and settings of tasks that already exist.
 - [Internal] [Services] **The hub now logs which requests were running when its event loop is blocked for more than a second.** The hub checks the loop every 250 milliseconds and writes at most one line every ten seconds, listing each running or just-finished request by method, path, and duration. Query strings are never logged.

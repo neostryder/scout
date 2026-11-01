@@ -66,12 +66,13 @@ test("parsePacket rejects unknown class, severity, version and fields", () => {
 });
 
 test("false alarms match the scheduler and launchd cases", () => {
-  assert.equal(FALSE_ALARMS.length, 3);
+  assert.equal(FALSE_ALARMS.length, 4);
   const running = packet({ evidence: { snapshot: { taskResult: 267009 } } });
   assert.equal(isFalseAlarm(running), true);
   assert.equal(isFalseAlarm(packet({ evidence: { snapshot: { taskResult: "0x41301" } } })), true);
   assert.equal(isFalseAlarm(packet({ component: "minute-watchdog", evidence: { snapshot: { taskResult: 2147946720 } } })), true);
   assert.equal(isFalseAlarm(packet({ component: "backup", evidence: { snapshot: { taskResult: 2147946720 } } })), false);
+  assert.equal(isFalseAlarm(packet({ component: "backup", evidence: { snapshot: { taskResult: 2147946720, running: true } } })), true);
   assert.equal(isFalseAlarm(packet({ evidence: { snapshot: { launchdStatus: -9, running: true } } })), true);
   assert.equal(isFalseAlarm(packet({ evidence: { snapshot: { launchdStatus: "-15", running: "true" } } })), true);
   assert.equal(isFalseAlarm(packet({ evidence: { snapshot: { launchdStatus: -9, running: false } } })), false);

@@ -351,6 +351,27 @@ scout-run.sh --fleet-host <name> --component <name> [--timeout-seconds N] [--exp
 
 A high incident notifies you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. Open incidents are listed at `GET /api/fleet/incidents`. The portal does not have an incidents page yet.
 
+### Catalog source
+
+The `sources.catalog` block in `.scout-data/fleet.json` makes the hub open fleet incidents for failed services, scheduled tasks, launchd jobs, and systemd units, using the rows it already scans from each machine. It reads those rows every two minutes and needs no setup on the machines themselves. The block is off until `sources.catalog.enabled` is `true`. By default it skips rows from any machine whose last scan is more than 30 minutes old (`staleScanMinutes`) and any disabled row. It also skips Windows scheduled tasks outside the root task folder, the vendor updaters from Brave, Google, Adobe, CCleaner, Driver Easy, OneDrive, and MicrosoftEdge, and launchd jobs with Apple, application, gui, or user labels. Systemd units and Windows services report nothing until an include pattern names them.
+
+```json
+{
+  "sources": {
+    "catalog": {
+      "enabled": true,
+      "staleScanMinutes": 30,
+      "tasks": { "include": ["^[^\\\\]+$"], "exclude": ["^(Brave|Google|Adobe|CCleaner|Driver Easy|OneDrive|MicrosoftEdge)"] },
+      "launchd": { "include": [".*"], "exclude": ["^com\\.apple\\.", "^application\\.", "^gui/", "^user/"] },
+      "systemd": { "include": ["^backup\\.service$"], "exclude": [] },
+      "windowsServices": { "include": ["^ScoutAgent$"] }
+    }
+  }
+}
+```
+
+Each include and exclude entry is a regular expression string, matched without regard to case. A list you supply replaces its default instead of adding to it, so copy any default entries you want to keep. An invalid expression makes the whole fleet file malformed. A Windows scheduled task with a non-zero last result opens a ran-failed warning, except for results that do not mean failure: 267009 (running), 267010, 267011 (not run yet), 267014 (stopped by the user), and 2147946720 while the task is still running, which Task Scheduler reports when it refused a new instance because one was already running. A launchd keep-alive job that is stopped opens a critical dead incident. A launchd job that is not keep-alive, is not running, and exited with a code other than 0, -9, or -15 opens a ran-failed warning. An enabled systemd unit that is stopped or failed opens a critical dead incident, and so does a stopped Windows service set to start automatically. When a reported problem no longer appears in the catalog, the hub sends a recovered packet that resolves its incident.
+
 ## Resource meters
 
 The Resources view sits beside Services in the page's top navigation and shows how busy each machine is. Each machine gets a card titled with its name, showing its operating system, how old the reading is ("Updated 8 s ago"), and a one-line summary such as "Processor 12%, Memory 38%, Video memory 44%".

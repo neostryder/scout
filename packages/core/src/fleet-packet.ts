@@ -204,6 +204,11 @@ export const FALSE_ALARMS: { id: string; matches: (packet: IncidentPacket) => bo
     matches: (packet) => taskResult(packet) === 2147946720 && /minute-watchdog/i.test(packet.component),
   },
   {
+    id: "task-found-running",
+    reason: "Task Scheduler result 2147946720 (0x800710E0) means a new instance was refused because one is still running.",
+    matches: (packet) => taskResult(packet) === 2147946720 && isRunning(packet),
+  },
+  {
     id: "launchd-signal-while-running",
     reason: "A launchd exit of -9 or -15 while the job is running is a stop signal, not a failure.",
     matches: (packet) => {
