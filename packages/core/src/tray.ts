@@ -167,7 +167,7 @@ export function trayResponse(db: Db, rules: TrayRules, options: TrayOptions = {}
   const recipes = recipesResponse(db).recipes.filter((r) => r.state === "approved" && !r.gone);
   const out: TrayMachine[] = machines.map((machine) => {
     const reachable = options.reachable?.(machine.id) ?? (machine.state !== "unreachable" && machine.state !== "stopped");
-    const services = listServices(db, { machine: machine.id }, descriptions).filter((s) => s.goneAt === null);
+    const services = listServices(db, { machine: machine.id, gone: "present" }, descriptions);
     const listeners = listListeners(db, { machine: machine.id, state: "present" }, descriptions);
     const watch = watchContext(db, services);
     // Like the outage watch, a stopped service counts as down only when it has been seen running; one that never ran is just stopped.

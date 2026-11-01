@@ -299,7 +299,7 @@ export function createHub(options: HubOptions): Server {
         return send(res, 403, "forbidden", "text/plain");
       }
     }
-    if (url.pathname === "/api/tray" || url.pathname.startsWith("/api/tray/")) return trayApi(db, req, url, res, hostAllowed, json, { rulesPath: trayPath, read: trayFile, stacks: () => stacks.response().stacks, provenance, live: options.live, control: { context: () => control.context() } });
+    if (url.pathname === "/api/tray" || url.pathname.startsWith("/api/tray/")) return trayApi(db, req, url, res, hostAllowed, json, { rulesPath: trayPath, read: trayFile, stacks: () => stacks.response().stacks, provenance, live: options.live, control: { context: () => control.context() }, cacheMs: 4000 });
     if (url.pathname === "/api/resources/alerts") {
       if (!options.meterAlerts) return json(res, 404, { error: "meter alerts are off" });
       if (req.method === "POST") {

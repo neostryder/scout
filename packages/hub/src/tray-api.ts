@@ -13,7 +13,15 @@ export interface TrayDeps {
   provenance: () => ProvenanceContext;
   live?: LiveSchedule | undefined;
   control: { context: () => import("@scout/core").ProtectedContext };
+  /** How long a computed read model is reused when nothing it is built from has changed. Zero computes every request. */
+  cacheMs?: number;
+  now?: () => number;
 }
+
+type TrayBody = ReturnType<typeof trayResponse>;
+
+/** One read model per catalog: it takes about half a second to build and the panel polls every few seconds. */
+const memo = new WeakMap<Db, { key: string; at: number; body: TrayBody }>();
 
 async function readBody(req: IncomingMessage, res: ServerResponse, hostAllowed: (host: string | undefined) => boolean, json: SendJson): Promise<unknown | undefined> {
   const origin = req.headers.origin;
@@ -48,12 +56,22 @@ export async function trayApi(db: Db, req: IncomingMessage, url: URL, res: Serve
     const file = deps.read();
     const states = new Map((deps.live?.status() ?? []).map((s) => [s.id, s.state]));
     const provenance = deps.provenance();
-    const body = trayResponse(db, file.rules, {
-      context: deps.control.context(),
-      stacks: deps.stacks(),
-      mine: (row) => programFlags(row.machineId, row.path, row.ports[0] ?? null, provenance).some((flag) => flag.kind === "mine"),
-      reachable: (id) => { const state = states.get(id); return state === undefined || state === "never" ? null : state === "fresh" || state === "stale"; },
-    });
+    const stacks = deps.stacks();
+    const now = (deps.now ?? Date.now)();
+    const key = JSON.stringify([file.rules, [...states], stacks]);
+    const cached = memo.get(db);
+    let body: TrayBody;
+    if (cached && (deps.cacheMs ?? 0) > 0 && cached.key === key && now - cached.at < (deps.cacheMs ?? 0)) {
+      body = cached.body;
+    } else {
+      body = trayResponse(db, file.rules, {
+        context: deps.control.context(),
+        stacks,
+        mine: (row) => programFlags(row.machineId, row.path, row.ports[0] ?? null, provenance).some((flag) => flag.kind === "mine"),
+        reachable: (id) => { const state = states.get(id); return state === undefined || state === "never" ? null : state === "fresh" || state === "stale"; },
+      });
+      memo.set(db, { key, at: now, body });
+    }
     const etag = `"${body.version}"`;
     res.setHeader("ETag", etag);
     res.setHeader("Cache-Control", "no-cache");
