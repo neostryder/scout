@@ -132,6 +132,23 @@
 #services .health-dash { margin-right: 6px; }
 #services .health-latency { display: inline; margin-left: 5px; }
 #services .health-detail { margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+#services .risk-disclosure { position: relative; z-index: 2; margin: 8px auto; width: fit-content; color: var(--ink); }
+#services .risk-disclosure summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; }
+#services .risk-disclosure summary::-webkit-details-marker { display: none; }
+#services .risk-ring { display: block; flex: none; overflow: visible; }
+#services .risk-track, #services .risk-arc { fill: none; stroke: var(--line); }
+#services .risk-arc { stroke: var(--accent); stroke-linecap: round; }
+#services .risk-arc.moderate { stroke-dasharray: 5 1; }
+#services .risk-arc.elevated { stroke-dasharray: 2 1; }
+#services .risk-arc.high { stroke-dasharray: 1 1; }
+#services .risk-score { fill: var(--ink); font: 700 9px sans-serif; }
+#services .risk-word { font-size: 12px; font-weight: 600; }
+#services .risk-word.elevated::before { content: "! "; }
+#services .risk-word.high::before { content: "!! "; }
+#services .risk-disclosure ul { position: absolute; top: 100%; left: 50%; width: min(330px, 80vw); margin: 4px 0; padding: 10px 12px 10px 28px; transform: translateX(-50%); border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 4px 16px rgb(0 0 0 / 18%); font-size: 12px; }
+#services .risk-detail { margin: 12px 0; }
+#services .risk-detail .risk-disclosure { margin: 0; }
+@media (max-width: 719px) { #services .risk-ring { width: 28px; height: 28px; } }
 #services .health-detail h3 { margin: 0 0 8px; }
 #services .health-url { overflow-wrap: anywhere; }
 #services .health-detail svg { display: block; width: 100%; height: 72px; margin: 10px 0 4px; }
