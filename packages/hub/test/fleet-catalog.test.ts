@@ -87,7 +87,7 @@ test("catalog rows map integer flags, exclude gone services, and obey configured
 test("configured never-run tasks open incidents and recover after running", async (t) => {
   const f = fixture({ enabled: true });
   t.after(() => f.db.close());
-  f.db.prepare("UPDATE services SET last_result = '267011'").run();
+  f.db.prepare("UPDATE services SET last_result = '267011', first_seen_at = '2026-10-01T18:00:00.000Z'").run();
   const source = new FleetCatalogSource(f.db, f.fleet, f.options);
   await source.tick();
   assert.equal(f.batches.length, 0);
@@ -103,6 +103,41 @@ test("configured never-run tasks open incidents and recover after running", asyn
   assert.equal(f.batches[0]?.[0]?.summary, "task has never run");
   assert.equal(f.batches[0]?.[0]?.severity, "warning");
   f.db.prepare("UPDATE services SET last_result = '0', last_run = ?").run(T);
+  await source.tick();
+  assert.deepEqual(f.batches[1], [{ ...f.batches[0]?.[0], recovered: true, lastSeen: T, summary: "recovered" }]);
+  await source.tick();
+  assert.equal(f.batches.length, 2);
+  assert.equal((f.db.prepare("SELECT value FROM meta WHERE key = 'fleet_catalog_state'").get() as { value: string }).value, "[]");
+  assert.deepEqual(f.logs, []);
+});
+
+test("never-run grace uses catalog first observation and configured or default days", async (t) => {
+  for (const graceDays of [undefined, 0, 3, 365]) {
+    const neverRan = { tasks: ["^backup$"], ...(graceDays === undefined ? {} : { graceDays }) };
+    const f = fixture({ enabled: true, neverRan });
+    t.after(() => f.db.close());
+    const boundary = new Date(Date.parse(T) - (graceDays ?? 8) * 86_400_000).toISOString();
+    f.db.prepare("UPDATE services SET last_result = '267011', first_seen_at = ?").run(new Date(Date.parse(boundary) + 1).toISOString());
+    const source = new FleetCatalogSource(f.db, f.fleet, f.options);
+    await source.tick();
+    assert.equal(f.batches.length, 0);
+    f.db.prepare("UPDATE services SET first_seen_at = ?").run(boundary);
+    await source.tick();
+    assert.equal(f.batches.length, 1);
+    assert.equal(f.batches[0]?.[0]?.failureClass, "never-ran");
+    assert.deepEqual(f.logs, []);
+  }
+});
+
+test("increasing grace recovers a previously reported never-run task once", async (t) => {
+  const f = fixture({ enabled: true, neverRan: { tasks: ["^backup$"], graceDays: 0 } });
+  t.after(() => f.db.close());
+  f.db.prepare("UPDATE services SET last_result = '267011'").run();
+  const source = new FleetCatalogSource(f.db, f.fleet, f.options);
+  await source.tick();
+  assert.equal(f.batches.length, 1);
+  assert.equal(f.batches[0]?.[0]?.failureClass, "never-ran");
+  f.file.sources = { catalog: { enabled: true, neverRan: { tasks: ["^backup$"], graceDays: 8 } } };
   await source.tick();
   assert.deepEqual(f.batches[1], [{ ...f.batches[0]?.[0], recovered: true, lastSeen: T, summary: "recovered" }]);
   await source.tick();

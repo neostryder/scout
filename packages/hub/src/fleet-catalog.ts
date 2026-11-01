@@ -32,6 +32,7 @@ function scopeFor(config: FleetCatalogConfig): CatalogSourceScope {
   }
   scope.windowsServices = { include: compile(config.windowsServices?.include, scope.windowsServices.include) };
   scope.neverRan = compile(config.neverRan?.tasks, scope.neverRan);
+  scope.neverRanGraceDays = config.neverRan?.graceDays ?? scope.neverRanGraceDays;
   scope.staleScanMinutes = config.staleScanMinutes ?? scope.staleScanMinutes;
   return scope;
 }
@@ -74,7 +75,8 @@ export class FleetCatalogSource {
       if (file.fileError || config?.enabled !== true) return;
       const rows = this.db.prepare(`SELECT machines.name AS machine, services.kind, services.name, services.state,
         services.start_mode AS startMode, services.enabled, services.last_run AS lastRun,
-        services.last_result AS lastResult, services.keep_alive AS keepAlive, services.last_seen_at AS lastSeenAt
+        services.last_result AS lastResult, services.keep_alive AS keepAlive,
+        services.first_seen_at AS firstSeenAt, services.last_seen_at AS lastSeenAt
         FROM services JOIN machines ON machines.id = services.machine_id
         WHERE services.gone_at IS NULL ORDER BY services.id`).all() as unknown as StoredService[];
       const services = rows.map((row) => ({ ...row, enabled: row.enabled !== null && row.enabled !== 0, keepAlive: row.keepAlive === null ? null : row.keepAlive !== 0 }));
