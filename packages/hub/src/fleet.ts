@@ -46,6 +46,7 @@ export interface FleetServiceOptions {
   now?: () => Date;
   fetch?: typeof fetch;
   run?: (program: string, args: string[], stdin: string, timeoutMs: number) => Promise<{ code: number | null; error: string | null }>;
+  runCapture?: (program: string, args: string[], stdin: string, timeoutMs: number) => Promise<{ code: number | null; stdout: string; error: string | null }>;
   desktop?: (notice: { title: string; body: string; severity: "high" | "info" }) => Promise<void>;
   later?: (fn: () => void, ms: number) => TimerHandle;
   every?: (fn: () => void, ms: number) => TimerHandle;
@@ -138,6 +139,61 @@ export function runCommand(program: string, args: string[], stdin: string, timeo
   });
 }
 
+export function runCommandCapture(program: string, args: string[], stdin: string, timeoutMs: number): Promise<{ code: number | null; stdout: string; error: string | null }> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const finish = (code: number | null, error: string | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, stdout: Buffer.concat(chunks).toString("utf8"), error });
+    };
+    const child = spawn(program, args, { windowsHide: true, detached: process.platform !== "win32", shell: false, stdio: ["pipe", "pipe", "ignore"] });
+    child.stdout.on("data", (chunk: Buffer) => {
+      const kept = chunk.subarray(0, Math.max(0, 65_536 - size));
+      if (kept.length > 0) chunks.push(kept);
+      size += kept.length;
+    });
+    timer = setTimeout(() => {
+      child.kill();
+      finish(null, "timeout");
+    }, timeoutMs);
+    child.once("error", (error) => finish(null, error.message));
+    child.once("close", (code) => finish(code, code === 0 ? null : `exit ${code ?? "null"}`));
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(stdin);
+  });
+}
+
+export function commandInvestigator(config: { command: string[]; run?: FleetServiceOptions["runCapture"] }): FleetInvestigator {
+  const run = config.run ?? runCommandCapture;
+  const [program, ...args] = config.command;
+  return {
+    async investigate(incident, packet) {
+      if (!program) return { ok: false, reference: null, error: "command is empty" };
+      const { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count } = incident;
+      try {
+        const result = await run(program, args, JSON.stringify({ incident: { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count }, packet }), 90_000);
+        if (result.error || result.code !== 0) return { ok: false, reference: null, error: safeError(result.error ?? `exit ${result.code ?? "null"}`) };
+        const last = result.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1) ?? "";
+        let parsed: unknown;
+        try { parsed = JSON.parse(last); } catch {
+          return { ok: true, reference: result.stdout.slice(0, 200), error: null };
+        }
+        if (!parsed || typeof parsed !== "object" || !("ok" in parsed) || typeof parsed.ok !== "boolean") return { ok: false, reference: null, error: "invalid investigator response" };
+        const reference = "reference" in parsed && typeof parsed.reference === "string" ? parsed.reference : null;
+        const error = "error" in parsed && typeof parsed.error === "string" ? parsed.error : "investigation failed";
+        return { ok: parsed.ok, reference, error: parsed.ok ? null : safeError(error) };
+      } catch (error) {
+        return { ok: false, reference: null, error: safeError(error instanceof Error ? error.message : "investigation failed") };
+      }
+    },
+  };
+}
+
 export function webhookNotifier(config: { id: string; url: () => string | undefined; fetch?: typeof fetch }): FleetNotifier {
   const fetchImpl = config.fetch ?? fetch;
   return {
@@ -215,6 +271,7 @@ export class FleetService {
   private now: () => Date;
   private fetchImpl: typeof fetch | undefined;
   private run: NonNullable<FleetServiceOptions["run"]>;
+  private runCapture: NonNullable<FleetServiceOptions["runCapture"]>;
   private desktop: NonNullable<FleetServiceOptions["desktop"]> | undefined;
   private later: NonNullable<FleetServiceOptions["later"]>;
   private every: NonNullable<FleetServiceOptions["every"]>;
@@ -235,6 +292,7 @@ export class FleetService {
     this.now = options.now ?? (() => new Date());
     this.fetchImpl = options.fetch;
     this.run = options.run ?? runCommand;
+    this.runCapture = options.runCapture ?? runCommandCapture;
     this.desktop = options.desktop;
     this.later = options.later ?? defaultLater;
     this.every = options.every ?? defaultEvery;
@@ -310,29 +368,31 @@ export class FleetService {
     return { accepted, rejected };
   }
 
-  async handleAction(incidentId: number, action: "investigate" | "snooze" | "mute", _actor: string): Promise<{ ok: boolean; error: string | null }> {
+  async handleAction(incidentId: number, action: "investigate" | "snooze" | "mute", actor?: string): Promise<{ ok: boolean; error: string | null; reference?: string | null }> {
     const incident = incidentById(this.db, incidentId);
     if (!incident) return { ok: false, error: "not found" };
     const now = this.now().toISOString();
     if (action === "investigate") {
-      if (!this.investigator) return { ok: false, error: "no investigator configured" };
-      const result = await this.investigator.investigate(incident, incident.packet);
+      const investigator = this.currentInvestigator();
+      if (!investigator) return { ok: false, error: "no investigator configured" };
+      const result = await investigator.investigate(incident, incident.packet);
       this.record(incidentId, "investigate", result.ok ? (result.reference ?? "") : safeError(result.error ?? "failed"));
-      return { ok: result.ok, error: result.error };
+      return { ok: result.ok, error: result.error, reference: result.reference };
     }
     if (action === "snooze") {
       snooze(this.db, incidentId, new Date(this.now().getTime() + 60 * 60_000).toISOString(), now);
       return { ok: true, error: null };
     }
-    muteRule(this.db, ruleKey(incident.host, incident.component, incident.failureClass), "muted from channel", now);
+    muteRule(this.db, ruleKey(incident.host, incident.component, incident.failureClass), actor === undefined ? "muted from channel" : `muted from channel by ${actor}`, now);
     return { ok: true, error: null };
   }
 
   async investigateHttp(id: number): Promise<{ status: number; body: unknown }> {
     const incident = incidentById(this.db, id);
     if (!incident) return { status: 404, body: { error: "not found" } };
-    if (!this.investigator) return { status: 501, body: { error: "no investigator configured" } };
-    const result = await this.investigator.investigate(incident, incident.packet);
+    const investigator = this.currentInvestigator();
+    if (!investigator) return { status: 501, body: { error: "no investigator configured" } };
+    const result = await investigator.investigate(incident, incident.packet);
     this.record(id, "investigate", result.ok ? (result.reference ?? "") : safeError(result.error ?? "failed"));
     return { status: 200, body: result };
   }
@@ -359,6 +419,12 @@ export class FleetService {
     const incident = incidentById(this.db, id);
     if (!incident) return null;
     return { incident, ruleKey: key };
+  }
+
+  private currentInvestigator(): FleetInvestigator | undefined {
+    if (this.investigator) return this.investigator;
+    const config = this.config().investigator;
+    return config ? commandInvestigator({ command: config.command, run: this.runCapture }) : undefined;
   }
 
   private tickInner(): void {
@@ -518,6 +584,29 @@ export class FleetService {
   private record(incidentId: number | null, kind: string, detail: string): void {
     this.db.prepare("INSERT INTO fleet_events (incident_id, at, kind, detail) VALUES (?, ?, ?, ?)").run(incidentId, this.now().toISOString(), kind, detail.slice(0, 500));
   }
+}
+
+export async function fleetActions(service: FleetService, req: IncomingMessage, res: ServerResponse, json: SendJson): Promise<void> {
+  if (req.method !== "POST") return json(res, 405, { error: "method not allowed" });
+  const auth = service.authorize(req.headers.authorization);
+  if (auth === "unconfigured") return json(res, 503, { error: "ingest token is not configured" });
+  if (auth !== "ok") return json(res, 401, { error: "unauthorized" });
+  const body = await readLimited(req, 4096);
+  if (!body.ok) return json(res, body.status, { error: body.error });
+  if (Buffer.byteLength(body.raw, "utf8") > 4096) return json(res, 413, { error: "body too large" });
+  let parsed: unknown;
+  try { parsed = JSON.parse(body.raw); } catch { return json(res, 400, { error: "invalid json" }); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json(res, 400, { error: "body must be an object" });
+  const { incidentId, action, actor } = parsed as Record<string, unknown>;
+  if (typeof incidentId !== "number" || !Number.isSafeInteger(incidentId) || incidentId <= 0) return json(res, 400, { error: "incidentId must be a positive safe integer" });
+  if (action !== "investigate" && action !== "snooze" && action !== "mute") return json(res, 400, { error: "action is invalid" });
+  if (actor !== undefined && (typeof actor !== "string" || /^[A-Za-z0-9 _.-]{1,40}$/.exec(actor)?.[0] !== actor)) return json(res, 400, { error: "actor is invalid" });
+  const result = await service.handleAction(incidentId, action, actor ?? "api");
+  const reference = result.reference?.trim().slice(0, 120);
+  const message = result.ok
+    ? action === "investigate" ? reference ? `Investigation started: ${reference}` : "Investigation started." : action === "snooze" ? "Snoozed for an hour." : "Muted this rule."
+    : result.error ?? "failed";
+  return json(res, 200, { ok: result.ok, message });
 }
 
 export async function fleetPackets(service: FleetService, req: IncomingMessage, res: ServerResponse, json: SendJson): Promise<void> {

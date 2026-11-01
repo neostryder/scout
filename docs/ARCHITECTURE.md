@@ -353,7 +353,7 @@ The catalog source turns scanned catalog rows into fleet incidents without per-m
 
 Delivery and actions go through the ports in `fleet-ports.ts`. No investigator, triage model, or healer exists yet, so Investigate only records the request. Personal notifiers and secrets belong in the private config, never in the repo.
 
-`tools/fleet/telegram-notify.mjs` is a `command` notifier that reads one notice as JSON on stdin and posts it to the Telegram Bot API, adding buttons with callback data `scout:<action>:<incidentId>` when the notice has an incident id and actions. `tools/fleet/telegram-action.mjs` parses that callback data and POSTs to the hub's `/api/fleet/incidents/<id>/investigate`, `/snooze`, or `/mute` endpoint.
+`tools/fleet/telegram-notify.mjs` is a `command` notifier that reads one notice as JSON on stdin and posts it to the Telegram Bot API, adding buttons with callback data `scout:<action>:<incidentId>` when the notice has an incident id and actions. `tools/fleet/telegram-action.mjs` posts each button tap to `POST /api/fleet/actions`, which takes the bearer ingest token used by `POST /api/fleet/packets` in place of a Cloudflare Access sign-in and accepts a loopback Host header even when Access is configured. For Investigate, the hub runs the `investigator` command from `fleet.json` and passes the incident and its evidence packet to it as JSON on stdin.
 
 Routes in `packages/hub/src/fleet.ts`:
 - `POST /api/fleet/packets` takes one packet or up to 100 with a bearer ingest token, and it skips Cloudflare Access so headless machines can post.

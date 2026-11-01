@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **You can now investigate, snooze, and mute fleet incidents from Telegram buttons with the gateway on the hub machine, and Investigate can run a command you choose.** Button taps from a gateway on the hub machine used to fail.
 - [Visible] [Services] **You can now get a warning incident for a Windows scheduled task that is set up but has never run.** Name the tasks in the new `neverRan` list in `.scout-data/fleet.json`. The Catalog source section of SETUP.md gives the format and limits.
 - [Visible] [Services] **You can now get fleet incident alerts in Telegram and investigate, snooze, or mute an incident from the message.** Info notices and digests arrive without a notification sound. See Telegram delivery in SETUP.md to set it up.
 - [Internal] [Services] **The hub checks alerts and answers the tray panel much faster, so the web app and tray panel freeze far less often.** A service uninstalled long ago no longer counts when Scout decides whether a stopped listener needs an alert.
