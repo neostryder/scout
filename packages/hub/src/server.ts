@@ -5,6 +5,7 @@ import { hubMachineId, hubMachineName, resourcesResponse, changelogSummaryFor, m
 import { runDiscovery, type ModelRunner } from "@scout/core";
 import { summarizeChangelogs, type ChangelogOptions } from "@scout/research";
 import { revalidate } from "./etag.ts";
+import { createLoopLag } from "./loop-lag.ts";
 import { trayApi } from "./tray-api.ts";
 import { isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
@@ -61,6 +62,7 @@ export interface HubOptions {
   db: Db;
   /** Directory holding index.html and the page's scripts. */
   webRoot: string;
+  lagLog?: (line: string) => void;
   /**
    * Production mode: the hub answers only the configured public host and only requests that carry a valid Cloudflare
    * Access token. Without it (development) it answers only loopback host names and needs no sign-in.
@@ -231,6 +233,7 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
 
 export function createHub(options: HubOptions): Server {
   const { db, webRoot, access } = options;
+  const lag = createLoopLag({ log: options.lagLog ?? (() => {}) });
   const recipes = new HubRecipes(db, options.recipeProjects ?? (() => []));
   recipes.scan();
   const unsubscribeRecipeDescriptions = options.descriptions?.subscribe((event) => { if (event.scope === "project" && event.state !== "running") recipes.scan(); });
@@ -275,6 +278,9 @@ export function createHub(options: HubOptions): Server {
   let riskCacheAt = 0;
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    const end = lag.begin(`${req.method} ${url.pathname}`);
+    res.once("finish", end);
+    res.once("close", end);
     if (!hostAllowed(req.headers.host)) return send(res, 421, "misdirected request", "text/plain");
     // Posting machines authenticate with the ingest token. They do not carry a Cloudflare Access JWT.
     if (req.method === "POST" && url.pathname === "/api/fleet/packets") {
@@ -388,6 +394,7 @@ export function createHub(options: HubOptions): Server {
     });
   });
   server.once("listening", () => {
+    lag.start();
     const address = server.address();
     if (address && typeof address !== "string") { controlPort = address.port; controlRunner?.setContext({ port: address.port }); }
   });
@@ -403,6 +410,6 @@ export function createHub(options: HubOptions): Server {
     server.once("listening", () => { readGit(); gitTimer = setInterval(readGit, 6 * 3_600_000); gitTimer.unref(); });
     server.once("close", () => clearInterval(gitTimer));
   }
-  server.once("close", () => { options.fleet?.stop(); windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeAlertNotices?.(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
+  server.once("close", () => { lag.stop(); options.fleet?.stop(); windowRun?.stop(); alerts.stop(); options.scans?.stop(); options.competitors?.stop(); options.discovery?.stop(); backupWatch?.stop(); options.meters?.stop(); controlRunner?.close(); unsubscribeRecipeDescriptions?.(); unsubscribeAlertsLive?.(); unsubscribeAlertsEdge?.(); unsubscribeAlertsReads(); unsubscribeAlertNotices?.(); unsubscribeWatchLive?.(); options.watch?.stop(); unsubscribeStacksLive?.(); unsubscribeStacksReads(); health?.stop(); });
   return server;
 }
