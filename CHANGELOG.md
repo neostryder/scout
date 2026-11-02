@@ -81,6 +81,7 @@
 
 ### Fixed
 
+- [Visible] [Software] **A failed update row shows why the update cannot run now.** If an earlier update failed and Scout now refuses that update (Scout does not send itch, MSYS2, or Audacity to winget, for example), the Updates row shows the current reason instead of the old failure message, so the row and the Update dialog agree. A row whose update is allowed still shows the failure, because a retry can work.
 - [Visible] [Software] **Zoom and other apps with winget versions such as `7.2.5 (51704)` update again.** Scout used to refuse these versions with "invalid package id or version". It now accepts winget and Microsoft Store versions with spaces and a build number in parentheses and reads them correctly from `winget list`.
 - [Visible] [Software] **npm and pnpm updates now work on a hub that its supervisor starts with a short PATH.** Scout finds `npm`, `npx`, and `pnpm` beside its own Node, in `PNPM_HOME`, `%APPDATA%\npm`, `%LOCALAPPDATA%\pnpm`, and `%ProgramFiles%\nodejs`, where it used to fail with "spawn npm ENOENT". A program briefly locked as it starts (EACCES or EBUSY, as when winget updates itself) is retried up to 5 times, 3 seconds apart.
 - [Visible] [Software] **Probes, meter reads, and fleet remote checks no longer fail on Linux machines without zsh.** Scout runs remote commands under a login bash when zsh is missing, so a machine such as Bazzite can now be read. Start, stop, restart, enable, and disable still need zsh on the remote machine.

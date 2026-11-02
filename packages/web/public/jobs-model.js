@@ -55,11 +55,12 @@ export function jobProgress(job, now = Date.now()) {
   return { label: STAGE_TEXT[job.phase], stage: at + 1, stages: stages.length, elapsed, attention };
 }
 
-/** The one line a table row or tab title shows for a job. */
-export function jobSummary(job, now = Date.now()) {
+/** The one line a table row or tab title shows for a job. A failed job yields to the plan's current refusal, which says why the update cannot run now. */
+export function jobSummary(job, now = Date.now(), refusal = null) {
   if (!job) return "";
   const progress = jobProgress(job, now);
   if (progress) return progress.attention ? (job.attention.kind === "uac" ? "waiting for the Windows prompt" : "installer window open") : progress.label.toLowerCase();
+  if (job.state === "failed" && refusal) return `cannot update: ${refusal}`;
   if (job.state === "failed") return `failed: ${job.message || "update failed"}`;
   return job.state;
 }
