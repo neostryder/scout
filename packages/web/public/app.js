@@ -111,6 +111,15 @@ function noteSummary(row) {
 }
 function nameCell(row) { return h("td", { class: "name" }, h("div", { class: "t" }, marked(row.name, value("q"))), h("div", { class: "d" }, marked(row.description || "No description yet", value("q"))), ...flagRow(row.flags)); }
 function rowBase(row, cells) { return h("tr", { tabindex: 0, "aria-selected": String(state.detailId === row.installId), onclick: () => openDetail(row.installId), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) openDetail(row.installId); } }, ...cells); }
+// A failed job yields to the plan's current refusal, so the row says why the update cannot run now.
+function rowJob(row) { return state.jobs.find((j) => j.installId === row.installId) || row.job; }
+async function loadJobRefusals(sequence = state.sequence, force = false) {
+  if (view() !== "updates") return;
+  const failed = state.rows.filter((row) => row.updatable && rowJob(row)?.state === "failed" && (force || jobRefusals.get(row.installId)?.jobId !== rowJob(row).id));
+  if (failed.length === 0) return;
+  await Promise.all(failed.map(async (row) => { try { const result = await (await fetch(`/api/updates/plan?installId=${row.installId}`)).json(); jobRefusals.set(row.installId, { jobId: rowJob(row).id, refusal: result.refusal || null }); } catch {} }));
+  if (sequence === state.sequence) renderTable();
+}
 function jobText(job, refusal = null) { return jobSummary(job, Date.now(), refusal); }
 // A segmented bar of the stages the command reports, with the current one pulsing; a command with no stages shows a sweep.
 function jobProgressView(job) {
@@ -165,13 +174,13 @@ function autoToggle(row) {
   return select;
 }
 function updateRow(row) {
-  const job = state.jobs.find((j) => j.installId === row.installId) || row.job;
+  const job = rowJob(row);
   const badge = row.risk ? riskBadge(row.risk) : null;
   const reason = planReasons.get(row.installId) || (row.blockedBy ? `Blocked: ${row.blockedBy}` : row.advisoryOnly ? "Advisory only" : "No installable update");
   const updateButton = h("button", { class: row.risk?.hard > 0 ? "primary muted-action" : "primary", type: "button", disabled: !row.updatable || !!job && !["done", "failed", "stopped"].includes(job.state), title: row.updatable ? badge?.text || "" : reason, "aria-label": row.updatable ? `Update ${row.name} on ${row.machineId}${badge ? `: ${badge.text}` : ""}` : `Cannot update ${row.name}: ${reason}`, onclick: (e) => { e.stopPropagation(); startPlan([row.installId]); } }, "Update");
   const canDownload = !row.updatable && !row.blockedBy && (row.downloadUrl || row.statuses?.some((status) => status === "upstream" || status === "advisory"));
   const button = canDownload ? h("button", { class: "button download", "data-install-id": String(row.installId), type: "button", disabled: !!job && !["done", "failed", "stopped"].includes(job.state), "aria-label": `Download ${row.name} to ${row.machineId}`, onclick: (e) => { e.stopPropagation(); startDownload(row, e.currentTarget); } }, "Download") : updateButton;
-  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job, jobRefusals.get(row.installId) || null) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button, row.updatable ? autoToggle(row) : [])]);
+  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job, jobRefusals.get(row.installId)?.refusal || null) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button, row.updatable ? autoToggle(row) : [])]);
 }
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
@@ -193,7 +202,7 @@ async function load() {
     renderFacetCounts(); renderTable();
     if (current === "updates") {
       const disabled = data.rows.filter((row) => !row.updatable && !planReasons.has(row.installId));
-      const failed = data.rows.filter((row) => row.updatable && row.job?.state === "failed");
+      loadJobRefusals(sequence, true);
       Promise.all(failed.map(async (row) => { try { const result = await (await fetch(`/api/updates/plan?installId=${row.installId}`)).json(); if (result.refusal) jobRefusals.set(row.installId, result.refusal); else jobRefusals.delete(row.installId); } catch {} })).then(() => { if (sequence === state.sequence) renderTable(); });
       Promise.all(disabled.map(async (row) => { try { const result = await (await fetch(`/api/updates/plan?installId=${row.installId}`)).json(); planReasons.set(row.installId, result.refusal || "No installable update"); } catch {} })).then(() => { if (sequence === state.sequence) renderTable(); });
     }
@@ -311,7 +320,7 @@ async function pollJobs() {
     const previous = state.jobs;
     state.jobs = data.jobs;
     flagNeedsYou();
-    if (view() === "updates") renderTable();
+    if (view() === "updates") { renderTable(); loadJobRefusals(); }
     if (view() === "jobs") renderJobs();
     if (data.jobs.some((j) => ["queued", "preflight", "running"].includes(j.state))) {
       if (!state.poll) state.poll = setInterval(pollJobs, 1500);
