@@ -140,8 +140,22 @@ export function stopBatch(db: Db, batchId: string): void {
 }
 
 export function failInterruptedJobs(db: Db): void {
-  const batches = db.prepare("SELECT DISTINCT batch_id AS batchId FROM jobs WHERE state IN ('preflight','running')").all() as { batchId: string }[];
-  db.prepare("UPDATE jobs SET message = 'interrupted by a restart during ' || COALESCE(phase, state) || '; check the installed version, then retry the update', state = 'failed', attention = NULL, attention_detail = NULL, attention_at = NULL, finished_at = ? WHERE state IN ('preflight','running')")
-    .run(new Date().toISOString());
-  for (const batch of batches) stopBatch(db, batch.batchId);
+  const interrupted = db.prepare("SELECT id, batch_id AS batchId, action, phase FROM jobs WHERE state IN ('preflight','running')")
+    .all() as { id: number; batchId: string; action: string; phase: string | null }[];
+  const failedBatches = new Set<string>();
+  for (const job of interrupted) {
+    const stage = job.phase ?? "preflight";
+    const queued = db.prepare("SELECT 1 FROM job_steps WHERE job_id = ? AND name = 'requeued' LIMIT 1").get(job.id);
+    if (job.action === "update" && !queued) {
+      // A restart can land before the update did, so the job goes back in the queue and its preflight decides again.
+      recordStep(db, job.id, "requeued", "done", `interrupted by a restart during ${stage}; queued again`);
+      db.prepare("UPDATE jobs SET state = 'queued', started_at = NULL, phase = NULL, phase_at = NULL, attention = NULL, attention_detail = NULL, attention_at = NULL, message = NULL, finished_at = NULL WHERE id = ?")
+        .run(job.id);
+      continue;
+    }
+    db.prepare("UPDATE jobs SET message = ?, state = 'failed', attention = NULL, attention_detail = NULL, attention_at = NULL, finished_at = ? WHERE id = ?")
+      .run(`interrupted by a restart during ${stage}; check the installed version, then retry the update`, new Date().toISOString(), job.id);
+    failedBatches.add(job.batchId);
+  }
+  for (const batchId of failedBatches) stopBatch(db, batchId);
 }

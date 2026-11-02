@@ -13,7 +13,7 @@ import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAl
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
-import { checkRemote, cloneMirror, firecrawlScraper, githubRepoSizeKb, jevDecider, layaShadow, loadDiscoveryConfig, minimaxJudge, minimaxSemantic, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
+import { checkRemote, cloneMirror, firecrawlScraper, githubRepoSizeKb, jevDecider, layaShadow, loadDiscoveryConfig, minimaxJudge, minimaxSemantic, rewriteLegacyFailures, runDiscovery, checkWatchForSchedule, configureHubMachine, loadMachines, lookupCloudflareSecrets, readCloudflare, readSecret, researchForGate, researchForWatch, runCompetitorUpdate, runWatchUpdate, syncCompetitorMirror, watchMachines } from "@scout/ops";
 import { LiveSchedule, type LiveMachineConfig } from "./live.ts";
 import { ResearchSchedule } from "./schedule.ts";
 import { ScanSchedule, scanIntervalFromArgs } from "./scan-schedule.ts";
@@ -155,6 +155,9 @@ const fleet = new FleetService(db, { configPath: resolve(root, ".scout-data/flee
 const fleetCatalog = new FleetCatalogSource(db, fleet, { log: (line) => console.error(line) });
 const fleetLocal = new FleetLocalSource(db, fleet, { log: (line) => console.error(line) });
 const fleetRemote = new FleetRemoteSource(db, fleet, { machines: () => loadMachines(resolve(root, "machines.json")), log: (line) => console.error(line) });
+// The Runner is built inside createHub, so the stored failures carry the words of the runner that wrote them before it starts.
+const rewrittenFailures = rewriteLegacyFailures(db);
+if (rewrittenFailures > 0) console.log(`rewrote ${rewrittenFailures} stored update failure messages`);
 const server = createHub({ db, lagLog: (line) => console.error(line), fleet, scans, competitors, discovery, semantic: minimaxSemantic(), recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(args.includes("--no-claude") ? {} : { claude: claudeMonitor() }), ...(meterAlerts ? { meterAlerts } : {}), ...(backup ? { backup } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), updateWindowPath: resolve(root, ".scout-data/update-window.json"), updateWindowSchedule: !!scheduled, updateWindowNotifier: new Notifier(), alertNotifier: new Notifier(), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json"), coalesceMs: 2000 }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
 live?.start();
 server.once("listening", () => { fleetCatalog.start(); fleetLocal.start(); fleetRemote.start(); });

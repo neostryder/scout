@@ -133,6 +133,16 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   return { allowed: refusal === null, refusal, command: argv.join(" "), argv, disruptive, needsAdmin, verify };
 }
 
+/** The update command without the pinned version, so the package manager can pick the version it still offers. */
+export function withoutVersion(argv: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--version") { i++; continue; }
+    out.push(argv[i]!);
+  }
+  return out;
+}
+
 // Fixed scripts resolve the user's folder on the target; input travels only as positional arguments.
 const MAC_DOWNLOAD = `set -eu
 part="$HOME/Downloads/$2.part"

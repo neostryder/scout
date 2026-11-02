@@ -20,3 +20,4 @@ export * from "./competitor-facts.ts";
 export * from "./progress.ts";
 export * from "./observe.ts";
 export * from "./window.ts";
+export * from "./legacy-failures.ts";
