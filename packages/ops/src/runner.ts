@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { compareVersions, claimNext, quietWindow, failInterruptedJobs, jobById, listJobs, recordStep, retryExec, runArgv, setJobAttention, setJobPhase, setJobState, stopBatch, stopJob, updatesView, updateTarget, type Db, type Exec, type ExecHooks, type ExecResult, type Job, type Transport } from "@scout/core";
-import { ARCH_NEEDS_REBOOT, ARCH_REBOOT, planDownloadCommands, planUpdate, type PlanMachine, type UpdatePlan } from "./plan.ts";
+import { ARCH_NEEDS_REBOOT, ARCH_REBOOT, planDownloadCommands, planUpdate, withoutVersion, type PlanMachine, type UpdatePlan } from "./plan.ts";
 import { findHubMachine, setHubMachine, downloadFileName, downloadHttps, type ConfirmedDownload, type DownloadPlan } from "@scout/core";
 import { dependencyRefusal, softConfirmation, updateBreaks, type SoftConfirmation, type UpdateBreaks } from "./guard.ts";
 import { progressReader, unstaged } from "./progress.ts";
@@ -18,6 +18,8 @@ export interface MachineConfig extends PlanMachine {
 export interface ResolvedDownload { preview: DownloadPlan; download: ConfirmedDownload | null; transport: Transport | null }
 export interface RunnerDeps {
   exec?: Exec; machines: MachineConfig[]; updateTimeoutMs?: number; checkTimeoutMs?: number;
+  /** How long to wait before a check the package manager did not answer is tried again. */
+  retryDelayMs?: number;
   /** Reads the desktop while an update runs. Unset means the Windows reader when the real exec runs on this Windows machine, `false` means none. */
   observe?: Observer | false;
   /** How often the desktop is read, in milliseconds. */
@@ -181,6 +183,30 @@ export function failure(exitCode: number, output: string, context?: FailureConte
 
 export interface WatchedRun { result: ExecResult; tracker: AttentionTracker; promptExpired: boolean }
 
+// The leading number of a version: the major part a pinned version belongs to.
+const majorOf = (version: string | null | undefined): number | null => {
+  const match = /^\d+/.exec(version ?? "");
+  return match ? Number(match[0]) : null;
+};
+
+// winget answers with this code when the version the plan pinned is not offered any more.
+const NO_PINNED_VERSION = 0x8A150010;
+const pinnedVersionGone = (result: ExecResult): boolean => (result.exitCode | 0) === (NO_PINNED_VERSION | 0) || /no (?:applicable )?version found|no package found matching/i.test(`${result.stderr}\n${result.stdout}`);
+
+// Some apps update themselves when they run, so their version moves without Scout installing anything.
+const SELF_UPDATING = /(?:^|[^a-z0-9])(?:itch|epic(?:games)?)(?:[^a-z0-9]|$)/i;
+
+/** Waits between two checks and stops as soon as the job is stopped. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) { resolve(); return; }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = (): void => { if (timer) clearTimeout(timer); signal.removeEventListener("abort", stop); resolve(); };
+    timer = setTimeout(stop, ms);
+    signal.addEventListener("abort", stop, { once: true });
+  });
+}
+
 export interface WindowsService { name: string; state: string; startMode: string; pathName: string }
 
 const SERVICES_SCRIPT = "$ErrorActionPreference = 'Stop'; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Service | ForEach-Object { [pscustomobject]@{ name = $_.Name; state = $_.State; startMode = $_.StartMode; pathName = [string]$_.PathName } })";
@@ -314,45 +340,88 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
   const batchOptions = (): { alsoUpdating: number[] } => ({ alsoUpdating: (db.prepare("SELECT install_id AS installId FROM jobs WHERE batch_id = ? AND machine_id = ? AND action = 'update' AND state IN ('queued','preflight','running','done') AND id != ?").all(job.batchId, job.machineId, job.id) as { installId: number }[]).map((row) => row.installId) });
   const preview = previewUpdate(db, job.installId, deps.machines, batchOptions());
   const fail = (message: string): void => { setJobState(db, job.id, signal.aborted ? "stopped" : "failed", signal.aborted ? "stopped by user" : message); };
-  if (!preview || !preview.preview.allowed || !preview.transport || preview.preview.from !== job.from || preview.preview.to !== job.to) {
+  // The scan is old, so the installed version and the available release can both have moved on since it ran.
+  if (!preview || !preview.preview.allowed || !preview.transport) {
     const reason = preview?.preview.refusal ?? "install, answer, constraint, or machine changed";
     recordStep(db, job.id, "preflight", "failed", reason);
     fail(reason);
     return;
   }
-  const { plan, transport } = preview;
+  const { transport } = preview;
+  let { plan } = preview;
   const checkTimeout = deps.checkTimeoutMs ?? 120_000;
   const updateTimeout = deps.updateTimeoutMs ?? 1_200_000;
-  const isBrew = ["brew", "cask"].includes(preview.preview.ecosystem);
+  const retryDelay = deps.retryDelayMs ?? 5000;
+  const ecosystem = preview.preview.ecosystem;
+  const isBrew = ["brew", "cask"].includes(ecosystem);
+  const isWinget = ["winget", "msstore"].includes(ecosystem);
   const env = isBrew ? { HOMEBREW_NO_AUTO_UPDATE: "1", HOMEBREW_NO_SUDO: "1", HOMEBREW_NO_INSTALL_CLEANUP: "1", HOMEBREW_NO_ENV_HINTS: "1" } : undefined;
+  const notes: string[] = [];
+  let preflightWritten = false;
   let verifying = false;
   const verifyFailure = "could not read the installed version after the update; check it with winget list";
+  // A note that arrives after the preflight step was written joins that step.
+  const note = (text: string): void => {
+    if (preflightWritten) {
+      db.prepare("UPDATE job_steps SET output = COALESCE(output, '') || ? WHERE job_id = ? AND name = 'preflight' AND state = 'done'").run(`\n${text}`, job.id);
+      return;
+    }
+    notes.push(text);
+  };
+  // A newer release can ship between the plan and the update; the target follows it when it is newer.
+  const recheck = (fresh: typeof preview | null): boolean => {
+    if (!fresh?.preview.allowed) {
+      const reason = fresh?.preview.refusal ?? "answer or constraint changed";
+      recordStep(db, job.id, "preflight", "failed", reason);
+      fail(reason);
+      return false;
+    }
+    const to = fresh.preview.to;
+    if (to && job.to && compareVersions(to, job.to) === 1) {
+      db.prepare("UPDATE jobs SET target = ? WHERE id = ?").run(to, job.id);
+      job.to = to;
+      plan = fresh.plan;
+      note(`the catalog now offers ${to}; the update targets it`);
+    }
+    return true;
+  };
   try {
-    const before = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
-    const installed = plan.verify.parse(before.stdout);
+    let before = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
     if (signal.aborted) throw new Error("stopped by user");
-    const archPackage = preview.preview.ecosystem === "pacman" || preview.preview.ecosystem === "aur";
-    if (archPackage && before.exitCode === 0 && installed !== null && job.to && installed !== job.from && (compareVersions(installed, job.to) ?? -1) >= 0) {
-      // Arch upgrades everything at once, so an earlier job in this batch already brought this package to its target.
-      recordStep(db, job.id, "preflight", "done", `already at ${installed}; an earlier update on this machine brought it there`);
+    let installed = plan.verify.parse(before.stdout);
+    let readable = before.exitCode === 0 && installed !== null;
+    for (let attempt = 0; !readable && attempt < (isWinget ? 3 : 0); attempt++) {
+      await pause(retryDelay, signal);
+      if (signal.aborted) throw new Error("stopped by user");
+      before = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
+      if (signal.aborted) throw new Error("stopped by user");
+      installed = plan.verify.parse(before.stdout);
+      readable = before.exitCode === 0 && installed !== null;
+    }
+    if (!readable || installed === null) {
+      recordStep(db, job.id, "preflight", "failed", cleanOutput(before.stdout + "\n" + before.stderr));
+      fail("could not read the installed version; the package manager did not answer. Retry the update in a minute");
+      return;
+    }
+    if (job.to && (compareVersions(installed, job.to) ?? -1) >= 0) {
+      // The app moved on by itself, or the scan was old: the target is installed already.
+      recordStep(db, job.id, "preflight", "done", `already at ${installed}; it changed since the scan`);
       db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(installed, new Date().toISOString(), job.installId);
       recordStep(db, job.id, "verify", "done", cleanOutput(before.stdout));
       setJobState(db, job.id, "done");
       return;
     }
-    if (before.exitCode !== 0 || installed !== job.from) {
-      recordStep(db, job.id, "preflight", "failed", cleanOutput(before.stdout + "\n" + before.stderr));
-      fail("installed version changed since the plan");
-      return;
+    if (installed !== job.from) {
+      const moved = job.from;
+      db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(installed, new Date().toISOString(), job.installId);
+      db.prepare("UPDATE jobs SET from_version = ? WHERE id = ?").run(installed, job.id);
+      job.from = installed;
+      note(`installed version moved from ${moved} to ${installed} since the scan; continuing from the live version`);
     }
     const fresh = previewUpdate(db, job.installId, deps.machines, batchOptions());
-    if (!fresh?.preview.allowed || fresh.preview.to !== job.to) {
-      const reason = fresh?.preview.refusal ?? "answer or constraint changed";
-      recordStep(db, job.id, "preflight", "failed", reason);
-      fail(reason);
-      return;
-    }
-    recordStep(db, job.id, "preflight", "done", cleanOutput(before.stdout + "\n" + before.stderr));
+    if (!recheck(fresh)) return;
+    recordStep(db, job.id, "preflight", "done", [cleanOutput(before.stdout + "\n" + before.stderr), ...notes].filter(Boolean).join("\n"));
+    preflightWritten = true;
     setJobState(db, job.id, "running");
     if (isBrew) {
       // The local index goes stale; without a refresh `brew upgrade` finds nothing and exits 0.
@@ -376,12 +445,7 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       }
     }
     const guarded = previewUpdate(db, job.installId, deps.machines, batchOptions());
-    if (!guarded?.preview.allowed || guarded.preview.to !== job.to) {
-      const reason = guarded?.preview.refusal ?? "answer or constraint changed";
-      recordStep(db, job.id, "preflight", "failed", reason);
-      fail(reason);
-      return;
-    }
+    if (!recheck(guarded)) return;
     const windowsLocal = transport.type === "local" && !!db.prepare("SELECT 1 FROM machines WHERE id = ? AND os = 'windows'").get(job.machineId);
     const access = serviceAccess(exec, transport);
     const readServices = deps.readServices ?? access.read;
@@ -396,9 +460,22 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       } catch (error) { recordStep(db, job.id, "services-before", "failed", cleanOutput((error as Error).message)); }
     }
     let watched: WatchedRun;
+    let pinned: ExecResult | null = null;
+    let latest = false;
+    let dropped = false;
     try {
       if (signal.aborted) throw new Error("stopped by user");
-      watched = await runWatched(db, job, deps, exec, transport, plan.argv, preview.preview.ecosystem, updateTimeout, signal, env);
+      watched = await runWatched(db, job, deps, exec, transport, plan.argv, ecosystem, updateTimeout, signal, env);
+      if (!watched.promptExpired && watched.result.exitCode !== 0 && isWinget && pinnedVersionGone(watched.result)) {
+        const from = majorOf(job.from);
+        const to = majorOf(job.to);
+        if (from !== null && to !== null && from === to) {
+          // The pinned version is gone, so winget is asked for the newest one it still offers.
+          pinned = watched.result;
+          watched = await runWatched(db, job, deps, exec, transport, withoutVersion(plan.argv), ecosystem, updateTimeout, signal, env);
+          latest = true;
+        } else dropped = true;
+      }
     } finally {
       // Recovery uses its own deadline because a stopped installer can leave its services down.
       if (windowsLocal) await restoreServices(db, job.id, services, readServices, startService);
@@ -410,12 +487,18 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       fail(`no one answered the Windows administrator prompt in ${Math.max(1, Math.round((deps.promptTimeoutMs ?? 180_000) / 60_000))} minutes, so Scout stopped the update`);
       return;
     }
-    if (updated.exitCode !== 0) {
+    if (pinned) recordStep(db, job.id, "update", "failed", cleanOutput(pinned.stdout + "\n" + pinned.stderr));
+    if (dropped) {
       recordStep(db, job.id, "update", "failed", cleanOutput(updated.stdout + "\n" + updated.stderr));
+      fail(`winget no longer offers ${job.to}; rescan and retry`);
+      return;
+    }
+    if (updated.exitCode !== 0) {
+      recordStep(db, job.id, latest ? "update-latest" : "update", "failed", cleanOutput(updated.stdout + "\n" + updated.stderr));
       fail(failure(updated.exitCode, updated.stderr + "\n" + updated.stdout, { promptSeen: tracker.uacSeen, windowSeen: tracker.windowSeen, timeoutMs: updateTimeout }));
       return;
     }
-    recordStep(db, job.id, "update", "done", cleanOutput(updated.stdout + "\n" + updated.stderr));
+    recordStep(db, job.id, latest ? "update-latest" : "update", "done", cleanOutput(updated.stdout + "\n" + updated.stderr));
     if (isBrew) {
       // Whole-machine cleanup is off, so drop only this package's old versions, as `brew upgrade` normally does.
       const cleaned = await exec(transport, ["brew", "cleanup", plan.argv.at(-1) ?? ""], updateTimeout, signal, env);
@@ -423,13 +506,35 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
       recordStep(db, job.id, "cleanup", cleaned.exitCode === 0 ? "done" : "failed", cleanOutput(cleaned.stdout + "\n" + cleaned.stderr));
     }
     verifying = true;
-    const after = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
+    let after = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
     if (signal.aborted) throw new Error("stopped by user");
-    const version = plan.verify.parse(after.stdout);
-    if (after.exitCode !== 0 || !version || !job.to || compareVersions(version, job.to) !== 0 && compareVersions(version, job.to) !== 1) {
+    let version = plan.verify.parse(after.stdout);
+    const reached = (value: string | null): boolean => value !== null && job.to !== null && (compareVersions(value, job.to) ?? -1) >= 0;
+    for (let attempt = 1; attempt < (isWinget ? 5 : 1) && !(after.exitCode === 0 && reached(version)); attempt++) {
+      await pause(retryDelay, signal);
+      if (signal.aborted) throw new Error("stopped by user");
+      after = await exec(transport, plan.verify.argv, checkTimeout, signal, env);
+      if (signal.aborted) throw new Error("stopped by user");
+      version = plan.verify.parse(after.stdout);
+    }
+    if (after.exitCode !== 0) {
       recordStep(db, job.id, "verify", "failed", cleanOutput(after.stdout + "\n" + after.stderr));
-      const selfUpdating = /(?:^|[^a-z0-9])(?:itch|epic(?:games)?)(?:[^a-z0-9]|$)/i.test(`${job.name} ${plan.argv.join(" ")}`);
-      fail(after.exitCode !== 0 && plan.verify.argv[0] === "winget" ? verifyFailure : `installed version did not reach the target${version === job.from && selfUpdating ? "; the app may update itself; open it and let it finish" : ""}`);
+      fail(plan.verify.argv[0] === "winget" ? verifyFailure : "installed version did not reach the target");
+      return;
+    }
+    if (version === null || !reached(version)) {
+      if (version !== null && version === job.from && SELF_UPDATING.test(`${job.name} ${plan.argv.join(" ")}`)) {
+        recordStep(db, job.id, "verify", "done", cleanOutput(after.stdout + "\n" + after.stderr));
+        setJobState(db, job.id, "done", "installed; this app finishes updating itself, so Scout shows the new version after its next scan");
+        return;
+      }
+      recordStep(db, job.id, "verify", "failed", cleanOutput(after.stdout + "\n" + after.stderr));
+      fail("installed version did not reach the target");
+      return;
+    }
+    if (latest && majorOf(version) !== majorOf(job.to)) {
+      recordStep(db, job.id, "verify", "failed", cleanOutput(after.stdout + "\n" + after.stderr));
+      fail("installed a newer major version than planned; check it");
       return;
     }
     db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(version, new Date().toISOString(), job.installId);

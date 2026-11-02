@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { claimNext, enqueueBatch, failInterruptedJobs, jobById, jobForInstall, openCatalog, recordScan, setJobAttention, setJobPhase, setJobState, stopBatch, upsertMachine } from "../src/index.ts";
+import { claimNext, enqueueBatch, failInterruptedJobs, jobById, jobForInstall, openCatalog, recordScan, setJobAttention, setJobPhase, setJobState, stopBatch, upsertMachine, type ConfirmedDownload } from "../src/index.ts";
 
 function seed() {
   const db = openCatalog(":memory:");
@@ -27,27 +27,57 @@ test("jobs claim one per machine and stop the rest of a failed batch", () => {
   db.close();
 });
 
-test("restart fails interrupted jobs", () => {
+test("restart queues an interrupted update again", () => {
   const { db, ids } = seed();
-  const job = enqueueBatch(db, [{ installId: ids[0]!, machineId: "mini", from: "1.0", to: "2.0" }]).jobs[0]!;
+  const first = ids[0] as number;
+  const second = ids[1] as number;
+  const batch = enqueueBatch(db, [{ installId: first, machineId: "mini", from: "1.0", to: "2.0" }, { installId: second, machineId: "mini", from: "1.0", to: "2.0" }]);
+  const job = batch.jobs[0]!;
   claimNext(db, "mini");
+  setJobAttention(db, job.id, { kind: "uac" });
   failInterruptedJobs(db);
-  assert.deepEqual([jobById(db, job.id)?.state, jobById(db, job.id)?.message], ["failed", "interrupted by a restart during preflight; check the installed version, then retry the update"]);
-  assert.equal(enqueueBatch(db, [{ installId: ids[0]!, machineId: "mini", from: "1.0", to: "2.0" }]).jobs[0]?.state, "queued");
+  const requeued = jobById(db, job.id)!;
+  assert.equal(requeued.state, "queued");
+  assert.equal(requeued.message, null);
+  assert.equal(requeued.attention, null);
+  assert.equal(requeued.startedAt, null);
+  assert.equal(requeued.phase, null);
+  assert.equal(requeued.finishedAt, null);
+  assert.deepEqual(requeued.steps.map((step) => step.name), ["requeued"]);
+  assert.equal(requeued.steps[0]?.state, "done");
+  assert.equal(requeued.steps[0]?.output, "interrupted by a restart during preflight; queued again");
+  assert.equal(jobById(db, batch.jobs[1]!.id)?.state, "queued");
+  assert.throws(() => enqueueBatch(db, [{ installId: first, machineId: "mini", from: "1.0", to: "2.0" }]), /an update for this install is already queued/);
   db.close();
 });
 
-test("restart messages retain the installer phase and stop queued batch partners", () => {
+test("a second interruption fails the update and stops queued batch partners", () => {
   const { db, ids } = seed();
-  const jobs = enqueueBatch(db, ids.map((id) => ({ installId: id, machineId: "mini", from: "1.0", to: "2.0" }))).jobs;
-  const job = claimNext(db, "mini")!;
+  const batch = enqueueBatch(db, ids.map((id) => ({ installId: id, machineId: "mini", from: "1.0", to: "2.0" })));
+  const job = batch.jobs[0]!;
+  claimNext(db, "mini");
+  failInterruptedJobs(db);
+  assert.equal(jobById(db, job.id)?.state, "queued");
+  assert.equal(claimNext(db, "mini")?.id, job.id);
   setJobState(db, job.id, "running");
   setJobPhase(db, job.id, "install");
   setJobAttention(db, job.id, { kind: "uac" });
   failInterruptedJobs(db);
+  assert.equal(jobById(db, job.id)?.state, "failed");
   assert.equal(jobById(db, job.id)?.message, "interrupted by a restart during install; check the installed version, then retry the update");
   assert.equal(jobById(db, job.id)?.attention, null);
   assert.ok(jobById(db, job.id)?.finishedAt);
-  assert.equal(jobById(db, jobs[1]!.id)?.state, "stopped");
+  assert.equal(jobById(db, batch.jobs[1]!.id)?.state, "stopped");
+  db.close();
+});
+
+test("a download job interrupted by a restart fails", () => {
+  const { db, ids } = seed();
+  const download: ConfirmedDownload = { url: "https://vendor.example.test/Demo.dmg", fileName: "Demo.dmg", size: 123, sha256: "a".repeat(64), source: "github", platform: "macos", arch: "x64", version: "2.0", installed: "1.0" };
+  const job = enqueueBatch(db, [{ installId: ids[0]!, machineId: "mini", from: "1.0", to: "2.0", download }]).jobs[0]!;
+  claimNext(db, "mini");
+  failInterruptedJobs(db);
+  assert.deepEqual([jobById(db, job.id)?.state, jobById(db, job.id)?.message], ["failed", "interrupted by a restart during preflight; check the installed version, then retry the update"]);
+  assert.equal(jobById(db, job.id)?.steps.length, 0);
   db.close();
 });
