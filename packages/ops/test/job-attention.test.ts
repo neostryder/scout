@@ -341,7 +341,7 @@ test("a successful update followed by an unreadable winget reports a manual chec
     else if (updated) return { exitCode: 127, stdout: "", stderr: "spawn winget EACCES" };
     return f.exec(...args);
   };
-  await runJob(f.db, f.job, { machines: f.machines, exec, readServices: async () => [], checkTimeoutMs: 1 }, new AbortController().signal);
+  await runJob(f.db, f.job, { machines: f.machines, exec, readServices: async () => [], checkTimeoutMs: 1, retryDelayMs: 1 }, new AbortController().signal);
   assert.equal(jobById(f.db, f.job.id)?.message, "could not read the installed version after the update; check it with winget list");
   assert.equal(jobById(f.db, f.job.id)?.steps.at(-1)?.name, "verify");
 });
@@ -386,14 +386,20 @@ test("a late desktop observation cannot clear service recovery attention", async
   assert.equal(jobById(f.db, f.job.id)?.attention?.kind, "service");
 });
 
-test("unchanged self-updating apps retain the failure and add an open-app hint", async (t) => {
+test("self-updating apps finish with a note; other unchanged apps fail", async (t) => {
   for (const key of ["EpicGames.EpicGamesLauncher", "Zoom.Zoom"]) {
     const f = recoverySeed(key, "1.0", "2.0");
     t.after(() => f.db.close());
     const exec: Exec = async (_transport, argv) => ({ exitCode: 0, stdout: argv[1] === "list" ? `Package ${key} 1.0  winget` : "updated", stderr: "" });
-    await runJob(f.db, f.job, { machines: f.machines, exec, readServices: async () => [] }, new AbortController().signal);
-    const message = jobById(f.db, f.job.id)?.message;
-    assert.equal(message, `installed version did not reach the target${key === "Zoom.Zoom" ? "" : "; the app may update itself; open it and let it finish"}`);
+    await runJob(f.db, f.job, { machines: f.machines, exec, readServices: async () => [], retryDelayMs: 1 }, new AbortController().signal);
+    const job = jobById(f.db, f.job.id);
+    if (key === "EpicGames.EpicGamesLauncher") {
+      assert.equal(job?.state, "done");
+      assert.equal(job?.message, "installed; this app finishes updating itself, so Scout shows the new version after its next scan");
+    } else {
+      assert.equal(job?.state, "failed");
+      assert.equal(job?.message, "installed version did not reach the target");
+    }
   }
 });
 
