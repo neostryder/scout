@@ -47,6 +47,8 @@ test("finished jobs have no progress and keep their plain summary", () => {
   assert.equal(isLive({ state: "failed" }), false);
   assert.equal(jobSummary({ ...base, state: "done" }), "done");
   assert.equal(jobSummary({ ...base, state: "failed", message: "the app is running; close it and try again" }), "failed: the app is running; close it and try again");
+  assert.equal(jobSummary({ ...base, state: "failed", message: "old failure" }, Date.now(), "itch updates itself when it runs"), "cannot update: itch updates itself when it runs");
+  assert.equal(jobSummary({ ...base, state: "done" }, Date.now(), "ignored"), "done");
   assert.equal(jobSummary(null), "");
 });
 
