@@ -708,6 +708,30 @@ CREATE TABLE IF NOT EXISTS fleet_events (
   detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS fleet_events_incident ON fleet_events(incident_id, id);
+
+-- Headless investigations of fleet incidents. One row per fingerprint and incident open cycle.
+CREATE TABLE IF NOT EXISTS fleet_investigations (
+  id INTEGER PRIMARY KEY,
+  incident_id INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  opened_at TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running','done','incomplete','failed')),
+  actor TEXT,
+  cause TEXT,
+  evidence TEXT,
+  proposed_fix TEXT,
+  needs_human INTEGER NOT NULL DEFAULT 0,
+  heal TEXT,
+  proposed_actions_json TEXT NOT NULL DEFAULT '[]',
+  rounds INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  error TEXT,
+  UNIQUE (fingerprint, opened_at)
+);
+CREATE INDEX IF NOT EXISTS fleet_investigations_incident ON fleet_investigations(incident_id);
+CREATE INDEX IF NOT EXISTS fleet_investigations_started ON fleet_investigations(started_at);
 `;
 
 /** Columns added to `packages` in version 2, applied to a version 1 catalog. */

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FAILURE_CLASSES as CORE_CLASSES } from "../../core/src/fleet-packet.ts";
 
-const { FAILURE_CLASSES, INCIDENT_PARAMS, incidentFilters, incidentCounts, filterIncidents, sortIncidents, relativeTime, packetSections, snoozeMinutes } = await import(new URL("../public/incidents-model.js", import.meta.url).href);
+const { FAILURE_CLASSES, INCIDENT_PARAMS, incidentFilters, incidentCounts, filterIncidents, sortIncidents, relativeTime, packetSections, snoozeMinutes, investigationSummary, investigationActor, hasRunningInvestigation } = await import(new URL("../public/incidents-model.js", import.meta.url).href);
 const now = Date.parse("2026-11-01T12:00:00Z");
 const incident = (overrides: Record<string, unknown> = {}) => ({ id: 1, host: "eru", component: "backup", summary: "Worker stopped", state: "open", severity: "critical", failureClass: "dead", acknowledgedAt: null, muted: false, snoozedUntil: null, lastSeen: "2026-11-01T11:00:00Z", ...overrides });
 
@@ -62,4 +62,27 @@ test("evidence sections order known tails before other keys and cap plain text",
 
 test("snooze choices send minutes and reject unsupported durations", () => {
   assert.deepEqual(["1", "4", "24", 1, "2", "", null, "toString"].map(snoozeMinutes), [60, 240, 1440, 60, null, null, null, null]);
+});
+
+test("investigation summaries describe running, finished, and failed investigations", () => {
+  assert.equal(investigationSummary(null), null);
+  assert.equal(investigationSummary({ status: "running", startedAt: "2026-11-01T11:55:00Z" }, now), "Investigating since 5 min ago.");
+  assert.equal(investigationSummary({ status: "done", finishedAt: "2026-11-01T11:58:00Z", rounds: 2, costUsd: 0.0374 }, now), "Finished 2 min ago, 2 analyst calls, cost $0.0374.");
+  assert.equal(investigationSummary({ status: "incomplete", finishedAt: "2026-11-01T11:58:00Z", rounds: 1, costUsd: 1 }, now), "Finished 2 min ago, 1 analyst call, cost $1.0000.");
+  assert.equal(investigationSummary({ status: "done" }, now), "Finished Unknown, 0 analyst calls, cost $0.0000.");
+  assert.equal(investigationSummary({ status: "failed", error: "The analyst tool timed out." }, now), "The analyst tool timed out.");
+  assert.equal(investigationSummary({ status: "failed" }, now), "The investigation failed.");
+  assert.equal(investigationActor({ actor: "operations" }), "Asked by operations");
+  assert.equal(investigationActor({ actor: "" }), "");
+  assert.equal(investigationActor(null), "");
+});
+
+test("running investigations are found in a details collection", () => {
+  assert.equal(hasRunningInvestigation([]), false);
+  assert.equal(hasRunningInvestigation(null), false);
+  assert.equal(hasRunningInvestigation([{ investigation: null }]), false);
+  assert.equal(hasRunningInvestigation([{ investigation: { status: "done" } }]), false);
+  assert.equal(hasRunningInvestigation([{ investigation: { status: "done" } }, { investigation: { status: "running" } }]), true);
+  assert.equal(hasRunningInvestigation(new Map([[1, { investigation: { status: "running" } }]])), true);
+  assert.equal(hasRunningInvestigation(new Map([[1, { investigation: { status: "done" } }]])), false);
 });

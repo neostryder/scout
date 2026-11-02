@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Services] **Investigate can run a headless investigation.** With an `investigation` section in `fleet.json`, the hub runs the configured read-only diagnostics, asks an analyst command for the cause and a proposed fix, stores the finding on the incident, and posts it through the notifiers, subject to a daily limit, a cost cap, and an `investigation.off` kill switch file.
 - [Visible] [Software] **Scout no longer sends MSYS2, itch, or Audacity major-version updates to winget.** The Updates page shows on each row why the package was refused and how to update it, and automatic update windows show it as held.
 - [Visible] [Services] **Scout now tells you when the fleet settings file is invalid and which entry is wrong.** Before, one bad entry silently stopped every fleet source. Now the hub logs each problem and opens a critical `fleet config` incident for Eru until the file loads again, and `fleet check-config` tests an edit before you save it.
 - [Visible] [Services] **Scout can now alert when a Windows scheduled task fails, with no event log to switch on and no administrator rights.** Turn on `tasks` under `sources.local` and the hub opens an incident for each failing task, then resolves it when the task next succeeds. You can also list tasks you expect to run and get an incident when one goes missing or overdue.

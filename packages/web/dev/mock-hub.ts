@@ -10,6 +10,21 @@ import { filtersApi } from "../../hub/src/filters-api.ts";
 import { isLoopbackHost } from "../../hub/src/server.ts";
 
 type Row = Record<string, any>;
+type MockInvestigation = {
+  status: "running" | "done";
+  startedAt: string;
+  finishedAt: string | null;
+  actor: string;
+  cause: string;
+  evidence: string;
+  proposedFix: string;
+  needsHuman: boolean;
+  heal: string | null;
+  proposedActions: string[];
+  rounds: number;
+  costUsd: number;
+  error: string | null;
+};
 const machines = ["hub", "laptop", "server", "mini"];
 const ecosystems = ["winget", "brew", "npm", "cask", "pipx"];
 const categories = ["editor", "browser", "build tool", "media", "terminal", "database", "system utility"];
@@ -130,7 +145,7 @@ function downloadPlan(id: number) {
   const file = row.downloadUrl && row.installId % 2 === 0;
   return { installId: id, machineId: row.machineId, name: row.name, kind: file ? "file" : row.downloadUrl ? "page" : "none", url: file ? `https://example.com/tool-${id}${extension}` : row.downloadUrl, fileName: file ? `tool-${id}${extension}` : null, size: file ? 123456 : null, sha256: null, source: file ? "github" : null, folder: row.machineId === "hub" ? "User Downloads" : "~/Downloads", warnings: file ? ["No checksum is available."] : [], allowed: !!file && !row.blockedBy, refusal: row.blockedBy || (!file ? "No exact file is available" : null) };
 }
-/** Multiplies the mock job pauses so a person can watch the stages; tests leave it at 1. */
+/** Multiplies the mock job pauses and the mock investigation wait so a person can watch the stages; tests leave it at 1. */
 export const mockTiming = { scale: 1 };
 function runJob(job: Job) {
   if (job.state !== "queued") return;
@@ -163,7 +178,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
   const fleetDb = openCatalog(":memory:");
   const fleet = new FleetService(fleetDb, {
     configPath: "",
-    ...(!options.investigatorMissing ? { investigator: { async investigate(incident: { id: number }) { return { ok: true, reference: `mock-investigation-${incident.id}`, error: null }; } } } : {}),
+    ...(!options.investigatorMissing ? { investigator: { async investigate() { return { ok: true, reference: "investigation started", error: null }; } } } : {}),
   });
   const fleetRows: { host: string; component: string; failureClass: IncidentPacket["failureClass"]; severity: IncidentPacket["severity"]; state: string; summary: string }[] = [
     { host: "eru", component: "backup", failureClass: "dead", severity: "critical", state: "open", summary: "The backup worker exited and has not reported a heartbeat for 12 minutes." },
@@ -188,6 +203,44 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (row.state === "muted") muteRule(fleetDb, `${row.host}/${row.component}/${row.failureClass}`, "Known warning after resume", lastSeen);
     if (row.state === "resolved") ingest(fleetDb, { ...packet, recovered: true }, lastSeen);
   }
+  const mockInvestigations = new Map<string, MockInvestigation>();
+  const mockInvestigationTimers = new Set<ReturnType<typeof setTimeout>>();
+  const investigationKey = (incident: { host: string; component: string }) => `${incident.host}/${incident.component}`;
+  const sampleInvestigations = new Map<string, MockInvestigation>([["bilbo/nightly-index", {
+    status: "done",
+    startedAt: new Date(Date.now() - 2_400_000).toISOString(),
+    finishedAt: new Date(Date.now() - 2_100_000).toISOString(),
+    actor: "operations",
+    cause: "The host was asleep at 02:00 when the nightly index job was scheduled.",
+    evidence: "The scheduler log records a skipped run at 02:00 and a catch-up run at 03:15 that finished without errors.",
+    proposedFix: "Enable the wake timer so the job starts at its scheduled time.",
+    needsHuman: false,
+    heal: "The catch-up run rebuilt the index and the next run started on time.",
+    proposedActions: ["Enable the wake timer on bilbo."],
+    rounds: 2,
+    costUsd: 0.0412,
+    error: null,
+  }]]);
+  const startInvestigation = (incident: { host: string; component: string }) => {
+    const key = investigationKey(incident);
+    const running: MockInvestigation = { status: "running", startedAt: new Date().toISOString(), finishedAt: null, actor: "web", cause: "", evidence: "", proposedFix: "", needsHuman: false, heal: null, proposedActions: [], rounds: 0, costUsd: 0, error: null };
+    mockInvestigations.set(key, running);
+    const timer = setTimeout(() => {
+      mockInvestigationTimers.delete(timer);
+      mockInvestigations.set(key, {
+        ...running,
+        status: "done",
+        finishedAt: new Date().toISOString(),
+        cause: `The ${incident.component} worker on ${incident.host} stopped after its last run and did not start again.`,
+        evidence: `The journal ends with the ${incident.component} service exiting at the end of its run, and no heartbeat follows.`,
+        proposedFix: `Restart the ${incident.component} worker and confirm that the next scheduled run reports a heartbeat.`,
+        proposedActions: [`Restart the ${incident.component} worker on ${incident.host}.`],
+        rounds: 2,
+        costUsd: 0.0374,
+      });
+    }, 6_000 * mockTiming.scale);
+    mockInvestigationTimers.add(timer);
+  };
   const discoveryMock = createDiscoveryMock();
   const servicesMock = createServicesMock(options);
   const server = createServer(async (req, res) => {
@@ -196,6 +249,22 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (path === "/api/fleet/incidents" || path.startsWith("/api/fleet/incidents/")) {
       if (!isLoopbackHost(req.headers.host)) return json(res, 421, { error: "misdirected request" });
       if (options.incidentsMissing) return json(res, 404, { error: "no such route" });
+      const detail = /^\/api\/fleet\/incidents\/(\d+)$/.exec(path);
+      if (detail?.[1] && (req.method === "GET" || req.method === "HEAD")) {
+        const found = fleet.incident(Number(detail[1]));
+        if (!found) return json(res, 404, { error: "not found" });
+        const key = investigationKey(found.incident);
+        return json(res, 200, { ...found, investigation: mockInvestigations.get(key) ?? sampleInvestigations.get(key) ?? null });
+      }
+      const investigate = /^\/api\/fleet\/incidents\/(\d+)\/investigate$/.exec(path);
+      if (investigate?.[1] && req.method === "POST") {
+        const result = await fleet.investigateHttp(Number(investigate[1]));
+        if (result.status === 200) {
+          const found = fleet.incident(Number(investigate[1]));
+          if (found) startInvestigation(found.incident);
+        }
+        return json(res, result.status, result.body);
+      }
       return fleetApi(fleet, req, url, res, isLoopbackHost, json);
     }
     if (await servicesMock.route(req, res, url)) return;
@@ -260,7 +329,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     try { const bytes = await readFile(resolve(publicDir, relative)); res.writeHead(200, { "content-type": extname(relative) === ".css" ? "text/css" : extname(relative) === ".js" ? "text/javascript" : "text/html", "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'" }); res.end(bytes); } catch { json(res, 404, { error: "Not found" }); }
   });
   server.on("close", () => filtersDb.close());
-  server.on("close", () => { fleet.stop(); fleetDb.close(); });
+  server.on("close", () => { for (const timer of mockInvestigationTimers) clearTimeout(timer); mockInvestigationTimers.clear(); fleet.stop(); fleetDb.close(); });
   server.on("close", servicesMock.close);
   return server;
 }

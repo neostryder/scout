@@ -1,8 +1,9 @@
 import { h } from "./lib.js";
-import { FAILURE_CLASSES, INCIDENT_PARAMS, incidentFilters, incidentCounts, filterIncidents, sortIncidents, relativeTime, isSnoozed, packetSections, snoozeMinutes } from "./incidents-model.js";
+import { FAILURE_CLASSES, INCIDENT_PARAMS, incidentFilters, incidentCounts, filterIncidents, sortIncidents, relativeTime, isSnoozed, packetSections, snoozeMinutes, investigationSummary, investigationActor, hasRunningInvestigation } from "./incidents-model.js";
 
 const date = (value) => value ? new Date(value).toLocaleString() : "Unknown";
 const title = (value) => value[0].toUpperCase() + value.slice(1);
+const investigateMessage = (result) => result.reference === "investigation started" ? "Investigation started. The finding appears below when it is ready." : `Investigation ${result.ok ? "ok" : "failed"}.${result.reference ? ` Reference: ${result.reference}.` : ""}${result.error ? ` ${result.error}` : ""}`;
 
 export function createIncidentsPanel({ onCount, onFilterChange }) {
   const panel = h("section", { id: "services-incidents-panel", role: "tabpanel", class: "incidents-panel", hidden: true, "aria-labelledby": "services-tab-incidents" });
@@ -10,6 +11,7 @@ export function createIncidentsPanel({ onCount, onFilterChange }) {
   let supported = true;
   let visible = false;
   let timer = null;
+  let investigationTimer = null;
   let filters = incidentFilters(new URLSearchParams());
   let searchTimer = null;
   const summary = h("div", { class: "incident-summary" });
@@ -82,13 +84,16 @@ export function createIncidentsPanel({ onCount, onFilterChange }) {
   async function act(id, action, body = {}) {
     if (model.actions.get(id)?.pending) return;
     model.actions.set(id, { pending: true, message: "", error: false }); render();
+    let started = false;
     try {
       const result = await request(`/api/fleet/incidents/${id}/${action}`, body);
-      const message = action === "investigate" ? `Investigation ${result.ok ? "ok" : "failed"}.${result.reference ? ` Reference: ${result.reference}.` : ""}${result.error ? ` ${result.error}` : ""}` : ({ ack: "Incident acknowledged.", snooze: "Incident snoozed.", mute: "Incident muted." })[action];
+      const message = action === "investigate" ? investigateMessage(result) : ({ ack: "Incident acknowledged.", snooze: "Incident snoozed.", mute: "Incident muted." })[action];
       model.actions.set(id, { pending: false, message, error: action === "investigate" && !result.ok });
+      started = action === "investigate" && !!result.ok;
       if (action === "mute") { model.mute.delete(id); model.reasons.delete(id); }
     } catch (error) { model.actions.set(id, { pending: false, message: error.message, error: true }); }
     await refresh();
+    if (started) { model.expanded.add(id); await loadDetail(id); }
     render();
   }
 
@@ -112,6 +117,25 @@ export function createIncidentsPanel({ onCount, onFilterChange }) {
     return result?.message ? h("p", { class: result.error ? "error" : "quiet", role: result.error ? "alert" : "status" }, result.message) : [];
   }
 
+  function investigationBlock(investigation) {
+    if (!investigation) return [];
+    const summary = investigationSummary(investigation);
+    const heading = h("h4", {}, "Investigation");
+    if (investigation.status === "running") return h("section", { class: "incident-investigation" }, heading, h("p", { role: "status" }, summary));
+    if (investigation.status === "failed") return h("section", { class: "incident-investigation" }, heading, h("p", { class: "error", role: "alert" }, summary));
+    const actor = investigationActor(investigation);
+    return h("section", { class: "incident-investigation" }, heading,
+      h("dl", {},
+        h("dt", {}, "Cause"), h("dd", {}, investigation.cause || "The investigation did not name a cause."),
+        h("dt", {}, "Evidence"), h("dd", {}, h("pre", {}, investigation.evidence || "No evidence was recorded.")),
+        h("dt", {}, "Proposed fix"), h("dd", {}, investigation.proposedFix || "The investigation did not propose a fix."),
+        ...(investigation.proposedActions?.length ? [h("dt", {}, "Proposed actions"), h("dd", {}, h("ul", { class: "incident-investigation-actions" }, ...investigation.proposedActions.map((item) => h("li", {}, String(item)))))] : []),
+        ...(investigation.heal ? [h("dt", {}, "Healer"), h("dd", {}, investigation.heal)] : []),
+        h("dt", {}, "Needs a human"), h("dd", {}, investigation.needsHuman ? "Yes" : "No")),
+      h("p", { class: "quiet" }, summary),
+      actor ? h("p", { class: "quiet" }, actor) : []);
+  }
+
   function detail(row) {
     const data = model.details.get(row.id);
     const incident = data?.incident || row;
@@ -128,6 +152,7 @@ export function createIncidentsPanel({ onCount, onFilterChange }) {
         act(row.id, "mute", { reason: value });
       } }, h("p", {}, "Mute stops future notifications for this host, component, and failure class until its rule is unmuted."), h("label", {}, "Reason (1 to 500 characters)", reason), h("div", { class: "incident-actions" }, h("button", { type: "submit", disabled: pending }, "Confirm mute"), h("button", { type: "button", disabled: pending, onclick: () => { model.mute.delete(row.id); render(); } }, "Cancel"))) : [],
       actionResult(row.id),
+      investigationBlock(data?.investigation),
       h("h4", {}, "Evidence"), ...packetSections(incident.packet).map((section) => h("section", {}, h("h4", {}, section.label), h("pre", {}, section.text))),
       packetSections(incident.packet).length ? [] : h("p", { class: "quiet" }, "No evidence is recorded."),
       h("h4", {}, "Events"), data?.error ? h("p", { class: "error", role: "alert" }, data.error, " ", h("button", { type: "button", onclick: () => loadDetail(row.id) }, "Retry")) : data?.loading || !data ? h("p", { role: "status" }, "Reading events.") : data.events?.length ? h("ol", { class: "incident-events" }, ...data.events.map((event) => h("li", {}, h("time", { datetime: event.at, title: `${date(event.at)} (${event.at})` }, relativeTime(event.at)), " ", h("strong", {}, event.kind), event.detail ? h("pre", {}, String(event.detail)) : []))) : h("p", { class: "quiet" }, "No events are recorded."))));
@@ -165,14 +190,32 @@ export function createIncidentsPanel({ onCount, onFilterChange }) {
       target?.focus({ preventScroll: true });
       if (selection && target) target.setSelectionRange(...selection);
     }
+    updateInvestigationTimer();
   }
 
   function updateTimer() {
     clearInterval(timer); timer = null;
     if (visible && !document.hidden && supported) timer = setInterval(refresh, 30_000);
+    updateInvestigationTimer();
+  }
+  function updateInvestigationTimer() {
+    clearInterval(investigationTimer); investigationTimer = null;
+    if (visible && !document.hidden && supported && hasRunningInvestigation(expandedDetails())) investigationTimer = setInterval(refreshInvestigations, 5_000);
+  }
+  function expandedDetails() {
+    return [...model.expanded].map((id) => model.details.get(id));
+  }
+  function runningIds() {
+    return [...model.expanded].filter((id) => model.details.get(id)?.investigation?.status === "running");
+  }
+  async function refreshInvestigations() {
+    const ids = runningIds();
+    if (!ids.length) { updateInvestigationTimer(); return; }
+    await Promise.all(ids.map(loadDetail));
+    updateInvestigationTimer();
   }
   document.addEventListener("visibilitychange", () => { updateTimer(); if (visible && !document.hidden && supported) refresh(); });
-  window.addEventListener("pagehide", () => { clearInterval(timer); clearTimeout(searchTimer); });
+  window.addEventListener("pagehide", () => { clearInterval(timer); clearInterval(investigationTimer); clearTimeout(searchTimer); });
   window.addEventListener("pageshow", updateTimer);
   render();
   return {

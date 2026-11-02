@@ -1,7 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import { createMockHub, installs, listResponse, queryRows } from "../dev/mock-hub.ts";
+import { createMockHub, installs, listResponse, mockTiming, queryRows } from "../dev/mock-hub.ts";
+
+const waitFor = async (check: () => Promise<boolean>, budgetMs = 5000) => {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    if (await check()) return true;
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+};
 
 test("update search matches every term across fields", () => {
   const q = new URLSearchParams("q=orion northstar");
@@ -92,7 +101,7 @@ test("mock fleet incidents include evidence and events and actions update the in
   assert.equal((await post("ack", {})).body.incident.state, "acknowledged");
   assert.equal((await post("snooze", { minutes: 240 })).status, 200);
   assert.equal((await post("mute", { reason: "Scheduled maintenance" })).body.incident.muted, true);
-  assert.deepEqual((await post("investigate", {})).body, { ok: true, reference: `mock-investigation-${id}`, error: null });
+  assert.deepEqual((await post("investigate", {})).body, { ok: true, reference: "investigation started", error: null });
   const updated = await get(`/api/fleet/incidents/${id}`);
   assert.equal(updated.incident.state, "acknowledged");
   assert.equal(updated.incident.muted, true);
@@ -100,9 +109,51 @@ test("mock fleet incidents include evidence and events and actions update the in
   assert.ok(updated.events.some((event: any) => event.kind === "acknowledged"));
   assert.ok(updated.events.some((event: any) => event.kind === "snoozed"));
   assert.ok(updated.events.some((event: any) => event.kind === "investigate"));
+  assert.equal(updated.investigation.status, "running");
+  assert.ok(updated.investigation.startedAt);
+  assert.equal(updated.investigation.error, null);
   assert.deepEqual(updated.events.map((event: any) => event.at), updated.events.map((event: any) => event.at).sort());
   assert.equal((await fetch(`${base}/api/fleet/incidents/999`)).status, 404);
   assert.equal((await fetch(`${base}/api/fleet/incidents/${id}`, { method: "POST" })).status, 405);
+});
+
+test("mock fleet investigations answer at once, run while the finding is pending, and finish with a finding", async (t) => {
+  const server = createMockHub();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>((resolve) => { server.close(() => resolve()); server.closeAllConnections(); }));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const get = async (path: string) => {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const listing = await get("/api/fleet/incidents?limit=200");
+  const sample = listing.incidents.find((row: any) => row.host === "bilbo" && row.component === "nightly-index");
+  const sampleDetail = await get(`/api/fleet/incidents/${sample.id}`);
+  assert.equal(sampleDetail.investigation.status, "done");
+  assert.ok(sampleDetail.investigation.cause);
+  assert.ok(sampleDetail.investigation.evidence);
+  assert.ok(sampleDetail.investigation.proposedFix);
+  assert.equal(sampleDetail.investigation.proposedActions.length, 1);
+  assert.equal(sampleDetail.investigation.needsHuman, false);
+  assert.equal(sampleDetail.investigation.actor, "operations");
+  const target = listing.incidents.find((row: any) => row.host === "eru" && row.component === "backup");
+  assert.equal((await get(`/api/fleet/incidents/${target.id}`)).investigation, null);
+  mockTiming.scale = 0.05;
+  t.after(() => { mockTiming.scale = 1; });
+  const response = await fetch(`${base}/api/fleet/incidents/${target.id}/investigate`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, reference: "investigation started", error: null });
+  assert.equal((await get(`/api/fleet/incidents/${target.id}`)).investigation.status, "running");
+  assert.ok(await waitFor(async () => (await get(`/api/fleet/incidents/${target.id}`)).investigation.status === "done"));
+  const finished = (await get(`/api/fleet/incidents/${target.id}`)).investigation;
+  assert.ok(finished.cause);
+  assert.ok(finished.evidence);
+  assert.ok(finished.proposedFix);
+  assert.equal(finished.proposedActions.length, 1);
+  assert.equal(finished.needsHuman, false);
+  assert.equal(finished.error, null);
+  assert.ok(finished.finishedAt);
 });
 
 test("mock fleet incidents can be unsupported and an investigator can be absent", async (t) => {

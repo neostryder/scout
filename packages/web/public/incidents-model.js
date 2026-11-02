@@ -66,3 +66,23 @@ export function packetSections(packet, cap = 8000) {
 export function snoozeMinutes(hours) {
   return ["1", "4", "24"].includes(String(hours)) ? Number(hours) * 60 : null;
 }
+
+export function investigationSummary(investigation, now = Date.now()) {
+  if (!investigation) return null;
+  if (investigation.status === "running") return `Investigating since ${relativeTime(investigation.startedAt, now)}.`;
+  if (investigation.status === "failed") return investigation.error || "The investigation failed.";
+  const rounds = Number.isFinite(investigation.rounds) ? investigation.rounds : 0;
+  const cost = Number.isFinite(investigation.costUsd) ? investigation.costUsd : 0;
+  return `Finished ${relativeTime(investigation.finishedAt, now)}, ${rounds} analyst call${rounds === 1 ? "" : "s"}, cost $${cost.toFixed(4)}.`;
+}
+
+export function investigationActor(investigation) {
+  return investigation?.actor ? `Asked by ${investigation.actor}` : "";
+}
+
+export function hasRunningInvestigation(details) {
+  if (!details) return false;
+  const values = details instanceof Map ? details.values() : Array.isArray(details) ? details : Object.values(details);
+  for (const detail of values) if (detail?.investigation?.status === "running") return true;
+  return false;
+}

@@ -377,6 +377,55 @@ To make Investigate do something, set `investigator` in `fleet.json` to a comman
 }
 ```
 
+### Headless investigations
+
+When `fleet.json` has an `investigation` section, tapping Investigate in the Incidents tab, on a Telegram button, or through the API starts a background investigation of that incident. The hub answers at once with `Investigation started. The finding will be posted here when it is ready.` When the investigation finishes, the hub stores the finding (cause, evidence, proposed fix) on the incident, shows it in the incident's detail in the Incidents tab, and posts it through every notifier as a notice titled `finding: <host> <component>`. A failed run posts `investigation failed: ...` instead.
+
+The model never runs anything. The hub is the only process that executes commands. It runs the read-only diagnostics you declare in `fleet.json` and, at most, the one healer already configured for that incident. That healer comes from the same `healers` allowlist the automatic heal uses, and its cooldown and daily limit still apply. Anything else the analyst suggests is saved as a proposed action and never run.
+
+The `analyst` command is the only piece that talks to a model. It reads a JSON request on stdin and prints one JSON line. The request is `{ incident: {id, host, component, failureClass, severity, state, firstSeen, lastSeen, count}, packet, diagnostics: [{id, description, args, exitCode, output, error}], available: [{id, description, params}], round, roundsLeft }`. A final reply is `{ "final": true, "cause", "evidence", "proposedFix", "needsHuman", "heal", "proposedActions", "costUsd" }`. A reply that asks for more diagnostics is `{ "final": false, "run": [{ "id", "args": {name: value} }], "costUsd" }`. The hub reads the last non-empty line of at most 64 KB of output. It clips `cause` to 300 characters, `evidence` to 1500, and `proposedFix` to 600, and it keeps at most 5 proposed actions of 200 characters each. All text is redacted before it is stored.
+
+`tools/fleet/investigation-analyst.mjs` is a ready analyst. Run it as `node tools/fleet/investigation-analyst.mjs -- <model command and args>`. It builds the prompt, runs your model command with the prompt on stdin, and turns the answer into the reply above. Your model command prints the answer and can end with an optional line such as `cost-usd: 0.003` to report the cost of the call. If the model command fails, the finding is saved unfinished and marked as needing a human.
+
+Each entry in `diagnostics` has these fields:
+
+- `id`: lowercase letters, digits, and hyphens, at most 64 characters.
+- `machine`: an id from machines.json, with the same rule as remote checks.
+- `host` (optional): the name incidents are matched against, case-insensitive. It defaults to `machine`.
+- `argv`: 1 to 20 strings.
+- `params` (optional): a map from param name to regular expression. A value must match the whole expression.
+- `components` (optional) and `failureClasses` (optional): limit which incidents the diagnostic applies to.
+- `timeoutSeconds` (optional): 1 to 120, default 20.
+- `description` (optional).
+
+An `argv` part that is exactly `{name}` is replaced by the validated value of param `name`. Every declared param must appear in `argv`, and every placeholder must be declared. Keep diagnostics read-only, because the hub runs the `argv` exactly as written.
+
+This section uses the bundled analyst and declares one diagnostic without params and one with a `name` param:
+
+```
+"investigation": {
+  "analyst": { "command": ["node", "tools/fleet/investigation-analyst.mjs", "--", "your-model-command"] },
+  "maxPerDay": 10,
+  "maxCostUsdPerDay": 1,
+  "diagnostics": [
+    { "id": "container-list", "machine": "server", "argv": ["docker", "ps", "-a"], "components": ["containers"], "description": "List all containers with their status" },
+    { "id": "container-log", "machine": "server", "argv": ["docker", "logs", "--tail", "80", "{name}"], "params": { "name": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$" } }
+  ]
+}
+```
+
+The hub first runs every matching diagnostic that has no params, up to 6, and sends the results with the incident. In each round the analyst can ask for up to 4 parameterized diagnostics. The hub does not run a request for an unknown diagnostic, a request with a missing or extra param, or a value that does not match its pattern, and it tells the analyst why. The loop makes at most `maxRounds` analyst calls (default 3, range 1 to 4). If the last call still asks for more, the finding is saved as incomplete.
+
+`maxPerDay` (1 to 100, default 10) caps the investigations started in 24 hours. `maxCostUsdPerDay` (optional, up to 1000) caps the summed `costUsd` the analyst reports over 24 hours. At most 2 investigations run at once, and each analyst call has `timeoutSeconds` (10 to 900, default 240). Each incident is investigated once per time it opens. Tapping Investigate again reports that the investigation is already running or done. You can tap again after a failed investigation.
+
+To switch investigations off, set `enabled` to false in the section or create a file named `investigation.off` next to `fleet.json`. The hub checks for the file on every tap, so you do not need to restart it. While investigations are off, Investigate falls back to the `investigator` command if one is configured. Without one, it answers `investigations are switched off`.
+
+When the analyst sets `heal` to true, the incident is still open, and a healer matches the incident's host, component, and failure class, the hub runs that healer. The finding records the outcome as `ran <healer id>`, `failed <error>`, `skipped: cooldown or daily limit`, `skipped: incident is not open`, or `no healer configured`.
+
+The `investigator` command still works alongside a headless investigation. It runs after the finding is stored and receives two extra keys. `finding` holds status, cause, evidence, proposedFix, needsHuman, heal, proposedActions, costUsd, rounds, and error, and `actor` names who tapped Investigate. With these keys the command can file a note and escalate only when `needsHuman` is true.
+
+In the Incidents tab, the opened incident row shows Investigating while the investigation runs and refreshes every 5 seconds. When the investigation finishes, the row shows the cause, evidence, proposed fix, proposed actions, healer outcome, whether a human is needed, the number of analyst calls, and the cost. `GET /api/fleet/incidents/<id>` also returns `investigation`, which is null or the finding.
+
 ### Triage and healers
 
 Two optional settings in `.scout-data/fleet.json` act on fleet packets. `triage` runs your command on each incoming packet to drop noise or correct its failure class and severity. `healers` lists repair commands the hub may run on its own for an exact host, component, and failure class.

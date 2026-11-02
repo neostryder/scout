@@ -151,7 +151,7 @@ if (scheduled && !args.includes("--no-competitor-watch")) competitors.start();
 if (scheduled && !args.includes("--no-discovery")) discovery.start();
 // Release-note summaries run a few minutes after start and then daily, a small batch each time, only where the schedule runs.
 const summaries = model && scheduled && modelsOnSchedule ? [setTimeout(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 600_000), setInterval(() => void summarizeChangelogs(db, { summarize: changelogSummarizer(model) }).catch(() => {}), 86_400_000)] : [];
-const fleet = new FleetService(db, { configPath: resolve(root, ".scout-data/fleet.json"), log: (line) => console.error(line) });
+const fleet = new FleetService(db, { configPath: resolve(root, ".scout-data/fleet.json"), log: (line) => console.error(line), machines: () => loadMachines(resolve(root, "machines.json")) });
 const fleetCatalog = new FleetCatalogSource(db, fleet, { log: (line) => console.error(line) });
 const fleetLocal = new FleetLocalSource(db, fleet, { log: (line) => console.error(line) });
 const fleetRemote = new FleetRemoteSource(db, fleet, { machines: () => loadMachines(resolve(root, "machines.json")), log: (line) => console.error(line) });

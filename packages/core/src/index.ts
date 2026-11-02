@@ -73,3 +73,4 @@ export * from "./fleet-local-source.ts";
 export * from "./fleet-remote-source.ts";
 export * from "./fleet-incidents.ts";
 export * from "./fleet-ports.ts";
+export * from "./fleet-investigation.ts";
