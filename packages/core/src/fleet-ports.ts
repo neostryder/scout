@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import type { ExpectedRun } from "./fleet-expected.ts";
 import type { FleetIncident, FleetPolicy } from "./fleet-incidents.ts";
+import { investigationConfig, type FleetInvestigationConfig } from "./fleet-investigation.ts";
 import { FAILURE_CLASSES, SEVERITIES, type FailureClass, type IncidentPacket, type Severity } from "./fleet-packet.ts";
 
 export interface FleetNotice {
@@ -9,7 +10,7 @@ export interface FleetNotice {
   body: string;
   severity: Severity;
   incidentId: number | null;
-  kind: "incident" | "recovered" | "escalation" | "digest" | "flapping" | "healed" | "heal-failed";
+  kind: "incident" | "recovered" | "escalation" | "digest" | "flapping" | "healed" | "heal-failed" | "investigation";
   actions: { id: "investigate" | "snooze" | "mute"; label: string }[];
 }
 
@@ -142,6 +143,7 @@ export interface FleetFile {
   fileError: string | null;
   fileErrorDetail?: string | null;
   sources?: { catalog?: FleetCatalogConfig; local?: FleetLocalConfig; remote?: FleetRemoteConfig };
+  investigation?: FleetInvestigationConfig | null;
 }
 
 const EMPTY: FleetFile = {
@@ -452,7 +454,7 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
   try {
     if (!isRecord(data)) return invalid();
     if (Object.keys(data).some((key) => SECRET_FIELDS.has(key))) return invalid();
-    const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources"]);
+    const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources", "investigation"]);
     if (Object.keys(data).some((key) => !allowed.has(key))) return invalid();
     let sources: FleetFile["sources"];
     if (data.sources !== undefined) {
@@ -503,6 +505,13 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
       triage = hook(data.triage);
       if (!triage) return invalid();
     }
+    let investigation: FleetInvestigationConfig | null = null;
+    if (data.investigation !== undefined) {
+      section = "investigation";
+      const parsed = investigationConfig(data.investigation, onInvalid);
+      if (!parsed) return invalid();
+      investigation = parsed;
+    }
     const healers: FleetHealerConfig[] = [];
     if (data.healers !== undefined) {
       section = "healers";
@@ -544,7 +553,7 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
       if (!Array.isArray(data.digestTimes) || data.digestTimes.length === 0 || data.digestTimes.length > 24 || data.digestTimes.some((item) => typeof item !== "string" || !HM.test(item))) return invalid();
       digestTimes = data.digestTimes as string[];
     }
-    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null, fileErrorDetail: null, ...(sources ? { sources } : {}) };
+    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null, fileErrorDetail: null, ...(sources ? { sources } : {}), ...(investigation ? { investigation } : {}) };
   } catch {
     return invalid();
   }

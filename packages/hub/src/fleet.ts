@@ -1,40 +1,54 @@
 import { spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { dirname, join } from "node:path";
 import {
   FAILURE_CLASSES,
   SEVERITIES,
   acknowledge,
+  beginInvestigation,
+  buildDiagnosticArgv,
   digest,
+  discardInvestigation,
   expectedKey,
   expectedPackets,
   fingerprint,
+  finishInvestigation,
   heartbeatMetaKey,
   inQuietHours,
   incidentByFingerprint,
   incidentById,
   ingest,
+  investigationForIncident,
+  investigationUsage,
   listIncidents,
   loadFleetConfig,
+  matchDiagnostics,
   muteRule,
   parsePacket,
+  redact,
   resolvePolicy,
   ruleKey,
+  runArgv,
   snooze,
   sweepEscalations,
   type Db,
+  type Exec,
   type FailureClass,
   type FleetDecision,
+  type FleetDiagnosticConfig,
   type FleetFile,
   type FleetIncident,
   type FleetInvestigator,
+  type FleetInvestigationConfig,
   type FleetNotice,
   type FleetNotifier,
   type FleetTriage,
   type FleetTriageResult,
   type IncidentPacket,
   type Severity,
+  type Transport,
 } from "@scout/core";
 import { readJson } from "./services-api.ts";
 import { desktopNotice } from "./notify.ts";
@@ -54,12 +68,43 @@ export interface FleetServiceOptions {
   every?: (fn: () => void, ms: number) => TimerHandle;
   investigator?: FleetInvestigator;
   triage?: FleetTriage;
+  machines?: () => { id: string; transport: Transport }[];
+  exec?: Exec;
 }
 
 type SendJson = (res: ServerResponse, status: number, value: unknown) => void;
 
 interface Outbound { notice: FleetNotice; incidentId: number | null }
 interface TriageCacheEntry { result: FleetTriageResult; expires: number; noiseRecorded?: boolean }
+interface DiagnosticResult { id: string; description: string; args: Record<string, string>; exitCode: number | null; output: string; error: string | null }
+interface AvailableDiagnostic { id: string; description: string; params: string[] }
+interface InvestigationView {
+  status: "running" | "done" | "incomplete" | "failed";
+  startedAt: string;
+  finishedAt: string | null;
+  actor: string | null;
+  cause: string | null;
+  evidence: string | null;
+  proposedFix: string | null;
+  needsHuman: boolean;
+  heal: string | null;
+  proposedActions: string[];
+  rounds: number;
+  costUsd: number;
+  error: string | null;
+}
+interface Finding {
+  status: "done" | "incomplete" | "failed";
+  cause: string | null;
+  evidence: string | null;
+  proposedFix: string | null;
+  needsHuman: boolean;
+  heal: string | null;
+  proposedActions: string[];
+  costUsd: number;
+  rounds: number;
+  actor: string | null;
+}
 
 const ACTIONS: FleetNotice["actions"] = [
   { id: "investigate", label: "Investigate" },
@@ -73,6 +118,15 @@ const RETRY_MS = 60_000;
 const CLASSES = new Set<string>(FAILURE_CLASSES);
 const SEVERITY_SET = new Set<string>(SEVERITIES);
 const TRIAGE_CACHES = new WeakMap<FleetTriage, Map<string, TriageCacheEntry>>();
+const KILL_SWITCH = "investigation.off";
+const RUNNING_LIMIT = 2;
+const DIAGNOSTIC_LIMIT = 6;
+const DIAGNOSTIC_CONCURRENCY = 3;
+const REQUEST_LIMIT = 4;
+const OUTPUT_LIMIT = 4_000;
+const ANALYST_INPUT_LIMIT = 200_000;
+const BODY_LIMIT = 3_900;
+const HOOK_TIMEOUT_MS = 90_000;
 
 function safeError(error: string): string {
   return error
@@ -80,6 +134,64 @@ function safeError(error: string): string {
     .replace(/\bBearer\s+\S+/gi, "[redacted:bearer]")
     .replace(/(?:github_pat_|ghp_|gho_)\S+/g, "[redacted:github]")
     .slice(0, 200);
+}
+
+/** Text from the analyst is redacted and cut to the length the finding keeps. */
+function cleanText(value: unknown, max: number): string {
+  if (typeof value !== "string") return "";
+  return redact(value.replace(/[\x00-\x1f\x7f]/g, " ")).text.slice(0, max);
+}
+
+function analystCost(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1000 ? value : 0;
+}
+
+function stringArgs(args: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(args)) if (typeof value === "string") out[key] = value;
+  return out;
+}
+
+function summariseRuns(runs: DiagnosticResult[]): string {
+  return runs.map((row) => `${row.id}: ${row.error ?? `exit ${row.exitCode ?? "null"}`}${row.output ? `\n${row.output}` : ""}`).join("\n").slice(0, 1500);
+}
+
+/** The param names of a diagnostic; a diagnostic without params takes none. */
+function paramNames(diagnostic: FleetDiagnosticConfig): string[] {
+  const params: Record<string, string> | undefined = diagnostic.params;
+  return Object.keys(params ?? {});
+}
+
+function findingBody(finding: Finding): string {
+  const lines: string[] = [];
+  if (finding.cause) lines.push(`Cause: ${finding.cause}`);
+  if (finding.evidence) lines.push(`Evidence: ${finding.evidence}`);
+  if (finding.proposedFix) lines.push(`Proposed fix: ${finding.proposedFix}`);
+  if (finding.proposedActions.length > 0) lines.push(`Proposed actions: ${finding.proposedActions.join("; ")}`);
+  if (finding.heal) lines.push(`Healer: ${finding.heal}`);
+  if (finding.needsHuman) lines.push("Needs a human: yes");
+  return lines.join("\n").slice(0, BODY_LIMIT);
+}
+
+/** The investigator hook reads the finding, so it gets its own payload and keeps the old reply contract. */
+async function runFindingCommand(run: NonNullable<FleetServiceOptions["runCapture"]>, command: string[], stdin: string): Promise<{ ok: boolean; reference: string | null; error: string | null }> {
+  const [program, ...args] = command;
+  if (!program) return { ok: false, reference: null, error: "command is empty" };
+  try {
+    const result = await run(program, args, stdin, HOOK_TIMEOUT_MS);
+    if (result.error || result.code !== 0) return { ok: false, reference: null, error: safeError(result.error ?? `exit ${result.code ?? "null"}`) };
+    const last = result.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1) ?? "";
+    let parsed: unknown;
+    try { parsed = JSON.parse(last); } catch {
+      return { ok: true, reference: result.stdout.slice(0, 200), error: null };
+    }
+    if (!parsed || typeof parsed !== "object" || !("ok" in parsed) || typeof parsed.ok !== "boolean") return { ok: false, reference: null, error: "invalid investigator response" };
+    const reference = "reference" in parsed && typeof parsed.reference === "string" ? parsed.reference : null;
+    const error = "error" in parsed && typeof parsed.error === "string" ? parsed.error : "investigation failed";
+    return { ok: parsed.ok, reference, error: parsed.ok ? null : safeError(error) };
+  } catch (error) {
+    return { ok: false, reference: null, error: safeError(error instanceof Error ? error.message : "investigation failed") };
+  }
 }
 
 function sameToken(expected: string, presented: string): boolean {
@@ -336,6 +448,9 @@ export class FleetService {
   private every: NonNullable<FleetServiceOptions["every"]>;
   private investigator: FleetInvestigator | undefined;
   private triage: FleetTriage | undefined;
+  private machines: NonNullable<FleetServiceOptions["machines"]>;
+  private exec: Exec;
+  private pending = new Set<Promise<void>>();
   private configuredTriage: { key: string; triage: FleetTriage } | undefined;
   private triageNoise = new Map<string, number>();
   private healing = new Set<number>();
@@ -361,6 +476,8 @@ export class FleetService {
     this.every = options.every ?? defaultEvery;
     this.investigator = options.investigator;
     this.triage = options.triage;
+    this.machines = options.machines ?? (() => []);
+    this.exec = options.exec ?? runArgv;
   }
 
   start(): void {
@@ -442,13 +559,7 @@ export class FleetService {
     const incident = incidentById(this.db, incidentId);
     if (!incident) return { ok: false, error: "not found" };
     const now = this.now().toISOString();
-    if (action === "investigate") {
-      const investigator = this.currentInvestigator();
-      if (!investigator) return { ok: false, error: "no investigator configured" };
-      const result = await investigator.investigate(incident, incident.packet);
-      this.record(incidentId, "investigate", result.ok ? (result.reference ?? "") : safeError(result.error ?? "failed"));
-      return { ok: result.ok, error: result.error, reference: result.reference };
-    }
+    if (action === "investigate") return this.investigate(incident, actor ?? null);
     if (action === "snooze") {
       snooze(this.db, incidentId, new Date(this.now().getTime() + 60 * 60_000).toISOString(), now);
       return { ok: true, error: null };
@@ -460,24 +571,43 @@ export class FleetService {
   async investigateHttp(id: number): Promise<{ status: number; body: unknown }> {
     const incident = incidentById(this.db, id);
     if (!incident) return { status: 404, body: { error: "not found" } };
-    const investigator = this.currentInvestigator();
-    if (!investigator) return { status: 501, body: { error: "no investigator configured" } };
-    const result = await investigator.investigate(incident, incident.packet);
-    this.record(id, "investigate", result.ok ? (result.reference ?? "") : safeError(result.error ?? "failed"));
+    const result = await this.investigate(incident, null);
+    if (!result.ok && result.error === "no investigator configured") return { status: 501, body: { error: "no investigator configured" } };
     return { status: 200, body: result };
+  }
+
+  /** Resolves when no investigation is running, so a caller can wait for a finding. */
+  async settled(): Promise<void> {
+    while (this.pending.size > 0) await Promise.allSettled([...this.pending]);
   }
 
   incidents(filter: { state?: "open" | "acknowledged" | "resolved"; host?: string; failureClass?: string; limit?: number }): FleetIncident[] {
     return listIncidents(this.db, filter);
   }
 
-  incident(id: number): { incident: FleetIncident; events: { at: string; kind: string; detail: string }[] } | null {
+  incident(id: number): { incident: FleetIncident; events: { at: string; kind: string; detail: string }[]; investigation: InvestigationView | null } | null {
     const incident = incidentById(this.db, id);
     if (!incident) return null;
     const events = this.db.prepare(`SELECT at, kind, detail FROM (
       SELECT id, at, kind, detail FROM fleet_events WHERE incident_id = ? ORDER BY at DESC, id DESC LIMIT 200
     ) ORDER BY at, id`).all(id) as { at: string; kind: string; detail: string }[];
-    return { incident, events };
+    const row = investigationForIncident(this.db, { id: incident.id, fingerprint: incident.fingerprint, openedAt: incident.openedAt });
+    const investigation: InvestigationView | null = row ? {
+      status: row.status,
+      startedAt: row.startedAt,
+      finishedAt: row.finishedAt,
+      actor: row.actor,
+      cause: row.cause,
+      evidence: row.evidence,
+      proposedFix: row.proposedFix,
+      needsHuman: row.needsHuman,
+      heal: row.heal,
+      proposedActions: row.proposedActions,
+      rounds: row.rounds,
+      costUsd: row.costUsd,
+      error: row.error,
+    } : null;
+    return { incident, events, investigation };
   }
 
   ack(id: number): FleetIncident | null {
@@ -516,6 +646,238 @@ export class FleetService {
     const key = JSON.stringify(config.command);
     if (this.configuredTriage?.key !== key) this.configuredTriage = { key, triage: commandTriage({ command: config.command, run: this.runCapture, now: this.now }) };
     return this.configuredTriage.triage;
+  }
+
+  private switchedOff(): boolean {
+    return existsSync(join(dirname(this.configPath), KILL_SWITCH));
+  }
+
+  /** The headless path runs alone; without it the tap keeps its old hand-off to the investigator hook. */
+  private async investigate(incident: FleetIncident, actor: string | null): Promise<{ ok: boolean; error: string | null; reference?: string | null }> {
+    const config = this.config().investigation ?? null;
+    if (config && config.enabled && !this.switchedOff()) return this.startInvestigation(incident, actor, config);
+    const investigator = this.currentInvestigator();
+    if (!investigator) return { ok: false, error: config ? "investigations are switched off" : "no investigator configured" };
+    const result = await investigator.investigate(incident, incident.packet);
+    this.record(incident.id, "investigate", result.ok ? (result.reference ?? "") : safeError(result.error ?? "failed"));
+    return { ok: result.ok, error: result.error, reference: result.reference };
+  }
+
+  private startInvestigation(incident: FleetIncident, actor: string | null, config: FleetInvestigationConfig): { ok: boolean; error: string | null; reference?: string | null } {
+    const now = this.now();
+    const existing = investigationForIncident(this.db, { id: incident.id, fingerprint: incident.fingerprint, openedAt: incident.openedAt });
+    if (existing) {
+      if (existing.status === "done" || existing.status === "incomplete") return { ok: true, error: null, reference: "already investigated" };
+      if (existing.status === "running") {
+        const stale = now.getTime() - Date.parse(existing.startedAt) > (config.timeoutSeconds * config.maxRounds + 120) * 1000;
+        if (!stale) return { ok: true, error: null, reference: "already running" };
+      }
+      // A failed run and a run the hub abandoned mid way are replaced by this one.
+      discardInvestigation(this.db, existing.id);
+    }
+    const usage = investigationUsage(this.db, new Date(now.getTime() - 24 * 60 * 60_000).toISOString());
+    if (usage.running >= RUNNING_LIMIT) return { ok: false, error: "too many investigations running" };
+    if (usage.started >= config.maxPerDay) return { ok: false, error: "daily investigation limit reached" };
+    if (config.maxCostUsdPerDay !== null && usage.costUsd >= config.maxCostUsdPerDay) return { ok: false, error: "daily investigation cost limit reached" };
+    let row: { id: number };
+    try {
+      row = beginInvestigation(this.db, incident, actor, now.toISOString());
+    } catch (error) {
+      this.log(`fleet investigation could not start: ${safeError(error instanceof Error ? error.message : "failed")}`);
+      return { ok: false, error: "an investigation is already running" };
+    }
+    const task = this.runInvestigation(row.id, incident, config, actor).catch((error: unknown) => {
+      const message = safeError(error instanceof Error ? error.message : "failed");
+      this.log(`fleet investigation failed: ${message}`);
+      try { finishInvestigation(this.db, row.id, { status: "failed", rounds: 0, costUsd: 0, error: message }, this.now().toISOString()); } catch { /* the row is already finished */ }
+    });
+    this.pending.add(task);
+    void task.finally(() => { this.pending.delete(task); });
+    return { ok: true, error: null, reference: "investigation started" };
+  }
+
+  private async runInvestigation(id: number, incident: FleetIncident, config: FleetInvestigationConfig, actor: string | null): Promise<void> {
+    const matching = matchDiagnostics(config, incident);
+    const plain = matching.filter((row) => paramNames(row).length === 0).slice(0, DIAGNOSTIC_LIMIT);
+    const parameterised = matching.filter((row) => paramNames(row).length > 0);
+    const available: AvailableDiagnostic[] = parameterised.map((row) => ({ id: row.id, description: row.description ?? "", params: paramNames(row) }));
+    const ran: DiagnosticResult[] = [];
+    let results = await this.runPlainDiagnostics(plain);
+    ran.push(...results);
+    let status: "done" | "incomplete" | "failed" = "failed";
+    let cause: string | null = null;
+    let evidence: string | null = null;
+    let proposedFix: string | null = null;
+    let needsHuman = false;
+    let proposedActions: string[] = [];
+    let healRequested = false;
+    let costUsd = 0;
+    let rounds = 0;
+    let error: string | null = null;
+    for (let round = 1; round <= config.maxRounds; round += 1) {
+      rounds = round;
+      const reply = await this.callAnalyst(config, incident, results, available, round);
+      if (!reply.ok) {
+        error = reply.error;
+        break;
+      }
+      const parsed = reply.reply;
+      costUsd += analystCost(parsed.costUsd);
+      if (parsed.final === true) {
+        if (typeof parsed.cause !== "string") {
+          error = "invalid analyst response";
+          break;
+        }
+        cause = cleanText(parsed.cause, 300);
+        evidence = cleanText(parsed.evidence, 1500) || null;
+        proposedFix = cleanText(parsed.proposedFix, 600) || null;
+        needsHuman = parsed.needsHuman === true;
+        healRequested = parsed.heal === true;
+        proposedActions = (Array.isArray(parsed.proposedActions) ? parsed.proposedActions : [])
+          .filter((item): item is string => typeof item === "string")
+          .slice(0, 5)
+          .map((item) => cleanText(item, 200))
+          .filter((item) => item.length > 0);
+        status = "done";
+        break;
+      }
+      if (round === config.maxRounds) {
+        status = "incomplete";
+        cause = "The analyst did not reach a conclusion.";
+        evidence = summariseRuns(ran);
+        break;
+      }
+      const next = await this.runRequestedDiagnostics(parameterised, parsed.run);
+      ran.push(...next);
+      results = next;
+    }
+    const heal = status === "done" && healRequested ? await this.heal(incident.id) : null;
+    finishInvestigation(this.db, id, { status, cause, evidence, proposedFix, needsHuman, heal, proposedActions, rounds, costUsd, error }, this.now().toISOString());
+    this.record(incident.id, "investigation", cause ?? error ?? "investigation finished");
+    if (heal) this.record(incident.id, "investigation-heal", heal);
+    const finding: Finding = { status, cause, evidence, proposedFix, needsHuman, heal, proposedActions, costUsd, rounds, actor };
+    const notice: FleetNotice = status === "failed"
+      ? { title: `investigation failed: ${incident.host} ${incident.component}`.slice(0, 200), body: error ?? "investigation failed", severity: incident.severity, incidentId: incident.id, kind: "investigation", actions: [] }
+      : { title: `finding: ${incident.host} ${incident.component}`.slice(0, 200), body: findingBody(finding), severity: incident.severity, incidentId: incident.id, kind: "investigation", actions: [] };
+    await this.sendNotice({ incidentId: incident.id, notice }, true);
+    await this.runFindingHook(incident, finding);
+  }
+
+  private async runPlainDiagnostics(list: FleetDiagnosticConfig[]): Promise<DiagnosticResult[]> {
+    const results: DiagnosticResult[] = new Array(list.length);
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < list.length) {
+        const index = cursor++;
+        const diagnostic = list[index]!;
+        results[index] = await this.runDiagnostic(diagnostic, diagnostic.argv, {});
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(DIAGNOSTIC_CONCURRENCY, list.length) }, () => worker()));
+    return results;
+  }
+
+  /** Only a diagnostic the operator declared for this incident may run, and only with arguments its own rules accept. */
+  private async runRequestedDiagnostics(list: FleetDiagnosticConfig[], requested: unknown): Promise<DiagnosticResult[]> {
+    const rows = Array.isArray(requested) ? requested.slice(0, REQUEST_LIMIT) : [];
+    const results: DiagnosticResult[] = new Array(rows.length);
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < rows.length) {
+        const index = cursor++;
+        const request = rows[index] && typeof rows[index] === "object" ? rows[index] as Record<string, unknown> : {};
+        const id = typeof request.id === "string" ? request.id : "";
+        const diagnostic = list.find((row) => row.id === id);
+        if (!diagnostic) {
+          results[index] = { id, description: "", args: {}, exitCode: null, output: "", error: "no such diagnostic" };
+          continue;
+        }
+        const args = request.args && typeof request.args === "object" && !Array.isArray(request.args) ? request.args as Record<string, unknown> : {};
+        const argv = buildDiagnosticArgv(diagnostic, args);
+        if (!argv) {
+          results[index] = { id, description: diagnostic.description ?? "", args: {}, exitCode: null, output: "", error: "invalid arguments" };
+          continue;
+        }
+        results[index] = await this.runDiagnostic(diagnostic, argv, stringArgs(args));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(DIAGNOSTIC_CONCURRENCY, rows.length) }, () => worker()));
+    return results;
+  }
+
+  private async runDiagnostic(diagnostic: FleetDiagnosticConfig, argv: string[], args: Record<string, string>): Promise<DiagnosticResult> {
+    const id = diagnostic.id;
+    const description = diagnostic.description ?? "";
+    let machine: { id: string; transport: Transport } | undefined;
+    try {
+      machine = this.machines().find((row) => row.id === diagnostic.machine);
+    } catch (error) {
+      return { id, description, args, exitCode: null, output: "", error: safeError(error instanceof Error ? error.message : "the machine list is unreadable") };
+    }
+    if (!machine) return { id, description, args, exitCode: null, output: "", error: `machine ${diagnostic.machine} is not known` };
+    try {
+      const result = await this.exec(machine.transport, argv, diagnostic.timeoutSeconds * 1000, undefined, undefined, { maxOutputBytes: 65_536 });
+      const output = redact(`${result.stdout}${result.stderr}`.slice(0, OUTPUT_LIMIT)).text;
+      const error = result.exitCode === -1 ? "timeout" : result.spawnError ? `the command could not start (${result.spawnError})` : null;
+      return { id, description, args, exitCode: result.exitCode, output, error };
+    } catch (error) {
+      return { id, description, args, exitCode: null, output: "", error: safeError(error instanceof Error ? error.message : "diagnostic failed") };
+    }
+  }
+
+  private async callAnalyst(config: FleetInvestigationConfig, incident: FleetIncident, diagnostics: DiagnosticResult[], available: AvailableDiagnostic[], round: number): Promise<{ ok: true; reply: Record<string, unknown> } | { ok: false; error: string }> {
+    const stdin = this.analystInput(incident, diagnostics, available, round, config.maxRounds);
+    const [program, ...args] = config.analyst.command;
+    if (!program) return { ok: false, error: "the analyst command is empty" };
+    let result: { code: number | null; stdout: string; error: string | null };
+    try {
+      result = await this.runCapture(program, args, stdin, config.timeoutSeconds * 1000);
+    } catch (error) {
+      return { ok: false, error: safeError(error instanceof Error ? error.message : "the analyst failed") };
+    }
+    if (result.error || result.code !== 0) return { ok: false, error: safeError(result.error ?? `exit ${result.code ?? "null"}`) };
+    const last = result.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1) ?? "";
+    if (!last) return { ok: false, error: "the analyst returned nothing" };
+    let parsed: unknown;
+    try { parsed = JSON.parse(last); } catch { return { ok: false, error: "invalid analyst response" }; }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { ok: false, error: "invalid analyst response" };
+    return { ok: true, reply: parsed as Record<string, unknown> };
+  }
+
+  /** The analyst payload is capped, and the oldest diagnostic output gives up its room first. */
+  private analystInput(incident: FleetIncident, diagnostics: DiagnosticResult[], available: AvailableDiagnostic[], round: number, maxRounds: number): string {
+    const { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count } = incident;
+    const rows = diagnostics.map((row) => ({ ...row }));
+    const build = (): string => JSON.stringify({
+      incident: { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count },
+      packet: incident.packet,
+      diagnostics: rows,
+      available,
+      round,
+      roundsLeft: maxRounds - round,
+    });
+    let text = build();
+    while (text.length > ANALYST_INPUT_LIMIT && rows.length > 0) {
+      const oldest = rows[0]!;
+      oldest.output = oldest.output.slice(0, Math.floor(oldest.output.length / 2));
+      if (oldest.output.length === 0) rows.shift();
+      text = build();
+    }
+    return text.length > ANALYST_INPUT_LIMIT ? text.slice(0, ANALYST_INPUT_LIMIT) : text;
+  }
+
+  private async runFindingHook(incident: FleetIncident, finding: Finding): Promise<void> {
+    const hook = this.config().investigator;
+    if (!hook) return;
+    const { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count } = incident;
+    const stdin = JSON.stringify({
+      incident: { id, host, component, failureClass, severity, state, firstSeen, lastSeen, count },
+      packet: incident.packet,
+      finding,
+      actor: finding.actor,
+    });
+    const result = await runFindingCommand(this.runCapture, hook.command, stdin);
+    this.record(incident.id, "investigate", result.ok ? (result.reference ?? "") : safeError(result.error ?? "failed"));
   }
 
   private tickInner(): void {
@@ -703,21 +1065,22 @@ export class FleetService {
     }
   }
 
-  private async heal(incidentId: number): Promise<void> {
-    if (this.healing.has(incidentId)) return;
+  /** Runs the one healer the allowlist names for the incident and says what it did. */
+  private async heal(incidentId: number): Promise<string> {
+    if (this.healing.has(incidentId)) return "skipped: a heal is already running";
     const incident = incidentById(this.db, incidentId);
-    if (!incident || incident.state !== "open") return;
+    if (!incident || incident.state !== "open") return "skipped: incident is not open";
     const healer = this.config().healers.find((row) => row.host === incident.host && row.component === incident.component && row.failureClass === incident.failureClass);
-    if (!healer) return;
+    if (!healer) return "no healer configured";
     const now = this.now();
     const key = `${ruleKey(incident.host, incident.component, incident.failureClass)} `;
     const attempts = this.db.prepare("SELECT at FROM fleet_events WHERE kind IN ('heal', 'heal-failed') AND instr(detail, ?) = 1 AND at > ? ORDER BY at DESC").all(key, new Date(now.getTime() - 24 * 60 * 60_000).toISOString()) as { at: string }[];
     if (attempts.length >= healer.maxPerDay) {
       const day = `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
       if (!this.db.prepare("SELECT 1 FROM fleet_events WHERE incident_id = ? AND kind = 'heal-skipped' AND at >= ?").get(incidentId, day)) this.record(incidentId, "heal-skipped", `${key}daily limit`);
-      return;
+      return "skipped: cooldown or daily limit";
     }
-    if (attempts[0] && now.getTime() - Date.parse(attempts[0].at) < healer.cooldownMinutes * 60_000) return;
+    if (attempts[0] && now.getTime() - Date.parse(attempts[0].at) < healer.cooldownMinutes * 60_000) return "skipped: cooldown or daily limit";
     this.healing.add(incidentId);
     try {
       this.record(incidentId, "heal-start", `${key}${healer.id}`);
@@ -750,6 +1113,7 @@ export class FleetService {
         kind: ok ? "healed" : "heal-failed",
         actions: ok ? [] : ACTIONS,
       } }, true);
+      return ok ? `ran ${healer.id}` : `failed ${error ?? "heal failed"}`;
     } finally {
       this.healing.delete(incidentId);
     }
@@ -797,7 +1161,7 @@ export async function fleetActions(service: FleetService, req: IncomingMessage, 
   const result = await service.handleAction(incidentId, action, actor ?? "api");
   const reference = result.reference?.trim().slice(0, 120);
   const message = result.ok
-    ? action === "investigate" ? reference ? `Investigation started: ${reference}` : "Investigation started." : action === "snooze" ? "Snoozed for an hour." : "Muted this rule."
+    ? action === "investigate" ? reference === "investigation started" ? "Investigation started. The finding will be posted here when it is ready." : reference ? `Investigation started: ${reference}` : "Investigation started." : action === "snooze" ? "Snoozed for an hour." : "Muted this rule."
     : result.error ?? "failed";
   return json(res, 200, { ok: result.ok, message });
 }

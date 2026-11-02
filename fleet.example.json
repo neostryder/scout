@@ -16,5 +16,17 @@
     { "type": "desktop" },
     { "type": "webhook", "urlEnv": "SCOUT_FLEET_WEBHOOK_URL" },
     { "type": "command", "command": ["node", "-e", "process.stdin.resume()"] }
-  ]
+  ],
+  "investigation": {
+    "enabled": true,
+    "analyst": { "command": ["node", "tools/fleet/investigation-analyst.mjs", "--", "your-model-command"] },
+    "maxPerDay": 10,
+    "maxRounds": 3,
+    "maxCostUsdPerDay": 1,
+    "timeoutSeconds": 240,
+    "diagnostics": [
+      { "id": "docker-ps", "machine": "server", "argv": ["docker", "ps", "-a"], "components": ["containers"], "failureClasses": ["dead"], "description": "List all containers with status" },
+      { "id": "docker-logs", "machine": "server", "argv": ["docker", "logs", "--tail", "80", "{name}"], "params": { "name": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$" }, "timeoutSeconds": 30 }
+    ]
+  }
 }

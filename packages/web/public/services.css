@@ -301,6 +301,9 @@
 #services .incident-detail .mute-form { margin: 0; }
 #services .incident-events { max-height: 320px; overflow: auto; margin: 0; padding-left: 24px; }
 #services .incident-events li { margin-bottom: 8px; }
+#services .incident-investigation { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+#services .incident-investigation ul { margin: 0; padding-left: 20px; }
+#services .incident-investigation li { margin-bottom: 4px; }
 @media (max-width: 719px) {
   #services .incidents-panel .data-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); }
   #services .incident-table { display: table; }
