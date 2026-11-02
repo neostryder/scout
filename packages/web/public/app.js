@@ -203,7 +203,6 @@ async function load() {
     if (current === "updates") {
       const disabled = data.rows.filter((row) => !row.updatable && !planReasons.has(row.installId));
       loadJobRefusals(sequence, true);
-      Promise.all(failed.map(async (row) => { try { const result = await (await fetch(`/api/updates/plan?installId=${row.installId}`)).json(); if (result.refusal) jobRefusals.set(row.installId, result.refusal); else jobRefusals.delete(row.installId); } catch {} })).then(() => { if (sequence === state.sequence) renderTable(); });
       Promise.all(disabled.map(async (row) => { try { const result = await (await fetch(`/api/updates/plan?installId=${row.installId}`)).json(); planReasons.set(row.installId, result.refusal || "No installable update"); } catch {} })).then(() => { if (sequence === state.sequence) renderTable(); });
     }
     if (current === "updates") $("updates-count").textContent = state.updatable ? String(state.updatable) : "";
