@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Software] **An update now goes ahead when a version moved after the last scan.** Scout starts from the version that is installed, stops early if the target is already there, and switches to a newer target when the constraints allow it. After an App Installer update it waits for winget to answer, apps that update themselves finish as done with a note, an update cut off by a restart runs once more, and old failure messages on the Updates page now read in plain words.
 - [Visible] [Services] **Investigate can run a headless investigation.** With an `investigation` section in `fleet.json`, the hub runs the configured read-only diagnostics, asks an analyst command for the cause and a proposed fix, stores the finding on the incident, and posts it through the notifiers, subject to a daily limit, a cost cap, and an `investigation.off` kill switch file.
 - [Visible] [Software] **Scout no longer sends MSYS2, itch, or Audacity major-version updates to winget.** The Updates page shows on each row why the package was refused and how to update it, and automatic update windows show it as held.
 - [Visible] [Services] **Scout now tells you when the fleet settings file is invalid and which entry is wrong.** Before, one bad entry silently stopped every fleet source. Now the hub logs each problem and opens a critical `fleet config` incident for Eru until the file loads again, and `fleet check-config` tests an edit before you save it.

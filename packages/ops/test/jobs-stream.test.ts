@@ -67,7 +67,7 @@ function seeded(machineIds: string[] = ["mini"]): { db: Db; ids: number[] } {
   return { db, ids: (db.prepare("SELECT id FROM installs ORDER BY id").all() as { id: number }[]).map((r) => r.id) };
 }
 
-test("preflight rejects changed installs, withdrawn answers, and freezes", async () => {
+test("preflight rejects unreadable installs, withdrawn answers, and freezes", async () => {
   for (const change of ["version", "answer", "freeze"]) {
     const { db, ids } = seeded();
     const id = ids[0]!;
@@ -81,7 +81,7 @@ test("preflight rejects changed installs, withdrawn answers, and freezes", async
     runner.wake();
     for (let n = 0; n < 20 && runner.jobs().jobs[0]?.state !== "failed"; n++) await new Promise((r) => setTimeout(r, 1));
     assert.equal(runner.jobs().jobs[0]?.state, "failed", change);
-    assert.equal(calls, 0, change);
+    assert.equal(calls, change === "version" ? 1 : 0, change);
     assert.equal(runner.jobs().jobs[0]?.id, job.id);
     await new Promise((resolve) => setImmediate(resolve));
     db.close();
