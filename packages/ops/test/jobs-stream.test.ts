@@ -25,6 +25,9 @@ test("every supported ecosystem builds an update and read-only verify argv", () 
     assert.equal(plan.verify.parse(stdout), version);
   }
   assert.equal(planUpdate({ ecosystem: "cargo", key: "x", kind: "package" }, "2.0", machine).allowed, false);
+  const image = planUpdate({ ecosystem: "ostree", key: "ghcr.io/ublue-os/bazzite-deck-nvidia", kind: "image" }, "44.20261026", machine);
+  assert.equal(image.refusal, "Scout has no updater for ostree installs");
+  assert.equal(planUpdate({ ecosystem: "flatpak", key: "org.mozilla.firefox", kind: "app" }, "159.0", machine).refusal, "Scout has no updater for flatpak installs");
   assert.equal(planUpdate({ ecosystem: "brew", key: "x;touch", kind: "package" }, "2.0", machine).argv.length, 0);
   assert.equal(planUpdate({ ecosystem: "brew", key: "x", kind: "package" }, "2.0;touch", machine).argv.length, 0);
   assert.equal(planUpdate({ ecosystem: "brew", key: "x", kind: "package", details: { requiresSudo: true } }, "2.0", machine).refusal, "needs admin; Scout cannot elevate yet");

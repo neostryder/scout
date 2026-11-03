@@ -15,6 +15,7 @@ const WINGET_EXTERNAL_UPDATES = new Map<string, { refusal: string; majorChangeOn
   ["ItchIo.Itch", { refusal: "itch updates itself when it runs, and winget cannot see the new version; open itch to update it." }],
   ["Audacity.Audacity", { refusal: "this version uses a different installer type; uninstall Audacity and install the new version.", majorChangeOnly: true }],
 ]);
+const HAS_UPDATER = new Set(["winget", "msstore", "brew", "cask", "npm", "pipx", "uv-tool", "pacman", "aur"]);
 const majorVersion = (version: string | null | undefined): number | null => {
   const match = /^\d+/.exec(version ?? "");
   return match ? Number(match[0]) : null;
@@ -91,6 +92,8 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   let argv: string[] = [];
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
   if (!machine) refusal = "machine is not configured";
+  // An image reference such as ghcr.io/org/name has more path segments than ID allows, so say there is no updater rather than a bad id.
+  else if (!HAS_UPDATER.has(install.ecosystem)) refusal = `Scout has no updater for ${install.ecosystem} installs`;
   else if (!(arch ? PACMAN_ID.test(install.key) && PACMAN_VERSION.test(target) : ID.test(install.key) && (["winget", "msstore"].includes(install.ecosystem) ? WINDOWS_VERSION : VERSION).test(target))) refusal = "invalid package id or version";
   else if (external && (!external.majorChangeOnly || installedMajor !== null && targetMajor !== null && installedMajor !== targetMajor)) refusal = external.refusal;
   // winget raises the Windows administrator prompt itself, so Scout can run it only where someone can answer: on this computer.
