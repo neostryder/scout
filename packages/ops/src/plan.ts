@@ -7,15 +7,20 @@ export interface UpdatePlan {
   verify: { argv: string[]; parse: (stdout: string) => string | null };
   /** Runs on the machine just before the update; the update waits while it exits with `busyExit`, and stops on any other failure. */
   guard: { argv: string[]; busyExit: number; busy: string } | null;
+  /** A reinstall removes the installed version first: the command that does it, run before `argv`. Null for an ordinary update. */
+  uninstall: string[] | null;
+  /** Set on a refused update that a confirmed uninstall and reinstall can still get through. */
+  reinstall: { warning: string } | null;
 }
 
 const ID = /^(?:@?[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)?)$/;
 const VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 const WINDOWS_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._+-]+)*(?: \([A-Za-z0-9._+-]+(?: [A-Za-z0-9._+-]+)*\))?$/;
-const WINGET_EXTERNAL_UPDATES = new Map<string, { refusal: string; majorChangeOnly?: boolean }>([
+export const REINSTALL_WARNING = "Scout removes Audacity and then installs the new version, and the uninstall and the install can each open a Windows administrator prompt. Settings in your user profile stay, but plug-ins and anything else in the program folder are deleted. If the install fails, Audacity is left uninstalled until you install it again.";
+const WINGET_EXTERNAL_UPDATES = new Map<string, { refusal: string; majorChangeOnly?: boolean; reinstall?: boolean }>([
   ["MSYS2.MSYS2", { refusal: "MSYS2 updates through its own package manager; run pacman -Syu in the MSYS2 shell, because winget cannot upgrade it." }],
   ["ItchIo.Itch", { refusal: "itch updates itself when it runs, and winget cannot see the new version; open itch to update it." }],
-  ["Audacity.Audacity", { refusal: "this version uses a different installer type; uninstall Audacity and install the new version.", majorChangeOnly: true }],
+  ["Audacity.Audacity", { refusal: "this version uses a different installer type; uninstall Audacity and install the new version.", majorChangeOnly: true, reinstall: true }],
 ]);
 const HAS_UPDATER = new Set(["winget", "msstore", "brew", "cask", "npm", "pipx", "uv-tool", "pacman", "aur", "flatpak"]);
 const majorVersion = (version: string | null | undefined): number | null => {
@@ -88,7 +93,7 @@ export const ARCH_NEEDS_REBOOT = "[ ! -d \"/usr/lib/modules/$(uname -r)\" ]";
 /** Schedules a restart two minutes out so the job can finish and be read back first; `shutdown -c` cancels it. */
 export const ARCH_REBOOT = "sudo -n shutdown -r +2 'Scout: restarting to finish a kernel update'";
 
-export function planUpdate(install: PlanInstall, target: string, machine: PlanMachine | null, running = false): UpdatePlan {
+export function planUpdate(install: PlanInstall, target: string, machine: PlanMachine | null, running = false, reinstall = false): UpdatePlan {
   const disruptive = install.kind === "app" || running || install.ecosystem === "pacman" || install.ecosystem === "aur";
   const arch = install.ecosystem === "pacman" || install.ecosystem === "aur";
   const needsAdmin = install.details?.scope === "machine" || install.details?.needsAdmin === true || install.details?.requiresSudo === true;
@@ -99,11 +104,14 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   let argv: string[] = [];
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
   let guard: UpdatePlan["guard"] = null;
+  let uninstall: string[] | null = null;
+  const blocked = !!external && (!external.majorChangeOnly || installedMajor !== null && targetMajor !== null && installedMajor !== targetMajor);
   if (!machine) refusal = "machine is not configured";
   // An image reference such as ghcr.io/org/name has more path segments than ID allows, so say there is no updater rather than a bad id.
   else if (!HAS_UPDATER.has(install.ecosystem)) refusal = `Scout has no updater for ${install.ecosystem} installs`;
   else if (!(arch ? PACMAN_ID.test(install.key) && PACMAN_VERSION.test(target) : ID.test(install.key) && (["winget", "msstore"].includes(install.ecosystem) ? WINDOWS_VERSION : VERSION).test(target))) refusal = "invalid package id or version";
-  else if (external && (!external.majorChangeOnly || installedMajor !== null && targetMajor !== null && installedMajor !== targetMajor)) refusal = external.refusal;
+  else if (reinstall && !(blocked && external?.reinstall)) refusal = "Scout cannot reinstall this software";
+  else if (blocked && !reinstall) refusal = external!.refusal;
   // winget raises the Windows administrator prompt itself, so Scout can run it only where someone can answer: on this computer.
   else if (needsAdmin && !(["winget", "msstore"].includes(install.ecosystem) && machine.transport.type === "local")) refusal = "needs admin; Scout cannot elevate yet";
   else {
@@ -112,6 +120,10 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
       case "winget": case "msstore":
         argv = ["winget", "upgrade", "--id", key, "--exact", "--silent", "--accept-package-agreements", "--accept-source-agreements", "--version", target];
         if (install.ecosystem === "msstore") argv.push("--source", "msstore");
+        if (reinstall) {
+          uninstall = ["winget", "uninstall", "--id", key, "--exact", "--silent"];
+          argv = ["winget", "install", "--id", key, "--exact", "--silent", "--accept-package-agreements", "--accept-source-agreements", "--version", target];
+        }
         verify = { argv: ["winget", "list", "--id", key, "--exact"], parse: (s) => parseWinget(key, s) };
         break;
       case "brew":
@@ -149,7 +161,8 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
       default: refusal = `Scout has no updater for ${install.ecosystem} installs`;
     }
   }
-  return { allowed: refusal === null, refusal, command: argv.join(" "), argv, disruptive, needsAdmin, verify, guard };
+  const offer = !reinstall && blocked && external?.reinstall === true ? { warning: REINSTALL_WARNING } : null;
+  return { allowed: refusal === null, refusal, command: [uninstall, argv].filter((part): part is string[] => part !== null && part.length > 0).map((part) => part.join(" ")).join("\n"), argv, disruptive, needsAdmin, verify, guard, uninstall, reinstall: offer };
 }
 
 /** The update command without the pinned version, so the package manager can pick the version it still offers. */

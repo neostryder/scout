@@ -10,7 +10,7 @@ import { trayApi } from "./tray-api.ts";
 import { isPublicInstallAsset, serviceTokenMayReach, verifyAccessJwt, type AccessConfig, type KeySource } from "./access.ts";
 import { coverageResponse, decideProposalRequest, installDetail, installsResponse, proposalsResponse, summaryResponse, updatesResponse } from "./api.ts";
 import { ControlRunner, Runner, runHealthCycle, subscribeServiceReads, type ControlRunnerDeps, type RunnerDeps } from "@scout/ops";
-import { createDownloadJobsResponse, createJobsResponse, jobResponse, planResponse, windowResponse } from "./jobs-api.ts";
+import { createDownloadJobsResponse, createJobsResponse, createReinstallJobResponse, jobResponse, planResponse, windowResponse } from "./jobs-api.ts";
 import { WindowRun } from "./update-window-schedule.ts";
 import { createDownloadKinds, createDownloadResolver, type DownloadsOptions } from "./downloads-api.ts";
 import { filtersApi } from "./filters-api.ts";
@@ -223,7 +223,8 @@ async function decide(db: Db, req: IncomingMessage, url: URL, res: ServerRespons
     if (jobId && runner) return runner.stop(Number(jobId[1])) ? json(res, 200, jobResponse(db, Number(jobId[1]))) : json(res, jobResponse(db, Number(jobId[1])) ? 409 : 404, { error: "job cannot be stopped" });
     if (runner) {
       const body: unknown = JSON.parse(raw);
-      const result = (body as { action?: unknown } | null)?.action === "download" ? await createDownloadJobsResponse(db, runner, body) : createJobsResponse(db, runner, body);
+      const action = (body as { action?: unknown } | null)?.action;
+      const result = action === "download" ? await createDownloadJobsResponse(db, runner, body) : action === "reinstall" ? createReinstallJobResponse(db, runner, body) : createJobsResponse(db, runner, body);
       return json(res, result.status, result.body);
     }
   } catch (err) {
@@ -360,7 +361,7 @@ export function createHub(options: HubOptions): Server {
       if (url.pathname === "/api/provenance") return json(res, 200, provenanceResponse(db, mineFile()));
       if (url.pathname === "/api/updates") return json(res, 200, updatesResponse(db, url.searchParams));
       if (runner && url.pathname === "/api/updates/plan") {
-        const plan = planResponse(db, runner, Number(url.searchParams.get("installId")), url.searchParams.get("alsoInstallIds"));
+        const plan = planResponse(db, runner, Number(url.searchParams.get("installId")), url.searchParams.get("alsoInstallIds"), url.searchParams.get("reinstall") === "1");
         return plan ? json(res, 200, plan) : json(res, 404, { error: "no such install or update" });
       }
       if (url.pathname === "/api/updates/auto-updates") return json(res, 200, { autoUpdates: listAutoUpdates(db) });

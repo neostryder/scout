@@ -252,6 +252,7 @@ document.addEventListener("keydown", (e) => {
 
 async function startPlan(ids, machineId = null, options = {}) {
   state.downloadPlan = null;
+  state.reinstallPlan = null;
   $("confirm-title").textContent = "Confirm updates";
   $("confirm-submit").textContent = "Start updates";
   const selected = ids.map((installId) => ({ installId, machineId: machineId || state.selected.get(installId) || state.rows.find((row) => row.installId === installId)?.machineId }));
@@ -270,13 +271,36 @@ async function startPlan(ids, machineId = null, options = {}) {
     const breaks = [...(p.breaks?.hard || []), ...(p.breaks?.soft || [])];
     return breaks.length ? [h("h3", {}, "Also affects"), h("ul", {}, breaks.map((entry) => h("li", {}, `${entry.dependent.name} (${entry.dependent.machine}): ${entry.reason}`)))] : [];
   };
-  $("confirm-body").replaceChildren(h("ul", {}, allowed.map((p) => h("li", {}, `${p.machineId}: ${p.name}, ${p.from || "unknown"} to ${p.to}`, h("pre", {}, p.command), (p.warnings || []).map((w) => h("div", { class: "warning" }, w)), affects(p)))), acknowledgement || [], adminAcknowledgement || [], softAcknowledgement || [], refused.length ? h("section", {}, h("h3", {}, "Cannot update"), h("ul", {}, refused.map((p) => h("li", {}, `${p.name || p.installId}: ${p.refusal}`, affects(p))))) : []);
+  $("confirm-body").replaceChildren(h("ul", {}, allowed.map((p) => h("li", {}, `${p.machineId}: ${p.name}, ${p.from || "unknown"} to ${p.to}`, h("pre", {}, p.command), (p.warnings || []).map((w) => h("div", { class: "warning" }, w)), affects(p)))), acknowledgement || [], adminAcknowledgement || [], softAcknowledgement || [], refused.length ? h("section", {}, h("h3", {}, "Cannot update"), h("ul", {}, refused.map((p) => h("li", {}, `${p.name || p.installId}: ${p.refusal}`, p.reinstall ? h("div", {}, h("button", { class: "button", type: "button", onclick: () => startReinstall(p) }, "Uninstall and reinstall")) : [], affects(p))))) : []);
   // A Retry with admin prompt click says the person is at this computer; Start updates still has to be pressed.
   if (options.admin && $("allow-admin")) $("allow-admin").checked = true;
   refreshSubmit();
   $("confirm").showModal();
 }
+// A refused update that a confirmed uninstall and reinstall can still get through: the same dialog, with its own warning and checkbox.
+async function startReinstall(refused) {
+  state.downloadPlan = null;
+  let plan;
+  try { const r = await fetch(`/api/updates/plan?installId=${refused.installId}&reinstall=1`); if (!r.ok) throw new Error("Plan unavailable"); plan = await r.json(); } catch { plan = { installId: refused.installId, allowed: false, refusal: "Plan unavailable" }; }
+  state.reinstallPlan = plan;
+  $("confirm-title").textContent = `Uninstall and reinstall ${plan.name || refused.name}`;
+  $("confirm-submit").textContent = "Uninstall and reinstall";
+  const refreshSubmit = () => { $("confirm-submit").disabled = !plan.allowed || !$("allow-reinstall")?.checked || plan.needsAdmin && !$("allow-admin")?.checked; };
+  const reinstallAcknowledgement = h("label", { class: "warning" }, h("input", { id: "allow-reinstall", type: "checkbox", onchange: refreshSubmit }), "I understand the app will be uninstalled first");
+  const adminAcknowledgement = plan.needsAdmin ? h("label", { class: "warning" }, h("input", { id: "allow-admin", type: "checkbox", onchange: refreshSubmit }), "Windows will ask for administrator permission. I am at this computer and will approve the prompt.") : null;
+  $("confirm-body").replaceChildren(plan.allowed ? h("div", {}, h("p", {}, `${plan.machineId}: ${plan.name}, ${plan.from || "unknown"} to ${plan.to}`), h("pre", {}, plan.command), h("div", { class: "warning" }, refused.reinstall?.warning || ""), reinstallAcknowledgement, adminAcknowledgement || []) : h("p", { role: "alert" }, plan.refusal || "Cannot reinstall"));
+  refreshSubmit();
+  if (!$("confirm").open) $("confirm").showModal();
+}
+async function submitReinstall() {
+  if ($("confirm-submit").disabled) return;
+  const response = await fetch("/api/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "reinstall", installIds: [state.reinstallPlan.installId], confirm: true, confirmReinstall: true, allowAdmin: !!$("allow-admin")?.checked }) });
+  const data = await response.json();
+  if (!response.ok) { $("confirm-body").append(h("p", { role: "alert" }, data.error || "The reinstall was not queued.")); return; }
+  $("confirm").close(); state.reinstallPlan = null; state.selected.clear(); await pollJobs(); await load(); windowPanel?.refresh();
+}
 async function submitPlans() {
+  if (state.reinstallPlan) return submitReinstall();
   if (state.downloadPlan) return submitDownload();
   if ($("confirm-submit").disabled) return;
   const ids = state.plans.filter((p) => p.allowed).map((p) => p.installId);
@@ -293,6 +317,7 @@ async function startDownload(row, button) {
     const plan = await response.json();
     if (!response.ok) throw new Error(plan.error || "Download plan unavailable");
     if (plan.kind === "page" && safeUrl(plan.url)) { window.open(plan.url, "_blank", "noopener,noreferrer"); return; }
+    state.reinstallPlan = null;
     state.downloadPlan = plan;
     $("confirm-title").textContent = "Confirm download";
     $("confirm-submit").textContent = `Download to ${plan.machineId}`;
