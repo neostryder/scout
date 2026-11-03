@@ -30,7 +30,7 @@ export interface RunnerDeps {
   startService?: (name: string, signal: AbortSignal) => Promise<void>;
   resolveDownload?: (installId: number, fresh?: boolean, signal?: AbortSignal) => Promise<ResolvedDownload | null>;
 }
-export interface Preview { installId: number; machineId: string; name: string; ecosystem: string; from: string | null; to: string | null; command: string; disruptive: boolean; needsAdmin: boolean; running: boolean; warnings: string[]; allowed: boolean; refusal: string | null; breaks: UpdateBreaks; softConfirmation: SoftConfirmation | null }
+export interface Preview { installId: number; machineId: string; name: string; ecosystem: string; from: string | null; to: string | null; command: string; disruptive: boolean; needsAdmin: boolean; running: boolean; warnings: string[]; allowed: boolean; refusal: string | null; breaks: UpdateBreaks; softConfirmation: SoftConfirmation | null; reinstall: { warning: string; command: string } | null }
 
 export function loadMachines(path: string): MachineConfig[] {
   return loadAllMachines(path).filter((machine) => machine.paused !== true || machine.transport.type === "local");
@@ -107,17 +107,19 @@ function machineScopeOfSameSoftware(db: Db, packageId: number, machineId: string
   return registered.some((r) => { const other = r.name.trim().toLowerCase(); return other === name || other.startsWith(name) && /^[\s(]/.test(other.slice(name.length)); });
 }
 
-export function previewUpdate(db: Db, installId: number, machines: MachineConfig[], options: { alsoUpdating?: number[] } = {}): { preview: Preview; plan: UpdatePlan; transport: Transport | null } | null {
+export function previewUpdate(db: Db, installId: number, machines: MachineConfig[], options: { alsoUpdating?: number[]; reinstall?: boolean } = {}): { preview: Preview; plan: UpdatePlan; transport: Transport | null } | null {
   const row = updatesView(db).find((r) => r.installId === installId);
   const install = installRecord(db, installId);
   if (!row || !install) return null;
   const machine = machines.find((m) => m.id === row.machineId) ?? null;
   const running = !!db.prepare("SELECT 1 FROM usage_signals WHERE install_id = ? AND kind = 'running' AND value = '1' AND available = 1 ORDER BY observed_at DESC LIMIT 1").get(installId);
-  const plan = planUpdate({ ecosystem: row.ecosystem, key: row.key, kind: install.kind, version: row.installed, details: install.details }, row.available ?? "", machine, running);
+  const plan = planUpdate({ ecosystem: row.ecosystem, key: row.key, kind: install.kind, version: row.installed, details: install.details }, row.available ?? "", machine, running, options.reinstall === true);
+  const reinstallPlan = plan.reinstall ? planUpdate({ ecosystem: row.ecosystem, key: row.key, kind: install.kind, version: row.installed, details: install.details }, row.available ?? "", machine, running, true) : null;
   const breaks = updateBreaks(db, installId, updateTarget(row), row.machineId, options.alsoUpdating);
   const refusal = breaks.hard.length ? dependencyRefusal(`${row.name} ${row.installed ?? ""}`.trim(), breaks.hard.map((entry) => entry.dependent.name), breaks.hard.map((entry) => entry.reason)) : !row.updatable ? row.blockedBy ?? "no installable update is available" : plan.refusal;
   const preview: Preview = { installId, machineId: row.machineId, name: row.name, ecosystem: row.ecosystem, from: row.installed, to: row.available,
-    command: plan.command, disruptive: plan.disruptive, needsAdmin: plan.needsAdmin, running, warnings: breaks.soft.map((entry) => entry.reason), allowed: refusal === null, refusal, breaks, softConfirmation: softConfirmation(breaks) };
+    command: plan.command, disruptive: plan.disruptive, needsAdmin: plan.needsAdmin, running, warnings: breaks.soft.map((entry) => entry.reason), allowed: refusal === null, refusal, breaks, softConfirmation: softConfirmation(breaks),
+    reinstall: reinstallPlan ? { warning: plan.reinstall!.warning, command: reinstallPlan.command } : null };
   return { preview, plan, transport: machine?.transport ?? null };
 }
 
@@ -344,6 +346,7 @@ export async function runWatched(db: Db, job: Job, deps: RunnerDeps, exec: Exec,
 
 export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSignal): Promise<void> {
   if (job.action === "download") return runDownloadJob(db, job, deps, signal);
+  if (job.action === "reinstall") return runReinstallJob(db, job, deps, signal);
   const exec = deps.exec ? retryExec(deps.exec) : runArgv;
   const batchOptions = (): { alsoUpdating: number[] } => ({ alsoUpdating: (db.prepare("SELECT install_id AS installId FROM jobs WHERE batch_id = ? AND machine_id = ? AND action = 'update' AND state IN ('queued','preflight','running','done') AND id != ?").all(job.batchId, job.machineId, job.id) as { installId: number }[]).map((row) => row.installId) });
   const preview = previewUpdate(db, job.installId, deps.machines, batchOptions());
@@ -563,6 +566,84 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
   } catch (err) {
     if (verifying) recordStep(db, job.id, "verify", "failed", cleanOutput((err as Error).message));
     if (jobById(db, job.id)?.state !== "stopped") fail(verifying && plan.verify.argv[0] === "winget" ? verifyFailure : (err as Error).message);
+  }
+}
+
+/**
+ * Removes the installed version and installs the target, for software whose new installer type winget cannot apply over the old one. Nothing is
+ * touched until the version has been read; an install that fails after the removal says so, because the app is gone at that point.
+ */
+async function runReinstallJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSignal): Promise<void> {
+  const exec = deps.exec ? retryExec(deps.exec) : runArgv;
+  const fail = (message: string): void => { setJobState(db, job.id, signal.aborted ? "stopped" : "failed", signal.aborted ? "stopped by user" : message); };
+  const preview = previewUpdate(db, job.installId, deps.machines, { reinstall: true });
+  if (!preview || !preview.preview.allowed || !preview.transport || !preview.plan.uninstall) {
+    const reason = preview?.preview.refusal ?? "install, answer, constraint, or machine changed";
+    recordStep(db, job.id, "preflight", "failed", reason);
+    fail(reason);
+    return;
+  }
+  const { transport, plan } = preview;
+  const uninstall = plan.uninstall!;
+  const name = preview.preview.name;
+  const checkTimeout = deps.checkTimeoutMs ?? 120_000;
+  const updateTimeout = deps.updateTimeoutMs ?? 1_200_000;
+  const retryDelay = deps.retryDelayMs ?? 5000;
+  const context = (watched: WatchedRun): FailureContext => ({ promptSeen: watched.tracker.uacSeen, windowSeen: watched.tracker.windowSeen, timeoutMs: updateTimeout });
+  const minutes = Math.max(1, Math.round((deps.promptTimeoutMs ?? 180_000) / 60_000));
+  const installCommand = `winget install --id ${plan.argv[3] ?? name}`;
+  try {
+    const before = await exec(transport, plan.verify.argv, checkTimeout, signal);
+    if (signal.aborted) throw new Error("stopped by user");
+    const installed = plan.verify.parse(before.stdout);
+    if (before.exitCode !== 0 || installed === null) {
+      recordStep(db, job.id, "preflight", "failed", cleanOutput(before.stdout + "\n" + before.stderr));
+      fail(`Could not read the installed version of ${name}, so nothing was changed. Try again in a minute.`);
+      return;
+    }
+    if (job.to && (compareVersions(installed, job.to) ?? -1) >= 0) {
+      recordStep(db, job.id, "preflight", "done", `already at ${installed}; it changed since the scan`);
+      db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(installed, new Date().toISOString(), job.installId);
+      setJobState(db, job.id, "done");
+      return;
+    }
+    recordStep(db, job.id, "preflight", "done", cleanOutput(before.stdout));
+    setJobState(db, job.id, "running");
+    const removed = await runWatched(db, job, deps, exec, transport, uninstall, preview.preview.ecosystem, updateTimeout, signal);
+    if (signal.aborted) throw new Error("stopped by user");
+    if (removed.promptExpired || removed.result.exitCode !== 0) {
+      recordStep(db, job.id, "uninstall", "failed", cleanOutput(removed.result.stdout + "\n" + removed.result.stderr));
+      fail(removed.promptExpired ? `Nobody answered the administrator prompt to uninstall ${name} within ${minutes} minutes, so Scout stopped. Nothing was changed.` : `Could not uninstall ${name}: ${failure(removed.result.exitCode, removed.result.stderr + "\n" + removed.result.stdout, context(removed))}. Nothing was installed. Check whether ${name} is still installed on the machine.`);
+      return;
+    }
+    recordStep(db, job.id, "uninstall", "done", cleanOutput(removed.result.stdout + "\n" + removed.result.stderr));
+    const added = await runWatched(db, job, deps, exec, transport, plan.argv, preview.preview.ecosystem, updateTimeout, signal);
+    if (signal.aborted) throw new Error("stopped by user");
+    if (added.promptExpired || added.result.exitCode !== 0) {
+      recordStep(db, job.id, "install", "failed", cleanOutput(added.result.stdout + "\n" + added.result.stderr));
+      fail(added.promptExpired ? `${name} was uninstalled, but nobody answered the administrator prompt to install the new version within ${minutes} minutes. Run ${installCommand} on the machine to install it.` : `${name} was uninstalled, but the new version did not install: ${failure(added.result.exitCode, added.result.stderr + "\n" + added.result.stdout, context(added))}. Run ${installCommand} on the machine to install it.`);
+      return;
+    }
+    recordStep(db, job.id, "install", "done", cleanOutput(added.result.stdout + "\n" + added.result.stderr));
+    let after = await exec(transport, plan.verify.argv, checkTimeout, signal);
+    let version = plan.verify.parse(after.stdout);
+    const reached = (value: string | null): boolean => value !== null && job.to !== null && (compareVersions(value, job.to) ?? -1) >= 0;
+    for (let attempt = 1; attempt < 5 && !(after.exitCode === 0 && reached(version)); attempt++) {
+      await pause(retryDelay, signal);
+      if (signal.aborted) throw new Error("stopped by user");
+      after = await exec(transport, plan.verify.argv, checkTimeout, signal);
+      version = plan.verify.parse(after.stdout);
+    }
+    if (after.exitCode !== 0 || !reached(version)) {
+      recordStep(db, job.id, "verify", "failed", cleanOutput(after.stdout + "\n" + after.stderr));
+      fail(`The install finished, but ${name} is not at version ${job.to}. Check ${name} on the machine.`);
+      return;
+    }
+    db.prepare("UPDATE installs SET version = ?, last_seen = ? WHERE id = ?").run(version, new Date().toISOString(), job.installId);
+    recordStep(db, job.id, "verify", "done", cleanOutput(after.stdout + "\n" + after.stderr));
+    setJobState(db, job.id, "done");
+  } catch (err) {
+    if (jobById(db, job.id)?.state !== "stopped") fail((err as Error).message);
   }
 }
 

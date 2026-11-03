@@ -1,9 +1,9 @@
 import { enqueueBatch, jobById, listAutoUpdates, type Db } from "@scout/core";
 import { planWindows, previewUpdate, type Runner } from "@scout/ops";
 
-export function planResponse(db: Db, runner: Runner, installId: number, alsoInstallIds: string | null = null): unknown | null {
+export function planResponse(db: Db, runner: Runner, installId: number, alsoInstallIds: string | null = null, reinstall = false): unknown | null {
   const alsoUpdating = alsoInstallIds?.split(",").filter((id) => /^\d+$/.test(id.trim())).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0) ?? [];
-  return previewUpdate(db, installId, runner.deps.machines, { alsoUpdating })?.preview ?? null;
+  return previewUpdate(db, installId, runner.deps.machines, { alsoUpdating, reinstall })?.preview ?? null;
 }
 
 export function windowResponse(db: Db, runner: Runner, windowRun: { status(): unknown } | null = null, now = new Date()): unknown {
@@ -50,6 +50,21 @@ export function createJobsResponse(db: Db, runner: Runner, body: unknown): { sta
   const batch = enqueueBatch(db, valid);
   runner.wake();
   return { status: 202, body: { batchId: batch.batchId, jobs: batch.jobs.map((job) => ({ id: job.id, installId: job.installId, machineId: job.machineId, name: job.name, from: job.from, to: job.to, state: job.state })), refused } };
+}
+
+/** A reinstall removes the installed version first, so it takes one install at a time and its own confirmation. */
+export function createReinstallJobResponse(db: Db, runner: Runner, body: unknown): { status: number; body: unknown } {
+  const request = body as { installIds?: unknown; confirm?: unknown; confirmReinstall?: unknown; allowAdmin?: unknown } | null;
+  if (request?.confirm !== true || request.confirmReinstall !== true) return { status: 400, body: { error: "confirm and confirmReinstall must be true" } };
+  if (!Array.isArray(request.installIds) || request.installIds.length !== 1 || !Number.isSafeInteger(request.installIds[0]) || Number(request.installIds[0]) <= 0) return { status: 400, body: { error: "reinstall needs one positive installId" } };
+  const installId = Number(request.installIds[0]);
+  const preview = previewUpdate(db, installId, runner.deps.machines, { reinstall: true })?.preview;
+  if (!preview?.allowed || !preview.from || !preview.to) return { status: 400, body: { error: preview?.refusal ?? "no such install or update" } };
+  if (preview.needsAdmin && request.allowAdmin !== true) return { status: 400, body: { error: "administrator prompt needs confirmation" } };
+  if (db.prepare("SELECT 1 FROM jobs WHERE install_id = ? AND state IN ('queued','preflight','running')").get(installId)) return { status: 400, body: { error: "a job for this install is already queued" } };
+  const batch = enqueueBatch(db, [{ installId, machineId: preview.machineId, from: preview.from, to: preview.to, reinstall: true }]);
+  runner.wake();
+  return { status: 202, body: { batchId: batch.batchId, jobs: batch.jobs.map((job) => ({ id: job.id, installId: job.installId, machineId: job.machineId, name: job.name, from: job.from, to: job.to, state: job.state })), refused: [] } };
 }
 
 export function jobResponse(db: Db, id: number): unknown | null { return jobById(db, id); }

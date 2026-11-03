@@ -64,7 +64,7 @@ export function jobForInstall(db: Db, installId: number, now = new Date()): { id
     .get(installId, new Date(now.getTime() - 600_000).toISOString()) as { id: number; state: JobState; batchId: string } | undefined ?? null;
 }
 
-export function enqueueBatch(db: Db, installs: { installId: number; machineId: string; from: string; to: string; download?: ConfirmedDownload }[]): { batchId: string; jobs: Job[] } {
+export function enqueueBatch(db: Db, installs: { installId: number; machineId: string; from: string; to: string; download?: ConfirmedDownload; reinstall?: boolean }[]): { batchId: string; jobs: Job[] } {
   const batchId = randomUUID();
   const now = new Date().toISOString();
   const jobs: Job[] = [];
@@ -74,7 +74,7 @@ export function enqueueBatch(db: Db, installs: { installId: number; machineId: s
       const existing = db.prepare("SELECT id FROM jobs WHERE install_id = ? AND state IN ('queued','preflight','running')").get(i.installId);
       if (existing) throw new Error("an update for this install is already queued");
       const result = db.prepare("INSERT INTO jobs (batch_id, machine_id, install_id, action, target, state, requested_at, from_version) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)")
-        .run(batchId, i.machineId, i.installId, i.download ? "download" : "update", i.download ? JSON.stringify(i.download) : i.to, now, i.from);
+        .run(batchId, i.machineId, i.installId, i.download ? "download" : i.reinstall ? "reinstall" : "update", i.download ? JSON.stringify(i.download) : i.to, now, i.from);
       const job = jobById(db, Number(result.lastInsertRowid));
       if (job) jobs.push(job);
     }
@@ -154,7 +154,7 @@ export function failInterruptedJobs(db: Db): void {
       continue;
     }
     db.prepare("UPDATE jobs SET message = ?, state = 'failed', attention = NULL, attention_detail = NULL, attention_at = NULL, finished_at = ? WHERE id = ?")
-      .run(`interrupted by a restart during ${stage}; check the installed version, then retry the update`, new Date().toISOString(), job.id);
+      .run(job.action === "reinstall" ? `The hub restarted during the ${stage} step, so this reinstall stopped and will not run again. The app may already be uninstalled. Check the machine before you try again.` : `interrupted by a restart during ${stage}; check the installed version, then retry the update`, new Date().toISOString(), job.id);
     failedBatches.add(job.batchId);
   }
   for (const batchId of failedBatches) stopBatch(db, batchId);
