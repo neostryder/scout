@@ -2,7 +2,7 @@ import { $, h, flagRow, marked, safeUrl, defaultDir, riskBadge, updateDialogMode
 import { savedFilterControl } from "./saved-filters.js";
 import { dependencyCard, discoveryControls } from "./dependency-cards.js";
 import { upstreamSections } from "./intel-detail.js";
-import { isLive, jobProgress, jobSummary } from "./jobs-model.js";
+import { isLive, jobProgress, jobSummary, needsAdminRetry } from "./jobs-model.js";
 import { breakingLines } from "./breaking-lines.js";
 
 let windowPanel;
@@ -178,9 +178,10 @@ function updateRow(row) {
   const badge = row.risk ? riskBadge(row.risk) : null;
   const reason = planReasons.get(row.installId) || (row.blockedBy ? `Blocked: ${row.blockedBy}` : row.advisoryOnly ? "Advisory only" : "No installable update");
   const updateButton = h("button", { class: row.risk?.hard > 0 ? "primary muted-action" : "primary", type: "button", disabled: !row.updatable || !!job && !["done", "failed", "stopped"].includes(job.state), title: row.updatable ? badge?.text || "" : reason, "aria-label": row.updatable ? `Update ${row.name} on ${row.machineId}${badge ? `: ${badge.text}` : ""}` : `Cannot update ${row.name}: ${reason}`, onclick: (e) => { e.stopPropagation(); startPlan([row.installId]); } }, "Update");
+  const retryAdmin = row.updatable && needsAdminRetry(job) ? h("button", { class: "button", type: "button", "aria-label": `Retry ${row.name} on ${row.machineId} with the administrator prompt`, title: "Opens the confirmation with the administrator box ticked; approve the Windows prompt at this computer.", onclick: (e) => { e.stopPropagation(); startPlan([row.installId], null, { admin: true }); } }, "Retry with admin prompt") : null;
   const canDownload = !row.updatable && !row.blockedBy && (row.downloadUrl || row.statuses?.some((status) => status === "upstream" || status === "advisory"));
   const button = canDownload ? h("button", { class: "button download", "data-install-id": String(row.installId), type: "button", disabled: !!job && !["done", "failed", "stopped"].includes(job.state), "aria-label": `Download ${row.name} to ${row.machineId}`, onclick: (e) => { e.stopPropagation(); startDownload(row, e.currentTarget); } }, "Download") : updateButton;
-  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job, jobRefusals.get(row.installId)?.refusal || null) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button, row.updatable ? autoToggle(row) : [])]);
+  return rowBase(row, [h("td", {}, h("input", { type: "checkbox", checked: state.selected.has(row.installId), "aria-label": `Select ${row.name} on ${row.machineId}`, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.stopPropagation(); e.target.checked ? state.selected.set(row.installId, row.machineId) : state.selected.delete(row.installId); renderTable(); } })), nameCell(row), h("td", {}, row.machineId), h("td", {}, row.installed || "unknown"), h("td", {}, row.available || "no answer", row.upstream ? h("div", { class: "muted" }, `Upstream ${row.upstream}`) : [], row.beta ? h("div", { class: "muted" }, `Beta ${row.beta}`) : []), h("td", {}, row.availableSource || row.sourceKind || ""), h("td", { class: "status" }, job ? jobText(job, jobRefusals.get(row.installId)?.refusal || null) : row.statuses?.join(", ") || (row.updatable ? "updatable" : reason), job && isLive(job) ? jobProgressView(job) : [], badge ? h("div", {}, h("span", { class: badge.className, title: badge.title }, badge.text)) : [], row.priority != null ? h("div", { class: "muted", title: (row.priorityParts || []).map((part) => `${part.name} ${Math.round(part.value * 100)}%`).join(", ") }, `Priority ${Math.round(row.priority)}`) : [], noteSummary(row)), h("td", {}, row.bump || ""), h("td", {}, row.checkedAt || ""), h("td", {}, button, retryAdmin || [], row.updatable ? autoToggle(row) : [])]);
 }
 function catalogRow(row) { return rowBase(row, [nameCell(row), h("td", {}, row.machineId), h("td", {}, row.sourceKind), h("td", {}, row.version || "unknown"), h("td", {}, row.category || ""), h("td", {}, row.lastUsed || ""), h("td", { class: "path", title: row.location }, row.location)]); }
 async function load() {
@@ -249,7 +250,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if (document.activeElement === search) { search.value = ""; if (view() === "review") { setParam("q", "", false); renderReview(); } else if (view() === "jobs") { setParam("q", "", false); renderJobs(); } else searchChanged(); } else if (!$("confirm").open) closeDetail(); }
 });
 
-async function startPlan(ids, machineId = null) {
+async function startPlan(ids, machineId = null, options = {}) {
   state.downloadPlan = null;
   $("confirm-title").textContent = "Confirm updates";
   $("confirm-submit").textContent = "Start updates";
@@ -270,6 +271,8 @@ async function startPlan(ids, machineId = null) {
     return breaks.length ? [h("h3", {}, "Also affects"), h("ul", {}, breaks.map((entry) => h("li", {}, `${entry.dependent.name} (${entry.dependent.machine}): ${entry.reason}`)))] : [];
   };
   $("confirm-body").replaceChildren(h("ul", {}, allowed.map((p) => h("li", {}, `${p.machineId}: ${p.name}, ${p.from || "unknown"} to ${p.to}`, h("pre", {}, p.command), (p.warnings || []).map((w) => h("div", { class: "warning" }, w)), affects(p)))), acknowledgement || [], adminAcknowledgement || [], softAcknowledgement || [], refused.length ? h("section", {}, h("h3", {}, "Cannot update"), h("ul", {}, refused.map((p) => h("li", {}, `${p.name || p.installId}: ${p.refusal}`, affects(p))))) : []);
+  // A Retry with admin prompt click says the person is at this computer; Start updates still has to be pressed.
+  if (options.admin && $("allow-admin")) $("allow-admin").checked = true;
   refreshSubmit();
   $("confirm").showModal();
 }
