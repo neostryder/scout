@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-LIST-system---\norg.example.one\tOne\t1.0\tstable\tflathub\tsystem\tThe first app\norg.example.two\tTwo\t2.0\tstable\tflathub\tsystem\t\nexit=0\n---SCOUT-UPDATES-system---\nexit=0\n---SCOUT-LIST-user---\nexit=0\n---SCOUT-UPDATES-user---\nexit=0\n",
+    "stderr": ""
+  }
+}

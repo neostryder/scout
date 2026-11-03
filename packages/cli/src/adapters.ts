@@ -11,6 +11,8 @@ import { adapter as winwinget } from "@scout/adapter-winwinget";
 import { adapter as dockerimages } from "@scout/adapter-dockerimages";
 import { adapter as dpkg } from "@scout/adapter-dpkg";
 import { adapter as pacman } from "@scout/adapter-pacman";
+import { adapter as flatpak } from "@scout/adapter-flatpak";
+import { adapter as ostree } from "@scout/adapter-ostree";
 import { adapter as gitclone } from "@scout/adapter-gitclone";
 import { adapter as cogmodels } from "@scout/adapter-cogitator-models";
 import { wslAdapter, sbxAdapter } from "@scout/adapter-winguests";
@@ -49,6 +51,8 @@ export const ADAPTERS: Adapter[] = [
   noderuntime,
   dpkg,
   pacman,
+  flatpak,
+  ostree,
   gitclone,
   cogmodels,
 ];
@@ -59,7 +63,7 @@ export const PER_PREFIX = new Set(["brew", "cask"]);
 /** Adapters that read a guest: `host` ones run their CLI on the host and describe the guest, `linux` ones run inside it. */
 export const GUEST_ADAPTERS: { host: Adapter[]; linux: Adapter[] } = {
   host: [dockerimages],
-  linux: [dpkg, pacman],
+  linux: [dpkg, pacman, flatpak, ostree],
 };
 
 /** Sources whose CLI may start a background service when it is not already up. They run only while this process exists. */

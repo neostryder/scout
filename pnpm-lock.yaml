@@ -209,6 +209,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  adapters/flatpak:
+    dependencies:
+      '@scout/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   adapters/gitclone:
     dependencies:
       '@scout/core':
@@ -270,6 +276,12 @@ importers:
         version: link:../../packages/core
 
   adapters/npmglobal:
+    dependencies:
+      '@scout/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  adapters/ostree:
     dependencies:
       '@scout/core':
         specifier: workspace:*
@@ -370,6 +382,9 @@ importers:
       '@scout/adapter-dpkg':
         specifier: workspace:*
         version: link:../../adapters/dpkg
+      '@scout/adapter-flatpak':
+        specifier: workspace:*
+        version: link:../../adapters/flatpak
       '@scout/adapter-gitclone':
         specifier: workspace:*
         version: link:../../adapters/gitclone
@@ -403,6 +418,9 @@ importers:
       '@scout/adapter-npmglobal':
         specifier: workspace:*
         version: link:../../adapters/npmglobal
+      '@scout/adapter-ostree':
+        specifier: workspace:*
+        version: link:../../adapters/ostree
       '@scout/adapter-pacman':
         specifier: workspace:*
         version: link:../../adapters/pacman
