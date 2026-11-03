@@ -454,6 +454,18 @@ export async function runJob(db: Db, job: Job, deps: RunnerDeps, signal: AbortSi
     }
     const guarded = previewUpdate(db, job.installId, deps.machines, batchOptions());
     if (!recheck(guarded)) return;
+    if (plan.guard) {
+      // Fail closed: an unreadable answer stops the update the same way a busy machine does.
+      const checked = await exec(transport, plan.guard.argv, checkTimeout, signal, env);
+      if (signal.aborted) throw new Error("stopped by user");
+      if (checked.exitCode !== 0) {
+        const busy = checked.exitCode === plan.guard.busyExit;
+        recordStep(db, job.id, "game-check", "failed", busy ? plan.guard.busy : cleanOutput(`${checked.stdout}\n${checked.stderr}`) || `the check exited with code ${checked.exitCode}`);
+        fail(busy ? plan.guard.busy : "could not check whether a game is running, so nothing was updated; retry in a minute");
+        return;
+      }
+      recordStep(db, job.id, "game-check", "done", "no game is running");
+    }
     const windowsLocal = transport.type === "local" && !!db.prepare("SELECT 1 FROM machines WHERE id = ? AND os = 'windows'").get(job.machineId);
     const access = serviceAccess(exec, transport);
     const readServices = deps.readServices ?? access.read;

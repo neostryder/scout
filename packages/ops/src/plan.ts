@@ -5,6 +5,8 @@ export interface PlanMachine { transport: Transport }
 export interface UpdatePlan {
   allowed: boolean; refusal: string | null; command: string; argv: string[]; disruptive: boolean; needsAdmin: boolean;
   verify: { argv: string[]; parse: (stdout: string) => string | null };
+  /** Runs on the machine just before the update; the update waits while it exits with `busyExit`, and stops on any other failure. */
+  guard: { argv: string[]; busyExit: number; busy: string } | null;
 }
 
 const ID = /^(?:@?[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)?)$/;
@@ -15,7 +17,7 @@ const WINGET_EXTERNAL_UPDATES = new Map<string, { refusal: string; majorChangeOn
   ["ItchIo.Itch", { refusal: "itch updates itself when it runs, and winget cannot see the new version; open itch to update it." }],
   ["Audacity.Audacity", { refusal: "this version uses a different installer type; uninstall Audacity and install the new version.", majorChangeOnly: true }],
 ]);
-const HAS_UPDATER = new Set(["winget", "msstore", "brew", "cask", "npm", "pipx", "uv-tool", "pacman", "aur"]);
+const HAS_UPDATER = new Set(["winget", "msstore", "brew", "cask", "npm", "pipx", "uv-tool", "pacman", "aur", "flatpak"]);
 const majorVersion = (version: string | null | undefined): number | null => {
   const match = /^\d+/.exec(version ?? "");
   return match ? Number(match[0]) : null;
@@ -76,6 +78,11 @@ const parsePacman = (key: string, stdout: string): string | null => {
   const version = line ? line.slice(key.length + 1).trim() : "";
   return PACMAN_VERSION.test(version) ? version : null;
 };
+// Steam wraps every game it launches, in Game Mode and on the desktop alike, in a `reaper SteamLaunch AppId=<id>` process. The bracket keeps
+// pgrep from matching the shell that carries this very script. Exit 10 means a game is running, 0 means none, and 2 means pgrep is missing.
+export const GAME_GUARD = "command -v pgrep >/dev/null 2>&1 || exit 2; if pgrep -f '[S]teamLaunch AppId=[1-9]' >/dev/null 2>&1; then exit 10; fi; exit 0";
+export const GAME_BUSY = "a game is running on this machine; Scout does not update Flatpak apps while one is open. Try again after it closes";
+const parseFlatpak = (stdout: string): string | null => versionMatch(/^\s*Version:\s*(\S+)/m.exec(stdout)?.[1] ?? "");
 /** True when the kernel the machine is running was replaced by an update: its module folder is gone. */
 export const ARCH_NEEDS_REBOOT = "[ ! -d \"/usr/lib/modules/$(uname -r)\" ]";
 /** Schedules a restart two minutes out so the job can finish and be read back first; `shutdown -c` cancels it. */
@@ -91,6 +98,7 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
   let refusal: string | null = null;
   let argv: string[] = [];
   let verify: UpdatePlan["verify"] = { argv: [], parse: () => null };
+  let guard: UpdatePlan["guard"] = null;
   if (!machine) refusal = "machine is not configured";
   // An image reference such as ghcr.io/org/name has more path segments than ID allows, so say there is no updater rather than a bad id.
   else if (!HAS_UPDATER.has(install.ecosystem)) refusal = `Scout has no updater for ${install.ecosystem} installs`;
@@ -130,10 +138,18 @@ export function planUpdate(install: PlanInstall, target: string, machine: PlanMa
         argv = ["/bin/sh", "-c", ARCH_UPDATE];
         verify = { argv: ["pacman", "-Q", "--", key], parse: (s) => parsePacman(key, s) };
         break;
+      case "flatpak": {
+        // The scan records which installation holds the app: a system app is updated through sudo, a user app in the scanning account's own installation.
+        const scope = install.details?.installation === "user" ? "user" : "system";
+        argv = [...(scope === "system" ? ["sudo", "-n"] : []), "flatpak", "update", "-y", "--noninteractive", `--${scope}`, key];
+        verify = { argv: ["flatpak", "info", `--${scope}`, key], parse: parseFlatpak };
+        guard = { argv: ["/bin/sh", "-c", GAME_GUARD], busyExit: 10, busy: GAME_BUSY };
+        break;
+      }
       default: refusal = `Scout has no updater for ${install.ecosystem} installs`;
     }
   }
-  return { allowed: refusal === null, refusal, command: argv.join(" "), argv, disruptive, needsAdmin, verify };
+  return { allowed: refusal === null, refusal, command: argv.join(" "), argv, disruptive, needsAdmin, verify, guard };
 }
 
 /** The update command without the pinned version, so the package manager can pick the version it still offers. */
