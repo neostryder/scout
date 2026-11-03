@@ -4,6 +4,7 @@
 
 ### Added
 
+- [Visible] [Software] **Updates that failed on the Windows administrator prompt now have a Retry with admin prompt button beside Update.** The button opens the confirmation dialog with the administrator checkbox already ticked, and nothing runs until you press Start updates.
 - [Visible] [Software] **Scan results for Linux machines include Flatpak apps and the booted rpm-ostree image, and the Updates page shows newer versions of both.** Scout reads them without root and installs nothing on the machine. Scout has no updater for either kind, so their update rows are refused and you update them on the machine yourself.
 - [Visible] [Software] **An update now goes ahead when a version moved after the last scan.** Scout starts from the version that is installed, stops early if the target is already there, and switches to a newer target when the constraints allow it. After an App Installer update it waits for winget to answer, apps that update themselves finish as done with a note, an update cut off by a restart runs once more, and old failure messages on the Updates page now read in plain words.
 - [Visible] [Services] **Investigate can run a headless investigation.** With an `investigation` section in `fleet.json`, the hub runs the configured read-only diagnostics, asks an analyst command for the cause and a proposed fix, stores the finding on the incident, and posts it through the notifiers, subject to a daily limit, a cost cap, and an `investigation.off` kill switch file.

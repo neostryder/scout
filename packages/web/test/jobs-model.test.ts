@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-const { attentionText, elapsedText, isLive, jobProgress, jobSummary, stagesFor } = await import(new URL("../public/jobs-model.js", import.meta.url).href);
+const { attentionText, elapsedText, isLive, jobProgress, jobSummary, needsAdminRetry, stagesFor } = await import(new URL("../public/jobs-model.js", import.meta.url).href);
 
 const NOW = Date.parse("2026-10-22T12:01:23.000Z");
 const base = { id: 1, state: "running", action: "update", ecosystem: "winget", machineId: "eru", startedAt: "2026-10-22T12:00:00.000Z", steps: [{ seq: 1, name: "preflight", state: "done" }], phase: null, attention: null };
@@ -61,4 +61,13 @@ test("a job waiting on a person says so, by machine, and the summary leads with 
   assert.equal(attentionText(window), "The installer opened a window on eru: Setup Wizard (setup). It may be waiting for you.");
   assert.equal(jobSummary(window, NOW), "installer window open");
   assert.equal(attentionText(base), null);
+});
+
+test("a failed job that needed the administrator prompt can be retried with it", () => {
+  const failed = { ...base, state: "failed" };
+  assert.equal(needsAdminRetry({ ...failed, message: "the installer failed with MSI error 1603; it needs an administrator prompt or the app closed" }), true);
+  assert.equal(needsAdminRetry({ ...failed, message: "needs admin; Scout cannot elevate yet" }), true);
+  assert.equal(needsAdminRetry({ ...failed, message: "the app is running; close it and try again" }), false);
+  assert.equal(needsAdminRetry({ ...base, state: "running", message: "needs admin" }), false);
+  assert.equal(needsAdminRetry(null), false);
 });

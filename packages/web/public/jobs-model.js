@@ -55,6 +55,9 @@ export function jobProgress(job, now = Date.now()) {
   return { label: STAGE_TEXT[job.phase], stage: at + 1, stages: stages.length, elapsed, attention };
 }
 
+/** True when a failed job stopped for want of the Windows administrator prompt, so a retry at the computer can finish it. */
+export const needsAdminRetry = (job) => !!job && job.state === "failed" && /administrator prompt|needs admin/i.test(job.message || "");
+
 /** The one line a table row or tab title shows for a job. A failed job yields to the plan's current refusal, which says why the update cannot run now. */
 export function jobSummary(job, now = Date.now(), refusal = null) {
   if (!job) return "";
