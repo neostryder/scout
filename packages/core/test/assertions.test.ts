@@ -97,3 +97,16 @@ test("a pacman package is updatable only while the scan names a newer version fo
   assert.equal(deriveScanAssertions(db, LATER).assertions, 0);
   assert.equal(updatesView(db).length, 0);
 });
+
+test("a flatpak app is updatable only while the scan names a newer version for it", () => {
+  const db = openCatalog(":memory:");
+  upsertMachine(db, { id: "deck", name: "Deck", os: "linux", kind: "host" });
+  const firefox = (availableVersion?: string) => ({ ecosystem: "flatpak", key: "org.mozilla.firefox", name: "Firefox", kind: "app" as const, version: "150.0", location: "system", details: availableVersion ? { availableVersion } : {} });
+  recordScan(db, "deck", { sourceKind: "flatpak", location: "", status: "ok", installs: [firefox("159.0")] }, T);
+  assert.equal(deriveScanAssertions(db, T).assertions, 1);
+  const [row] = updatesView(db);
+  assert.deepEqual([row?.installed, row?.available, row?.availableSource, row?.updatable], ["150.0", "159.0", "flatpak-scan", true]);
+  recordScan(db, "deck", { sourceKind: "flatpak", location: "", status: "ok", installs: [firefox()] }, LATER);
+  assert.equal(deriveScanAssertions(db, LATER).assertions, 0);
+  assert.equal(updatesView(db).length, 0);
+});

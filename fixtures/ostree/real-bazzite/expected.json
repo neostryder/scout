@@ -1,0 +1,23 @@
+{
+  "sourceKind": "ostree",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "ostree",
+      "key": "ghcr.io/ublue-os/bazzite-deck-nvidia",
+      "name": "bazzite-deck-nvidia",
+      "kind": "image",
+      "version": "43.20260420",
+      "location": "",
+      "homepage": "https://bazzite.gg",
+      "details": {
+        "image": "ghcr.io/ublue-os/bazzite-deck-nvidia:stable",
+        "tag": "stable",
+        "digest": "sha256:5c69c75f571b87aa1e22f105d91381f58c4a890bd0030f482243c3b1e5a078db",
+        "staged": false,
+        "availableVersion": "44.20261026"
+      }
+    }
+  ]
+}

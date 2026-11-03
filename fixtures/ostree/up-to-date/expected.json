@@ -1,0 +1,22 @@
+{
+  "sourceKind": "ostree",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "ostree",
+      "key": "ghcr.io/ublue-os/bazzite",
+      "name": "bazzite",
+      "kind": "image",
+      "version": "43.20260420",
+      "location": "",
+      "homepage": "https://bazzite.gg",
+      "details": {
+        "image": "ghcr.io/ublue-os/bazzite:stable",
+        "tag": "stable",
+        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "staged": false
+      }
+    }
+  ]
+}

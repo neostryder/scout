@@ -1,0 +1,7 @@
+{
+  "list": {
+    "exitCode": 0,
+    "stdout": "---SCOUT-STATUS---\nState: idle\nDeployments:\n  ostree-image-signed:docker://ghcr.io/ublue-os/bazzite:stable\n                   Digest: sha256:1111111111111111111111111111111111111111111111111111111111111111\n                  Version: 44.20261026 (2026-10-26T20:14:43Z)\n\n* ostree-image-signed:docker://ghcr.io/ublue-os/bazzite:stable\n                   Digest: sha256:2222222222222222222222222222222222222222222222222222222222222222\n                  Version: 43.20260420 (2026-04-20T05:59:06Z)\nexit=0\n---SCOUT-REMOTE---\nexit=127\n",
+    "stderr": ""
+  }
+}

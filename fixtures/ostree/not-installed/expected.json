@@ -1,0 +1,7 @@
+{
+  "sourceKind": "ostree",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "rpm-ostree did not run (exit 127): rpm-ostree is not installed"
+}

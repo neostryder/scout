@@ -1,0 +1,34 @@
+{
+  "sourceKind": "flatpak",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "flatpak",
+      "key": "org.example.one",
+      "name": "One",
+      "kind": "app",
+      "version": "1.0",
+      "location": "system",
+      "description": "The first app",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.example.two",
+      "name": "Two",
+      "kind": "app",
+      "version": "2.0",
+      "location": "system",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system"
+      }
+    }
+  ]
+}

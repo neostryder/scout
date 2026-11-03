@@ -1,0 +1,22 @@
+{
+  "sourceKind": "flatpak",
+  "location": "",
+  "status": "partial",
+  "installs": [
+    {
+      "ecosystem": "flatpak",
+      "key": "org.example.one",
+      "name": "One",
+      "kind": "app",
+      "version": "1.0",
+      "location": "system",
+      "description": "The first app",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system"
+      }
+    }
+  ],
+  "message": "skipped 1 malformed line(s)"
+}

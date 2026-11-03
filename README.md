@@ -10,7 +10,7 @@ Scout builds an inventory of each machine from these sources:
 
 - Windows registry entries, winget packages, and Store apps
 - Homebrew formulae and casks, macOS app bundles, and pkgutil receipts
-- dpkg and pacman packages on Linux, with packages built from the AUR listed separately
+- dpkg and pacman packages, Flatpak apps, and the booted rpm-ostree image on Linux, with packages built from the AUR listed separately
 - npm globals, pipx and uv tools, and Go and other local binaries
 - Python and Node runtimes and container images
 - the contents of WSL and Docker Sandboxes guests
@@ -73,7 +73,7 @@ The hub and the full feature set target a Windows hub machine. Other machines ar
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |
 | How Scout reaches it | As the local hub machine | ssh | ssh (with zsh or bash installed) or local |
-| Installed software | Registry, winget, Store apps, npm, pipx, uv tools, Python and Node runtimes, WSL and Docker Sandboxes guests | Apps, Homebrew, casks, pkgutil, npm, pipx, uv tools, Go and local binaries, container images | dpkg, pacman, and AUR packages |
+| Installed software | Registry, winget, Store apps, npm, pipx, uv tools, Python and Node runtimes, WSL and Docker Sandboxes guests | Apps, Homebrew, casks, pkgutil, npm, pipx, uv tools, Go and local binaries, container images | dpkg, pacman, and AUR packages, plus Flatpak apps and rpm-ostree images |
 | Listeners and services | Listeners, services, scheduled tasks | Listeners, launchd jobs | Listeners, published container ports, systemd services (read-only) |
 | Usage signals | UserAssist, running processes | Spotlight, running processes | Running processes, file access times |
 | Updates | winget, Store, npm, pipx, uv | brew, cask, npm, pipx, uv | Not yet |
@@ -82,7 +82,7 @@ The hub and the full feature set target a Windows hub machine. Other machines ar
 | Launch recipes and stacks | Yes, on the hub machine | No | No |
 | Running the hub | Yes | Not the target platform | Not tested |
 
-Every platform also gets AI tool use counts, project files that pin tool versions, and dependency facts. On Linux, Scout reads listening TCP sockets with `ss` and also picks up the ports that Docker containers publish. Service units come from `systemctl show` and `systemctl list-unit-files`, so units that are installed but not loaded show up as well. The systemd reader does not need root. Scout lists packages from both dpkg and pacman, and it files any package that no sync database carries under the "aur" ecosystem. If a host has only one of the two package managers, Scout reports the missing one as skipped. Some gaps remain. Scout has no start, stop, restart, or disable control for systemd services on Linux. On Arch, Scout shows one "Arch system and apps" entry that upgrades the whole system together, because Arch does not allow partial upgrades; single pacman and AUR packages are not updated separately. Control of systemd services is the most wanted contribution.
+Every platform also gets AI tool use counts, project files that pin tool versions, and dependency facts. On Linux, Scout reads listening TCP sockets with `ss` and also picks up the ports that Docker containers publish. Service units come from `systemctl show` and `systemctl list-unit-files`, so units that are installed but not loaded show up as well. The systemd reader does not need root. Scout lists packages from both dpkg and pacman, and it files any package that no sync database carries under the "aur" ecosystem. If a host has only one of the two package managers, Scout reports the missing one as skipped. Scout also lists Flatpak apps from the system and user installations and the booted rpm-ostree image, which makes immutable Fedora systems such as Bazzite worth scanning. Both readers are read-only and need no root. Newer versions of both show on the Updates page, but Scout does not update either: you run `flatpak update` on the machine, and an image update replaces the operating system and needs a reboot that you start yourself. Some gaps remain. Scout has no start, stop, restart, or disable control for systemd services on Linux. On Arch, Scout shows one "Arch system and apps" entry that upgrades the whole system together, because Arch does not allow partial upgrades; single pacman and AUR packages are not updated separately. Control of systemd services is the most wanted contribution.
 
 ## Optional integrations
 

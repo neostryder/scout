@@ -1,0 +1,185 @@
+{
+  "sourceKind": "flatpak",
+  "location": "",
+  "status": "ok",
+  "installs": [
+    {
+      "ecosystem": "flatpak",
+      "key": "com.github.Matoking.protontricks",
+      "name": "Protontricks",
+      "kind": "app",
+      "version": "1.14.1",
+      "location": "system",
+      "description": "Apps and fixes for Proton games",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "1.15.0"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "com.github.tchx84.Flatseal",
+      "name": "Flatseal",
+      "kind": "app",
+      "version": "2.4.0",
+      "location": "system",
+      "description": "Manage Flatpak permissions",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "2.4.1"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "com.ranfdev.DistroShelf",
+      "name": "DistroShelf",
+      "kind": "app",
+      "version": "1.4.8",
+      "location": "system",
+      "description": "Graphical interface for managing Distrobox containers",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "1.5.2"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "com.vysp3r.ProtonPlus",
+      "name": "ProtonPlus",
+      "kind": "app",
+      "version": "0.5.20",
+      "location": "system",
+      "description": "A modern compatibility tools manager",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "0.6.8"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "io.github.flattool.Warehouse",
+      "name": "Warehouse",
+      "kind": "app",
+      "version": "2.2.0",
+      "location": "system",
+      "description": "Manage all things Flatpak",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "io.github.wivrn.wivrn",
+      "name": "WiVRn server",
+      "kind": "app",
+      "version": "26.9",
+      "location": "system",
+      "description": "Play your PC VR games on a standalone headset",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.kde.filelight",
+      "name": "Filelight",
+      "kind": "app",
+      "version": "26.04.0",
+      "location": "system",
+      "description": "Show disk usage and delete unused files",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "26.04.3"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.kde.gwenview",
+      "name": "Gwenview",
+      "kind": "app",
+      "version": "25.12.3",
+      "location": "system",
+      "description": "Image Viewer",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "26.04.3"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.kde.haruna",
+      "name": "Haruna",
+      "kind": "app",
+      "version": "1.7.1",
+      "location": "system",
+      "description": "Media player",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "1.9.0"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.kde.kcalc",
+      "name": "KCalc",
+      "kind": "app",
+      "version": "26.04.0",
+      "location": "system",
+      "description": "Scientific calculator",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "26.08.1"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.kde.okular",
+      "name": "Okular",
+      "kind": "app",
+      "version": "26.04.0",
+      "location": "system",
+      "description": "View and annotate documents",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "26.04.3"
+      }
+    },
+    {
+      "ecosystem": "flatpak",
+      "key": "org.mozilla.firefox",
+      "name": "Firefox",
+      "kind": "app",
+      "version": "150.0",
+      "location": "system",
+      "description": "Fast, Private & Safe Web Browser",
+      "details": {
+        "origin": "flathub",
+        "branch": "stable",
+        "installation": "system",
+        "availableVersion": "159.0"
+      }
+    }
+  ]
+}

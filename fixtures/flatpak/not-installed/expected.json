@@ -1,0 +1,7 @@
+{
+  "sourceKind": "flatpak",
+  "location": "",
+  "status": "skipped",
+  "installs": [],
+  "message": "flatpak did not run (exit 127): flatpak is not installed"
+}
