@@ -171,6 +171,14 @@ export function failure(exitCode: number, output: string, context?: FailureConte
   if (exitCode === (0x8A15002B | 0) || exitCode === (0x8A15008E | 0)) return "the new version uses a different installer type than the installed one; uninstall the package and install the newer version";
   if (exitCode === (0x8A150114 | 0)) return "winget cannot upgrade this package; use the publisher's own update method (for MSYS2, run pacman -Syu inside MSYS2)";
   if (exitCode === (0x8A150049 | 0) && /exit code:\s*1603\b/i.test(output)) return "the installer failed with MSI error 1603; it needs an administrator prompt or the app closed";
+  if (exitCode === (0x8A150030 | 0)) {
+    // winget removes the installed version first for some installers; the old uninstaller's own code is in the output.
+    const code = /uninstall failed with exit code:\s*(\d+)/i.exec(output)?.[1];
+    if (code === "1603") return "winget could not remove the installed version first (MSI error 1603); it needs an administrator prompt or the app closed";
+    return `winget could not remove the installed version first${code ? ` (the uninstaller exited with code ${code})` : ""}; close the app and try again`;
+  }
+  if (exitCode === (0x8A150011 | 0)) return "the downloaded installer did not match its published hash; try again later";
+  if (exitCode === (0x8A150008 | 0)) return "the installer download failed; check the connection and try again";
   if (context?.promptSeen && (DECLINED.has(exitCode) || /operation (?:was )?cancel|cancelled by|declined/i.test(output))) return "the Windows administrator prompt was declined";
   if (DECLINED.has(exitCode)) return "the installation was cancelled";
   if (IN_USE.has(exitCode)) return "the app is running; close it and try again";

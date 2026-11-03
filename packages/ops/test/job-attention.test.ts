@@ -129,6 +129,11 @@ test("failure words cover the documented winget codes and a stalled installer", 
   assert.equal(failure(-1978334974, "", ctx), "another installation is in progress; try again when it finishes");
   assert.equal(failure(-1978334967, "", ctx), "restart the computer to finish the update");
   assert.equal(failure(-1978335189, "", ctx), "the new version uses a different installer type than the installed one; uninstall the package and install the newer version");
+  assert.equal(failure(2316632112, "Starting package uninstall...\nUninstall failed with exit code: 1603\n", ctx), "winget could not remove the installed version first (MSI error 1603); it needs an administrator prompt or the app closed");
+  assert.equal(failure(0x8A150030 | 0, "Uninstall failed with exit code: 1618", ctx), "winget could not remove the installed version first (the uninstaller exited with code 1618); close the app and try again");
+  assert.equal(failure(0x8A150030, "", ctx), "winget could not remove the installed version first; close the app and try again");
+  assert.equal(failure(0x8A150011, "", ctx), "the downloaded installer did not match its published hash; try again later");
+  assert.equal(failure(0x8A150008, "", ctx), "the installer download failed; check the connection and try again");
   assert.equal(failure(-1, "", ctx), "did not finish in 20 minutes");
   assert.equal(failure(-1, "", { ...ctx, windowSeen: true }), "did not finish in 20 minutes; the installer opened a window and may have been waiting for you");
   assert.equal(failure(5, "", ctx), "command exited with code 5");
