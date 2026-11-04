@@ -690,7 +690,8 @@ CREATE TABLE IF NOT EXISTS fleet_incidents (
   muted INTEGER NOT NULL DEFAULT 0,
   last_notified_at TEXT,
   notify_count INTEGER NOT NULL DEFAULT 0,
-  flap_count INTEGER NOT NULL DEFAULT 0
+  flap_count INTEGER NOT NULL DEFAULT 0,
+  clean_checks INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS fleet_incidents_state ON fleet_incidents(state, last_seen);
 

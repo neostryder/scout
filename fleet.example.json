@@ -7,8 +7,19 @@
     "escalateEveryMinutes": 120,
     "flapReopens": 3,
     "flapWindowMinutes": 60,
-    "flapQuietMinutes": 60
+    "flapQuietMinutes": 60,
+    "resolveAfterCleanChecks": 3,
+    "maxNoticesPerDay": 6
   },
+  "components": [
+    {
+      "host": "desktop",
+      "component": "backup",
+      "description": "The nightly backup of the documents folder.",
+      "falseAlarm": "the machine was asleep at the scheduled time and the job ran a few minutes later",
+      "nextStep": "Open the backup log and check the last line for an error."
+    }
+  ],
   "expected": [
     { "host": "desktop", "component": "backup", "everyMinutes": 1440, "graceMinutes": 30, "since": "2026-01-01T00:00:00.000Z" }
   ],

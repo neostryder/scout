@@ -185,6 +185,7 @@ test("an open critical escalates from the sweep and a fresh heartbeat resolves a
     writeFileSync(path, JSON.stringify({
       expected: [{ host: "desktop", component: "backup", everyMinutes: 10, graceMinutes: 1, since: "2026-10-31T00:00:00.000Z" }],
       notifiers: [{ type: "desktop" }],
+      policy: { resolveAfterCleanChecks: 1 },
     }));
     const titles: string[] = [];
     let now = new Date("2026-10-31T18:00:00.000Z");

@@ -1,5 +1,5 @@
 import { open, stat, statfs } from "node:fs/promises";
-import { localPackets, parsePacket, reconcileCatalog, redact, redactPacket, windowsEventQuery, type Db, type IncidentPacket, type LocalObservation } from "@scout/core";
+import { incidentIsOpen, localPackets, parsePacket, reconcileCatalog, redact, redactPacket, windowsEventQuery, type Db, type IncidentPacket, type LocalObservation } from "@scout/core";
 import { runCommandCapture, type FleetService, type FleetServiceOptions, type TimerHandle } from "./fleet.ts";
 
 export interface FleetLocalOptions {
@@ -131,7 +131,7 @@ export class FleetLocalSource {
         if (safe.evidence.stderrTail !== undefined) safe.evidence.stderrTail = safe.evidence.stderrTail.slice(0, 1500);
         return safe;
       });
-      const { send, next } = reconcileCatalog(previous, current, now);
+      const { send, next } = reconcileCatalog(previous, current, now, (key) => incidentIsOpen(this.db, key));
       if (send.length > 0) {
         const result = await this.fleet.accept(send);
         if (result.rejected.length > 0) throw new Error("local source packets were rejected");

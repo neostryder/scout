@@ -62,6 +62,46 @@ test("the example fleet file loads with no embedded address", () => {
   assert.equal(file.ingestTokenEnv, "SCOUT_FLEET_INGEST_TOKEN");
   assert.equal(file.notifiers.some((row) => row.type === "webhook" && row.urlEnv === "SCOUT_FLEET_WEBHOOK_URL"), true);
   assert.equal(file.expected[0]?.host, "desktop");
+  assert.equal(file.policy?.resolveAfterCleanChecks, 3);
+  assert.equal(file.policy?.maxNoticesPerDay, 6);
+  assert.equal(file.components?.[0]?.component, "backup");
+});
+
+test("component notes and the clean-check and daily-cap policy are validated", () => {
+  const dir = mkdtempSync(join(root, "scout-fleet-notes-"));
+  try {
+    const path = join(dir, "fleet.json");
+    const load = (value: unknown) => {
+      writeFileSync(path, JSON.stringify(value), "utf8");
+      return loadFleetConfig(path);
+    };
+    const good = load({ policy: { resolveAfterCleanChecks: 5, maxNoticesPerDay: 2 }, components: [{ host: "eru", component: "*", description: "A service on Eru.", nextStep: "Restart it." }] });
+    assert.equal(good.fileError, null);
+    assert.equal(good.policy?.resolveAfterCleanChecks, 5);
+    assert.equal(good.policy?.maxNoticesPerDay, 2);
+    assert.deepEqual(good.components, [{ host: "eru", component: "*", description: "A service on Eru.", nextStep: "Restart it." }]);
+    assert.deepEqual(loadFleetConfig(join(dir, "absent.json")).components, []);
+    assert.deepEqual(load({}).components, []);
+    for (const bad of [
+      { components: "backup" },
+      { components: [{ host: "eru", component: "x" }] },
+      { components: [{ host: "eru", component: "x", description: "" }] },
+      { components: [{ host: "eru", component: "x", description: "ok", color: "red" }] },
+      { components: [{ host: "eru", component: "x", description: "line\nbreak" }] },
+      { components: [{ host: "eru", component: "x", description: "y".repeat(601) }] },
+      { components: [{ host: "eru", component: "x", description: "ok", nextStep: 4 }] },
+      { components: Array.from({ length: 201 }, (_, index) => ({ host: "eru", component: `c${index}`, description: "ok" })) },
+      { policy: { resolveAfterCleanChecks: 0 } },
+      { policy: { resolveAfterCleanChecks: 1.5 } },
+      { policy: { maxNoticesPerDay: -1 } },
+    ]) {
+      const broken = load(bad);
+      assert.ok(broken.fileError, JSON.stringify(bad).slice(0, 80));
+      assert.deepEqual(broken.components, []);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("catalog source config is optional and validates flags, ages, and regex lists", () => {

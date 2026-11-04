@@ -1,4 +1,4 @@
-import { parsePacket, reconcileCatalog, redact, redactPacket, fingerprint, remotePackets, remoteUnreachable, runArgv, type Db, type Exec, type IncidentPacket, type RemoteObservation, type Transport } from "@scout/core";
+import { incidentIsOpen, parsePacket, reconcileCatalog, redact, redactPacket, fingerprint, remotePackets, remoteUnreachable, runArgv, type Db, type Exec, type IncidentPacket, type RemoteObservation, type Transport } from "@scout/core";
 import type { FleetService, TimerHandle } from "./fleet.ts";
 
 export interface FleetRemoteOptions {
@@ -106,13 +106,19 @@ export class FleetRemoteSource {
         return safe;
       });
       // A check that could not run says nothing about its incident, so an open one is carried forward instead of recovering.
+      const held = new Set<string>();
       for (const [index, observation] of observations.entries()) {
         if (observation?.kind !== "result" || !remoteUnreachable(observation.result)) continue;
         const entry = config.checks[index]!;
         const prior = previous.get(fingerprint(entry.machine, entry.component, entry.failureClass));
-        if (prior && !current.some((item) => item.fingerprint === prior.fingerprint)) current.push(prior);
+        if (!prior || current.some((item) => item.fingerprint === prior.fingerprint)) continue;
+        // A recovery in progress is paused rather than counted: a check that could not run is not a clean check.
+        if (prior.recovered) held.add(prior.fingerprint);
+        else current.push(prior);
       }
-      const { send, next } = reconcileCatalog(previous, current, now);
+      const reconciled = reconcileCatalog(previous, current, now, (key) => incidentIsOpen(this.db, key));
+      const next = reconciled.next;
+      const send = reconciled.send.filter((item) => !held.has(item.fingerprint));
       if (send.length > 0) {
         const result = await this.fleet.accept(send);
         if (result.rejected.length > 0) throw new Error("remote source packets were rejected");

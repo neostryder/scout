@@ -201,7 +201,7 @@ export function createMockHub(options: { noModels?: boolean; controlOff?: boolea
     if (row.state === "acknowledged") acknowledge(fleetDb, incident.id, lastSeen);
     if (row.state === "snoozed") snooze(fleetDb, incident.id, new Date(Date.now() + 3_600_000).toISOString(), lastSeen);
     if (row.state === "muted") muteRule(fleetDb, `${row.host}/${row.component}/${row.failureClass}`, "Known warning after resume", lastSeen);
-    if (row.state === "resolved") ingest(fleetDb, { ...packet, recovered: true }, lastSeen);
+    if (row.state === "resolved") ingest(fleetDb, { ...packet, recovered: true }, lastSeen, { resolveAfterCleanChecks: 1 });
   }
   const mockInvestigations = new Map<string, MockInvestigation>();
   const mockInvestigationTimers = new Set<ReturnType<typeof setTimeout>>();

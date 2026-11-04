@@ -36,6 +36,7 @@ export function openCatalog(path: string, options: { busyTimeoutMs?: number } = 
   db.exec(SCHEMA_SQL);
   migrateCompetitors(db);
   migrateCandidates(db);
+  addMissingColumns(db, "fleet_incidents", ["clean_checks INTEGER NOT NULL DEFAULT 0"]);
   const descriptionColumns = db.prepare("PRAGMA table_info(descriptions)").all() as { name: string }[];
   if (!descriptionColumns.some((column) => column.name === "input_hash")) db.exec("ALTER TABLE descriptions ADD COLUMN input_hash TEXT");
   // An existing catalog gains the index here; index its rows once.

@@ -54,6 +54,11 @@ test("invalid fleet config logs each detail once, opens one incident, and recove
   assert.equal(logs.length, 2);
   write("{}");
   service.tick();
+  service.tick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(incidentByFingerprint(db, key)?.state, "open");
+  assert.equal(incidentByFingerprint(db, key)?.cleanChecks, 2);
+  service.tick();
   await new Promise((resolve) => setImmediate(resolve));
   const recovered = incidentByFingerprint(db, key)!;
   assert.equal(recovered.id, incident.id);
@@ -81,7 +86,7 @@ test("a clean fleet file recovers a config incident retained across service rest
   service.stop();
   writeFileSync(path, "{}");
   const restarted = new FleetService(db, { configPath: path, now: () => new Date(T) });
-  restarted.tick();
+  for (let check = 0; check < 3; check++) restarted.tick();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(restarted.incidents({ state: "open" }).length, 0);
   assert.equal(restarted.incidents({ state: "resolved" })[0]?.component, "fleet config");

@@ -112,11 +112,20 @@ export function catalogPackets(rows: readonly CatalogServiceRow[], scope: Catalo
   return packets;
 }
 
-export function reconcileCatalog(previous: ReadonlyMap<string, IncidentPacket>, current: readonly IncidentPacket[], now: string): { send: IncidentPacket[]; next: Map<string, IncidentPacket> } {
+/**
+ * Compares the last sweep with this one. A failure that is gone is sent as recovered. With `stillOpen`, the recovery is
+ * repeated every sweep until the incident resolves (it needs several clean checks), then dropped; without it, once.
+ */
+export function reconcileCatalog(previous: ReadonlyMap<string, IncidentPacket>, current: readonly IncidentPacket[], now: string, stillOpen?: (fingerprint: string) => boolean): { send: IncidentPacket[]; next: Map<string, IncidentPacket> } {
   const next = new Map(current.map((item) => [item.fingerprint, item]));
   const send = [...current];
   for (const [key, item] of previous) {
-    if (!next.has(key)) send.push({ ...item, recovered: true, lastSeen: now, summary: "recovered" });
+    if (next.has(key)) continue;
+    const open = stillOpen ? stillOpen(key) : false;
+    if (item.recovered && stillOpen && !open) continue;
+    const recovery = { ...item, recovered: true, lastSeen: now, summary: "recovered" };
+    send.push(recovery);
+    if (open) next.set(key, recovery);
   }
   return { send, next };
 }
