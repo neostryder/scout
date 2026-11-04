@@ -335,7 +335,7 @@ test("a heal request inside the cooldown and on a closed incident skips the heal
   assert.equal(cooled.service.incident(incident.id)?.investigation?.heal, "skipped: cooldown or daily limit");
   const closed = setup(t, { analyst: [{ stdout: "{\"final\":true,\"cause\":\"the service is down\",\"heal\":true}" }] });
   const other = closed.open({ host: "desktop", component: "backup", failureClass: "dead" });
-  ingest(closed.db, packet({ host: "desktop", component: "backup", failureClass: "dead", recovered: true }), T);
+  ingest(closed.db, packet({ host: "desktop", component: "backup", failureClass: "dead", recovered: true }), T, { resolveAfterCleanChecks: 1 });
   assert.equal(closed.service.incidents({}).find((row) => row.id === other.id)?.state, "resolved");
   await closed.service.handleAction(other.id, "investigate");
   await closed.service.settled();

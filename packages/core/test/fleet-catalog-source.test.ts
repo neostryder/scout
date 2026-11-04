@@ -201,3 +201,27 @@ test("reconciliation sends recovery once and never recovers an unreported failur
   assert.deepEqual(reconcileCatalog(recovery.next, [], now).send, []);
   assert.deepEqual(reconcileCatalog(new Map(), [], now).send, []);
 });
+
+test("with an open-check, a recovery repeats every sweep until the incident resolves, then stops", () => {
+  const failures = catalogPackets([row], DEFAULT_CATALOG_SCOPE, T);
+  const key = failures[0]!.fingerprint;
+  let open = true;
+  const stillOpen = (fingerprint: string) => fingerprint === key && open;
+  const first = reconcileCatalog(new Map(), failures, T, stillOpen);
+  const at = (minutes: number) => new Date(Date.parse(T) + minutes * 60_000).toISOString();
+  const one = reconcileCatalog(first.next, [], at(1), stillOpen);
+  assert.equal(one.send.length, 1);
+  assert.equal(one.send[0]?.recovered, true);
+  assert.equal(one.next.size, 1);
+  const two = reconcileCatalog(one.next, [], at(2), stillOpen);
+  assert.equal(two.send.length, 1);
+  assert.equal(two.next.size, 1);
+  open = false;
+  const done = reconcileCatalog(two.next, [], at(3), stillOpen);
+  assert.deepEqual(done.send, []);
+  assert.equal(done.next.size, 0);
+  open = true;
+  const back = reconcileCatalog(two.next, failures, at(3), stillOpen);
+  assert.deepEqual(back.send, failures);
+  assert.equal(back.next.get(key)?.recovered, undefined);
+});

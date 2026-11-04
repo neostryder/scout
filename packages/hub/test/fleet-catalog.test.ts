@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openCatalog, type FleetCatalogConfig, type FleetFile, type IncidentPacket } from "@scout/core";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { incidentById, openCatalog, type FleetCatalogConfig, type FleetFile, type IncidentPacket } from "@scout/core";
 import { FleetCatalogSource } from "../src/fleet-catalog.ts";
-import type { FleetService } from "../src/fleet.ts";
+import { FleetService } from "../src/fleet.ts";
 
 const T = "2026-10-31T18:00:00.000Z";
 
@@ -228,4 +231,30 @@ test("start and stop manage one injected timer with the default or supplied inte
   assert.deepEqual(intervals, [120_000, 1000]);
   custom.stop();
   assert.equal(stops, 2);
+});
+
+test("a catalog failure that clears resolves only after the configured clean sweeps, through a real fleet service", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "scout-fleet-catalog-"));
+  const f = fixture({ enabled: true });
+  const configPath = join(dir, "fleet.json");
+  writeFileSync(configPath, JSON.stringify({ sources: { catalog: { enabled: true } }, policy: { resolveAfterCleanChecks: 3 } }));
+  const service = new FleetService(f.db, { configPath, now: () => new Date(T), every: () => ({ stop() { /* ticks are called directly */ } }), run: async () => ({ code: 0, error: null }) });
+  t.after(() => { service.stop(); f.db.close(); rmSync(dir, { recursive: true, force: true }); });
+  const source = new FleetCatalogSource(f.db, service, f.options);
+  await source.tick();
+  const [opened] = service.incidents({});
+  assert.equal(opened?.state, "open");
+  f.db.prepare("UPDATE services SET last_result = '0'").run();
+  await source.tick();
+  await source.tick();
+  assert.equal(service.incidents({})[0]?.state, "open");
+  assert.equal(incidentById(f.db, opened!.id)?.cleanChecks, 2);
+  await source.tick();
+  assert.equal(service.incidents({})[0]?.state, "resolved");
+  const events = () => (f.db.prepare("SELECT COUNT(*) AS n FROM fleet_events WHERE incident_id = ?").get(opened!.id) as { n: number }).n;
+  const before = events();
+  await source.tick();
+  await source.tick();
+  assert.equal(events(), before);
+  assert.equal((f.db.prepare("SELECT value FROM meta WHERE key = 'fleet_catalog_state'").get() as { value: string }).value, "[]");
 });

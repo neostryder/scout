@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import type { ExpectedRun } from "./fleet-expected.ts";
+import type { ComponentNote } from "./fleet-explain.ts";
 import type { FleetIncident, FleetPolicy } from "./fleet-incidents.ts";
 import { investigationConfig, type FleetInvestigationConfig } from "./fleet-investigation.ts";
 import { FAILURE_CLASSES, SEVERITIES, type FailureClass, type IncidentPacket, type Severity } from "./fleet-packet.ts";
@@ -10,7 +11,7 @@ export interface FleetNotice {
   body: string;
   severity: Severity;
   incidentId: number | null;
-  kind: "incident" | "recovered" | "escalation" | "digest" | "flapping" | "healed" | "heal-failed" | "investigation";
+  kind: "incident" | "recovered" | "escalation" | "digest" | "flapping" | "capped" | "healed" | "heal-failed" | "investigation";
   actions: { id: "investigate" | "snooze" | "mute"; label: string }[];
 }
 
@@ -138,6 +139,8 @@ export interface FleetFile {
   triage: FleetCommandHook | null;
   healers: FleetHealerConfig[];
   expected: ExpectedRun[];
+  /** Per-component descriptions that make a notice say what the component is and what usually causes a false alarm. */
+  components?: ComponentNote[];
   ingestTokenEnv: string | null;
   digestTimes: string[];
   fileError: string | null;
@@ -153,6 +156,7 @@ const EMPTY: FleetFile = {
   triage: null,
   healers: [],
   expected: [],
+  components: [],
   ingestTokenEnv: null,
   digestTimes: ["08:00", "18:00"],
   fileError: null,
@@ -166,7 +170,7 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SECRET_FIELDS = new Set(["url", "token", "webhook", "authorization", "secret", "password"]);
 
 function broken(detail: string): FleetFile {
-  return { ...EMPTY, notifiers: [], healers: [], expected: [], digestTimes: ["08:00", "18:00"], fileError: FILE_ERROR, fileErrorDetail: detail };
+  return { ...EMPTY, notifiers: [], healers: [], expected: [], components: [], digestTimes: ["08:00", "18:00"], fileError: FILE_ERROR, fileErrorDetail: detail };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -189,7 +193,7 @@ function hook(value: unknown): FleetCommandHook | null {
 function policy(value: unknown): Partial<FleetPolicy> | null {
   if (value === undefined) return null;
   if (!isRecord(value)) return null;
-  const allowed = new Set(["quietHours", "escalateAfterMinutes", "escalateEveryMinutes", "flapReopens", "flapWindowMinutes", "flapQuietMinutes"]);
+  const allowed = new Set(["quietHours", "escalateAfterMinutes", "escalateEveryMinutes", "flapReopens", "flapWindowMinutes", "flapQuietMinutes", "resolveAfterCleanChecks", "maxNoticesPerDay"]);
   for (const key of Object.keys(value)) if (!allowed.has(key)) return null;
   const result: Partial<FleetPolicy> = {};
   if (value.quietHours !== undefined) {
@@ -199,13 +203,27 @@ function policy(value: unknown): Partial<FleetPolicy> | null {
     if (typeof timezone !== "string" || (timezone !== "local" && !TZ.test(timezone))) return null;
     result.quietHours = { start, end, timezone };
   }
-  for (const key of ["escalateAfterMinutes", "escalateEveryMinutes", "flapReopens", "flapWindowMinutes", "flapQuietMinutes"] as const) {
+  for (const key of ["escalateAfterMinutes", "escalateEveryMinutes", "flapReopens", "flapWindowMinutes", "flapQuietMinutes", "resolveAfterCleanChecks", "maxNoticesPerDay"] as const) {
     if (value[key] === undefined) continue;
     const number = value[key];
     if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1 || number > 100_000) return null;
     result[key] = number;
   }
   return result;
+}
+
+function componentNote(value: unknown): ComponentNote | null {
+  if (!isRecord(value)) return null;
+  if (Object.keys(value).some((key) => !["host", "component", "description", "falseAlarm", "nextStep"].includes(key))) return null;
+  const text = (item: unknown, max: number): item is string => typeof item === "string" && item.trim().length > 0 && item.length <= max && !/[\x00-\x1f\x7f-\x9f]/.test(item);
+  if (!text(value.host, 200) || !text(value.component, 200) || !text(value.description, 600)) return null;
+  const note: ComponentNote = { host: value.host, component: value.component, description: value.description };
+  for (const key of ["falseAlarm", "nextStep"] as const) {
+    if (value[key] === undefined) continue;
+    if (!text(value[key], 600)) return null;
+    note[key] = value[key];
+  }
+  return note;
 }
 
 function notifier(value: unknown, index: number, env: (name: string) => string | undefined): FleetNotifierConfig | null {
@@ -439,7 +457,7 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
   try {
     text = readFileSync(path, "utf8");
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { ...EMPTY, notifiers: [], healers: [], expected: [], digestTimes: ["08:00", "18:00"] } : broken("the file could not be read");
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { ...EMPTY, notifiers: [], healers: [], expected: [], components: [], digestTimes: ["08:00", "18:00"] } : broken("the file could not be read");
   }
   let data: unknown;
   try {
@@ -454,7 +472,7 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
   try {
     if (!isRecord(data)) return invalid();
     if (Object.keys(data).some((key) => SECRET_FIELDS.has(key))) return invalid();
-    const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources", "investigation"]);
+    const allowed = new Set(["policy", "notifiers", "investigator", "triage", "healers", "expected", "ingestTokenEnv", "digestTimes", "sources", "investigation", "components"]);
     if (Object.keys(data).some((key) => !allowed.has(key))) return invalid();
     let sources: FleetFile["sources"];
     if (data.sources !== undefined) {
@@ -553,7 +571,17 @@ export function loadFleetConfig(path: string, env: (name: string) => string | un
       if (!Array.isArray(data.digestTimes) || data.digestTimes.length === 0 || data.digestTimes.length > 24 || data.digestTimes.some((item) => typeof item !== "string" || !HM.test(item))) return invalid();
       digestTimes = data.digestTimes as string[];
     }
-    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, ingestTokenEnv, digestTimes, fileError: null, fileErrorDetail: null, ...(sources ? { sources } : {}), ...(investigation ? { investigation } : {}) };
+    const components: ComponentNote[] = [];
+    if (data.components !== undefined) {
+      section = "components";
+      if (!Array.isArray(data.components) || data.components.length > 200) return invalid();
+      for (const row of data.components) {
+        const note = componentNote(row);
+        if (!note) return invalid();
+        components.push(note);
+      }
+    }
+    return { policy: parsedPolicy, notifiers, investigator, triage, healers, expected, components, ingestTokenEnv, digestTimes, fileError: null, fileErrorDetail: null, ...(sources ? { sources } : {}), ...(investigation ? { investigation } : {}) };
   } catch {
     return invalid();
   }

@@ -13,6 +13,7 @@ import {
   discardInvestigation,
   expectedKey,
   expectedPackets,
+  explainIncident,
   fingerprint,
   finishInvestigation,
   heartbeatMetaKey,
@@ -1005,7 +1006,7 @@ export class FleetService {
   private digestOutbound(built: ReturnType<typeof digest>): Outbound[] {
     if (built.groups.length === 0) return [];
     const lines = built.groups.map((group) => {
-      const items = group.incidents.map((incident) => `- ${incident.component}: ${incident.summary}`).join("\n");
+      const items = group.incidents.map((incident) => `- ${incident.component}: ${incident.summary}${incident.state === "resolved" ? " (recovered)" : ""}`).join("\n");
       return `${group.host} (${group.count})\n${items}`;
     });
     let severity: Severity = "info";
@@ -1025,13 +1026,15 @@ export class FleetService {
     if (decision.kind === "digest") return null;
     if (decision.kind === "suppressed" && decision.reason !== "flapping") return null;
     const incident = decision.incident;
-    const kind = decision.kind === "notify-now" ? "incident" : decision.kind === "escalate" ? "escalation" : decision.kind === "recovered" ? "recovered" : "flapping";
+    const kind = decision.kind === "notify-now" ? "incident" : decision.kind === "escalate" ? "escalation" : decision.kind === "recovered" ? "recovered" : decision.kind === "capped" ? "capped" : "flapping";
     const prefix = kind === "incident" ? incident.severity : kind === "escalation" ? "escalate" : kind;
+    const file = this.config();
+    const body = explainIncident({ db: this.db, incident, now: this.now().toISOString(), notes: file.components ?? [], policy: resolvePolicy(file.policy), kind });
     return {
       incidentId: incident.id,
       notice: {
         title: `${prefix}: ${incident.host} ${incident.component}`.slice(0, 200),
-        body: incident.summary,
+        body,
         severity: incident.severity,
         incidentId: incident.id,
         kind,

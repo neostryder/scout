@@ -1,4 +1,4 @@
-import { DEFAULT_CATALOG_SCOPE, catalogPackets, parsePacket, reconcileCatalog, type CatalogServiceRow, type CatalogSourceScope, type Db, type FleetCatalogConfig, type IncidentPacket } from "@scout/core";
+import { DEFAULT_CATALOG_SCOPE, catalogPackets, incidentIsOpen, parsePacket, reconcileCatalog, type CatalogServiceRow, type CatalogSourceScope, type Db, type FleetCatalogConfig, type IncidentPacket } from "@scout/core";
 import type { FleetService, TimerHandle } from "./fleet.ts";
 
 export interface FleetCatalogOptions {
@@ -92,7 +92,7 @@ export class FleetCatalogSource {
         }
       }
       const now = this.now().toISOString();
-      const { send, next } = reconcileCatalog(previous, catalogPackets(services, scopeFor(config), now), now);
+      const { send, next } = reconcileCatalog(previous, catalogPackets(services, scopeFor(config), now), now, (key) => incidentIsOpen(this.db, key));
       if (send.length > 0) {
         const result = await this.fleet.accept(send);
         if (result.rejected.length > 0) throw new Error("catalog source packets were rejected");

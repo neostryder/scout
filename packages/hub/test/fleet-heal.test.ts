@@ -24,7 +24,7 @@ function packet(overrides: Partial<IncidentPacket> = {}): IncidentPacket {
 function setup(t: TestContext, options: { healers?: unknown[]; runCapture?: FleetServiceOptions["runCapture"]; run?: FleetServiceOptions["run"] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "scout-fleet-heal-"));
   const configPath = join(dir, "fleet.json");
-  writeFileSync(configPath, JSON.stringify({ healers: options.healers ?? [healer], policy: { escalateAfterMinutes: 1, escalateEveryMinutes: 1 }, digestTimes: ["03:33"], notifiers: [{ type: "command", command: ["notify"] }] }));
+  writeFileSync(configPath, JSON.stringify({ healers: options.healers ?? [healer], policy: { escalateAfterMinutes: 1, escalateEveryMinutes: 1, resolveAfterCleanChecks: 1 }, digestTimes: ["03:33"], notifiers: [{ type: "command", command: ["notify"] }] }));
   const db = openCatalog(":memory:");
   let now = new Date(T);
   const notices: FleetNotice[] = [];
@@ -84,7 +84,7 @@ test("digest, recovered and suppressed decisions never heal", async (t) => {
   await drain();
   assert.equal(app.calls.length, 0);
   assert.equal(app.events("heal-start").length, 0);
-  assert.equal(app.notices[0]?.kind, "recovered");
+  assert.equal(app.notices.length, 0);
   const muted = setup(t);
   muted.db.prepare("INSERT INTO fleet_rules (rule_key, reason, muted_at) VALUES (?, ?, ?)").run("desktop/backup/dead", "muted", T);
   await muted.service.accept([packet()]);

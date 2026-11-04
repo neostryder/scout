@@ -9,6 +9,8 @@ import { SCHEMA_SQL, SCHEMA_VERSION, acknowledge, digest, fingerprint, heartbeat
 const T = "2026-10-31T18:00:00.000Z";
 const QUIET = "2026-10-31T12:00:00.000Z";
 const MIN = 60_000;
+/** The earlier tests predate the clean-check count, so they resolve on the first clean check. */
+const ONE = { resolveAfterCleanChecks: 1 };
 
 function plus(iso: string, ms: number): string {
   return new Date(Date.parse(iso) + ms).toISOString();
@@ -59,7 +61,7 @@ test("ingest routes critical, quiet hours, recovery, repeats, snooze and mute", 
     assert.equal(warning[0]?.kind, "digest");
     assert.equal(warning[0]?.reason, "warning");
 
-    const recovered = ingest(db, packet({ failureClass: "dead", severity: "critical", recovered: true }), plus(T, 2 * MIN));
+    const recovered = ingest(db, packet({ failureClass: "dead", severity: "critical", recovered: true }), plus(T, 2 * MIN), ONE);
     assert.equal(recovered[0]?.kind, "recovered");
     assert.equal(recovered[0]?.incident.state, "resolved");
 
@@ -71,8 +73,9 @@ test("ingest routes critical, quiet hours, recovery, repeats, snooze and mute", 
 
     const fresh = ingest(db, packet({ host: "other", component: "clock", failureClass: "slow-or-timeout" }), T);
     snooze(db, fresh[0]!.incident.id, plus(T, 30 * MIN), T);
-    const resolved = ingest(db, packet({ host: "other", component: "clock", failureClass: "slow-or-timeout", recovered: true }), plus(T, MIN));
-    assert.equal(resolved[0]?.kind, "recovered");
+    const resolved = ingest(db, packet({ host: "other", component: "clock", failureClass: "slow-or-timeout", recovered: true }), plus(T, MIN), ONE);
+    assert.equal(resolved[0]?.kind, "digest");
+    assert.equal(resolved[0]?.reason, "recovered");
     const snoozed = ingest(db, packet({ host: "other", component: "clock", failureClass: "slow-or-timeout" }), plus(T, 2 * MIN));
     assert.equal(snoozed[0]?.kind, "suppressed");
     assert.equal(snoozed[0]?.reason, "snoozed");
@@ -97,7 +100,7 @@ test("flap suppression latches on the third reopen inside 60 minutes and clears 
   const db = openCatalog(":memory:");
   try {
     const fail = (at: string) => ingest(db, packet(), at);
-    const recover = (at: string) => ingest(db, packet({ recovered: true }), at);
+    const recover = (at: string) => ingest(db, packet({ recovered: true }), at, ONE);
     fail(plus(T, -MIN));
     recover(plus(T, -30_000));
     assert.equal(fail(T)[0]?.kind, "digest");
@@ -121,11 +124,11 @@ test("a reopen one millisecond outside the window does not latch", () => {
   const db = openCatalog(":memory:");
   try {
     ingest(db, packet(), plus(T, -MIN));
-    ingest(db, packet({ recovered: true }), plus(T, -30_000));
+    ingest(db, packet({ recovered: true }), plus(T, -30_000), ONE);
     ingest(db, packet(), T);
-    ingest(db, packet({ recovered: true }), plus(T, MIN));
+    ingest(db, packet({ recovered: true }), plus(T, MIN), ONE);
     ingest(db, packet(), plus(T, 30 * MIN));
-    ingest(db, packet({ recovered: true }), plus(T, 31 * MIN));
+    ingest(db, packet({ recovered: true }), plus(T, 31 * MIN), ONE);
     const outside = ingest(db, packet(), plus(T, 60 * MIN + 1));
     assert.equal(outside[0]?.kind, "digest");
     assert.notEqual(outside[0]?.reason, "flapping");
@@ -209,5 +212,69 @@ test("a version 3 catalog gains the fleet tables at version 4", () => {
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an incident needs several clean checks in a row before it resolves, and a failure in between starts the count over", () => {
+  const db = openCatalog(":memory:");
+  try {
+    const critical = (overrides: Partial<IncidentPacket> = {}) => packet({ failureClass: "dead", severity: "critical", ...overrides });
+    const id = ingest(db, critical(), T)[0]!.incident.id;
+    assert.deepEqual(ingest(db, critical({ recovered: true }), plus(T, MIN)), []);
+    assert.deepEqual(ingest(db, critical({ recovered: true }), plus(T, 2 * MIN)), []);
+    assert.equal(incidentById(db, id)?.state, "open");
+    assert.equal(incidentById(db, id)?.cleanChecks, 2);
+    assert.deepEqual(ingest(db, critical(), plus(T, 3 * MIN)), []);
+    assert.equal(incidentById(db, id)?.cleanChecks, 0);
+    assert.deepEqual(ingest(db, critical({ recovered: true }), plus(T, 4 * MIN)), []);
+    assert.deepEqual(ingest(db, critical({ recovered: true }), plus(T, 5 * MIN)), []);
+    const done = ingest(db, critical({ recovered: true }), plus(T, 6 * MIN));
+    assert.equal(done[0]?.kind, "recovered");
+    assert.equal(done[0]?.incident.state, "resolved");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM fleet_events WHERE incident_id = ? AND kind = 'reopen'").get(id)?.n, 0);
+    const wider = ingest(db, critical({ host: "mini" }), T)[0]!.incident.id;
+    for (let at = 1; at <= 4; at++) assert.deepEqual(ingest(db, critical({ host: "mini", recovered: true }), plus(T, at * MIN), { resolveAfterCleanChecks: 5 }), []);
+    assert.equal(ingest(db, critical({ host: "mini", recovered: true }), plus(T, 5 * MIN), { resolveAfterCleanChecks: 5 })[0]?.kind, "recovered");
+    assert.equal(incidentById(db, wider)?.state, "resolved");
+  } finally {
+    db.close();
+  }
+});
+
+test("a warning that recovers goes to the digest and sends no recovery notice", () => {
+  const db = openCatalog(":memory:");
+  try {
+    const id = ingest(db, packet({ failureClass: "dead", severity: "warning" }), T)[0]!.incident.id;
+    digest(db, plus(T, MIN));
+    const decisions = ingest(db, packet({ failureClass: "dead", severity: "warning", recovered: true }), plus(T, 2 * MIN), ONE);
+    assert.equal(decisions[0]?.kind, "digest");
+    assert.equal(decisions[0]?.reason, "recovered");
+    assert.equal(incidentById(db, id)?.state, "resolved");
+    const built = digest(db, plus(T, 3 * MIN));
+    assert.deepEqual(built.groups.map((group) => group.incidents.map((incident) => incident.state)), [["resolved"]]);
+  } finally {
+    db.close();
+  }
+});
+
+test("an incident sends at most the daily cap of notices, then one capped notice, then nothing until the next day", () => {
+  const db = openCatalog(":memory:");
+  try {
+    const policy = { resolveAfterCleanChecks: 1, maxNoticesPerDay: 3, flapReopens: 100 };
+    const dead = (recovered = false) => packet({ failureClass: "dead", severity: "critical", recovered });
+    const kinds: string[] = [];
+    for (let cycle = 0; cycle < 6; cycle++) {
+      const at = plus(T, cycle * 20 * MIN);
+      kinds.push(...ingest(db, dead(), at, policy).map((decision) => `${decision.kind}${decision.kind === "suppressed" ? `:${decision.reason}` : ""}`));
+      kinds.push(...ingest(db, dead(true), plus(at, 10 * MIN), policy).map((decision) => `${decision.kind}${decision.kind === "suppressed" ? `:${decision.reason}` : ""}`));
+    }
+    assert.deepEqual(kinds, ["notify-now", "recovered", "notify-now", "capped", ...Array(8).fill("suppressed:daily-cap")]);
+    const id = listIncidents(db)[0]!.id;
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM fleet_events WHERE incident_id = ? AND kind = 'capped'").get(id)?.n, 1);
+    assert.equal(digest(db, plus(T, 3 * 60 * MIN)).groups.length, 1);
+    const nextDay = ingest(db, dead(), plus(T, 24 * 60 * MIN), policy);
+    assert.equal(nextDay[0]?.kind, "notify-now");
+  } finally {
+    db.close();
   }
 });

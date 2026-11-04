@@ -12,6 +12,10 @@ export interface FleetPolicy {
   flapReopens: number;
   flapWindowMinutes: number;
   flapQuietMinutes: number;
+  /** Consecutive clean checks an open incident needs before it resolves. */
+  resolveAfterCleanChecks: number;
+  /** Notices one incident may send per calendar day (in the quiet-hours timezone) before one final capped notice. */
+  maxNoticesPerDay: number;
 }
 
 export const DEFAULT_FLEET_POLICY: FleetPolicy = {
@@ -21,6 +25,8 @@ export const DEFAULT_FLEET_POLICY: FleetPolicy = {
   flapReopens: 3,
   flapWindowMinutes: 60,
   flapQuietMinutes: 60,
+  resolveAfterCleanChecks: 3,
+  maxNoticesPerDay: 6,
 };
 
 export interface FleetIncident {
@@ -46,10 +52,11 @@ export interface FleetIncident {
   lastNotifiedAt: string | null;
   notifyCount: number;
   flapCount: number;
+  cleanChecks: number;
 }
 
 export interface FleetDecision {
-  kind: "notify-now" | "digest" | "recovered" | "escalate" | "suppressed";
+  kind: "notify-now" | "digest" | "recovered" | "escalate" | "suppressed" | "capped";
   incident: FleetIncident;
   reason: string;
 }
@@ -72,7 +79,7 @@ const SELECT = `SELECT id, fingerprint, host, component, severity, failure_class
   first_seen AS firstSeen, last_seen AS lastSeen, count, summary, packet_json AS packetJson,
   owner_chat AS ownerChat, runbook, opened_at AS openedAt, acknowledged_at AS acknowledgedAt,
   resolved_at AS resolvedAt, snoozed_until AS snoozedUntil, muted, last_notified_at AS lastNotifiedAt,
-  notify_count AS notifyCount, flap_count AS flapCount FROM fleet_incidents`;
+  notify_count AS notifyCount, flap_count AS flapCount, clean_checks AS cleanChecks FROM fleet_incidents`;
 
 const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const OFFSET = /^([+-])(\d{2}):(\d{2})$/;
@@ -90,6 +97,8 @@ export function resolvePolicy(partial?: Partial<FleetPolicy> | null): FleetPolic
     flapReopens: partial?.flapReopens ?? DEFAULT_FLEET_POLICY.flapReopens,
     flapWindowMinutes: partial?.flapWindowMinutes ?? DEFAULT_FLEET_POLICY.flapWindowMinutes,
     flapQuietMinutes: partial?.flapQuietMinutes ?? DEFAULT_FLEET_POLICY.flapQuietMinutes,
+    resolveAfterCleanChecks: partial?.resolveAfterCleanChecks ?? DEFAULT_FLEET_POLICY.resolveAfterCleanChecks,
+    maxNoticesPerDay: partial?.maxNoticesPerDay ?? DEFAULT_FLEET_POLICY.maxNoticesPerDay,
   };
 }
 
@@ -120,7 +129,7 @@ export function ruleKey(host: string, component: string, failureClass: string): 
   return `${host}/${component}/${failureClass}`;
 }
 
-function glob(match: string, key: string): boolean {
+export function globMatch(match: string, key: string): boolean {
   const pattern = match.split("*").map((part) => part.split("?").map((text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".")).join(".*");
   return new RegExp(`^${pattern}$`, "s").test(key);
 }
@@ -156,6 +165,12 @@ export function incidentByFingerprint(db: Db, fp: string): FleetIncident | null 
   return row ? toIncident(row) : null;
 }
 
+/** Whether the incident with this fingerprint is still open or acknowledged. */
+export function incidentIsOpen(db: Db, fingerprint: string): boolean {
+  const state = incidentByFingerprint(db, fingerprint)?.state;
+  return state === "open" || state === "acknowledged";
+}
+
 export function listIncidents(db: Db, filter: IncidentFilter = {}): FleetIncident[] {
   const where: string[] = [];
   const params: (string | number)[] = [];
@@ -174,7 +189,7 @@ function event(db: Db, incidentId: number | null, at: string, kind: string, deta
 function mutedRule(db: Db, host: string, component: string, failureClass: string): boolean {
   const key = ruleKey(host, component, failureClass);
   const rules = db.prepare("SELECT rule_key FROM fleet_rules").all() as { rule_key: string }[];
-  return rules.some((rule) => glob(rule.rule_key, key));
+  return rules.some((rule) => globMatch(rule.rule_key, key));
 }
 
 function refreshMuted(db: Db): void {
@@ -220,13 +235,50 @@ function markNotified(db: Db, id: number, now: string): void {
   db.prepare("UPDATE fleet_incidents SET last_notified_at = ?, notify_count = notify_count + 1 WHERE id = ?").run(now, id);
 }
 
-function finish(db: Db, id: number, now: string, kind: FleetDecision["kind"], reason: string): FleetDecision {
-  if (kind === "notify-now" || kind === "recovered" || kind === "escalate" || reason === "flapping") markNotified(db, id, now);
-  if (kind === "digest") event(db, id, now, "digest-pending");
-  if (kind === "suppressed") event(db, id, now, "suppressed", reason);
+/** Midnight that starts the calendar day `now` falls in, in the policy timezone, as an ISO instant. */
+function dayStart(now: string, quiet: QuietHours): string {
+  const at = new Date(now);
+  const sinceMidnight = quietMinutes(at, quiet.timezone) * 60_000 + at.getUTCSeconds() * 1000 + at.getUTCMilliseconds();
+  return new Date(at.getTime() - sinceMidnight).toISOString();
+}
+
+function eventsSince(db: Db, id: number, kind: string, since: string): number {
+  return (db.prepare("SELECT COUNT(*) AS n FROM fleet_events WHERE incident_id = ? AND kind = ? AND at >= ?").get(id, kind, since) as { n: number }).n;
+}
+
+/** How many times the incident opened or reopened since `since`. */
+export function occurrencesSince(db: Db, id: number, since: string): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM fleet_events WHERE incident_id = ? AND kind IN ('opened', 'reopen') AND at >= ?").get(id, since) as { n: number };
+  return row.n;
+}
+
+/**
+ * A message-sending decision counts against the incident's daily cap. The first one past the cap becomes one final "capped" notice,
+ * later ones are suppressed, and either way the incident is queued for the next digest so it cannot go quiet unseen.
+ */
+function finish(db: Db, id: number, now: string, kind: FleetDecision["kind"], reason: string, policy?: FleetPolicy): FleetDecision {
+  let outKind = kind;
+  let outReason = reason;
+  const sends = kind === "notify-now" || kind === "recovered" || kind === "escalate" || (kind === "suppressed" && reason === "flapping");
+  if (sends && policy) {
+    const start = dayStart(now, policy.quietHours);
+    const sent = eventsSince(db, id, "notice", start);
+    if (sent >= policy.maxNoticesPerDay) {
+      const already = eventsSince(db, id, "capped", start) > 0;
+      if (!already) event(db, id, now, "capped", String(sent));
+      outKind = already ? "suppressed" : "capped";
+      outReason = "daily-cap";
+      event(db, id, now, "digest-pending");
+    } else {
+      event(db, id, now, "notice");
+    }
+  }
+  if (outKind === "notify-now" || outKind === "recovered" || outKind === "escalate" || outKind === "capped" || outReason === "flapping") markNotified(db, id, now);
+  if (outKind === "digest") event(db, id, now, "digest-pending");
+  if (outKind === "suppressed") event(db, id, now, "suppressed", outReason);
   const incident = load(db, id);
   if (!incident) throw new Error("fleet incident disappeared");
-  return { kind, incident, reason };
+  return { kind: outKind, incident, reason: outReason };
 }
 
 function insertIncident(db: Db, packet: IncidentPacket, now: string, flapCount: number): number {
@@ -245,7 +297,7 @@ function insertIncident(db: Db, packet: IncidentPacket, now: string, flapCount: 
 function writeOpen(db: Db, incident: FleetIncident, packet: IncidentPacket, now: string, flapCount: number): void {
   const muted = mutedRule(db, packet.host, packet.component, packet.failureClass) ? 1 : 0;
   db.prepare(`UPDATE fleet_incidents SET state = 'open', resolved_at = NULL, acknowledged_at = NULL, opened_at = ?,
-    last_seen = ?, count = ?, summary = ?, packet_json = ?, severity = ?, owner_chat = ?, runbook = ?, flap_count = ?, muted = ?
+    last_seen = ?, count = ?, summary = ?, packet_json = ?, severity = ?, owner_chat = ?, runbook = ?, flap_count = ?, muted = ?, clean_checks = 0
     WHERE id = ?`).run(
     now, later(incident.lastSeen, packet.lastSeen), incident.count + 1, packet.summary, JSON.stringify(packet),
     packet.severity, packet.ownerChat, packet.runbook, flapCount, muted, incident.id,
@@ -276,20 +328,20 @@ function maybeEscalate(db: Db, incident: FleetIncident, now: string, policy: Fle
   if (inFuture(incident.snoozedUntil, now) || mutedRule(db, incident.host, incident.component, incident.failureClass)) return null;
   if (!dueEscalation(db, incident, now, policy)) return null;
   event(db, incident.id, now, "escalate");
-  return finish(db, incident.id, now, "escalate", "unacknowledged");
+  return finish(db, incident.id, now, "escalate", "unacknowledged", policy);
 }
 
 function openNew(db: Db, packet: IncidentPacket, now: string, policy: FleetPolicy): FleetDecision {
   const id = insertIncident(db, packet, now, 0);
   event(db, id, now, "opened");
-  if (mutedRule(db, packet.host, packet.component, packet.failureClass)) return finish(db, id, now, "suppressed", "muted");
+  if (mutedRule(db, packet.host, packet.component, packet.failureClass)) return finish(db, id, now, "suppressed", "muted", policy);
   const chosen = route(packet, now, policy);
-  return finish(db, id, now, chosen.kind, chosen.reason);
+  return finish(db, id, now, chosen.kind, chosen.reason, policy);
 }
 
 function bumpOpen(db: Db, incident: FleetIncident, packet: IncidentPacket, now: string): FleetIncident {
   const muted = mutedRule(db, packet.host, packet.component, packet.failureClass) ? 1 : 0;
-  db.prepare(`UPDATE fleet_incidents SET last_seen = ?, count = ?, summary = ?, packet_json = ?, severity = ?, owner_chat = ?, runbook = ?, muted = ? WHERE id = ?`).run(
+  db.prepare(`UPDATE fleet_incidents SET last_seen = ?, count = ?, summary = ?, packet_json = ?, severity = ?, owner_chat = ?, runbook = ?, muted = ?, clean_checks = 0 WHERE id = ?`).run(
     later(incident.lastSeen, packet.lastSeen), incident.count + 1, packet.summary, JSON.stringify(packet),
     packet.severity, packet.ownerChat, packet.runbook, muted, incident.id,
   );
@@ -311,19 +363,21 @@ function reopen(db: Db, incident: FleetIncident, packet: IncidentPacket, now: st
   event(db, incident.id, now, "reopen");
   const flaps = countReopens(db, incident.id, now, policy);
   db.prepare("UPDATE fleet_incidents SET flap_count = ? WHERE id = ?").run(flaps, incident.id);
-  if (flaps >= policy.flapReopens) return [finish(db, incident.id, now, "suppressed", "flapping")];
-  if (mutedRule(db, packet.host, packet.component, packet.failureClass)) return [finish(db, incident.id, now, "suppressed", "muted")];
-  if (inFuture(incident.snoozedUntil, now)) return [finish(db, incident.id, now, "suppressed", "snoozed")];
+  if (flaps >= policy.flapReopens) return [finish(db, incident.id, now, "suppressed", "flapping", policy)];
+  if (mutedRule(db, packet.host, packet.component, packet.failureClass)) return [finish(db, incident.id, now, "suppressed", "muted", policy)];
+  if (inFuture(incident.snoozedUntil, now)) return [finish(db, incident.id, now, "suppressed", "snoozed", policy)];
   const chosen = route(packet, now, policy);
-  return [finish(db, incident.id, now, chosen.kind, chosen.reason)];
+  return [finish(db, incident.id, now, chosen.kind, chosen.reason, policy)];
 }
 
-function resolveIncident(db: Db, incident: FleetIncident, packet: IncidentPacket, now: string): FleetDecision {
-  db.prepare(`UPDATE fleet_incidents SET state = 'resolved', resolved_at = ?, last_seen = ?, count = ?, summary = ?, packet_json = ?, severity = ? WHERE id = ?`).run(
+/** A warning that recovers is queued for the digest instead of sending a recovery notice; only a critical recovery is announced. */
+function resolveIncident(db: Db, incident: FleetIncident, packet: IncidentPacket, now: string, policy: FleetPolicy): FleetDecision {
+  db.prepare(`UPDATE fleet_incidents SET state = 'resolved', resolved_at = ?, last_seen = ?, count = ?, summary = ?, packet_json = ?, severity = ?, clean_checks = 0 WHERE id = ?`).run(
     now, later(incident.lastSeen, packet.lastSeen), incident.count + 1, packet.summary, JSON.stringify(packet), packet.severity, incident.id,
   );
   event(db, incident.id, now, "resolved");
-  return finish(db, incident.id, now, "recovered", "recovered");
+  if (packet.severity === "critical") return finish(db, incident.id, now, "recovered", "recovered", policy);
+  return finish(db, incident.id, now, "digest", "recovered", policy);
 }
 
 function ingestInner(db: Db, packet: IncidentPacket, now: string, policy: FleetPolicy): FleetDecision[] {
@@ -335,7 +389,12 @@ function ingestInner(db: Db, packet: IncidentPacket, now: string, policy: FleetP
   const existing = incidentByFingerprint(db, packet.fingerprint);
   if (packet.recovered) {
     if (!existing || existing.state === "resolved") return [];
-    return [resolveIncident(db, existing, packet, now)];
+    const clean = existing.cleanChecks + 1;
+    if (clean < policy.resolveAfterCleanChecks) {
+      db.prepare("UPDATE fleet_incidents SET clean_checks = ? WHERE id = ?").run(clean, existing.id);
+      return [];
+    }
+    return [resolveIncident(db, existing, packet, now, policy)];
   }
   if (!existing) return [openNew(db, packet, now, policy)];
   if (existing.state === "resolved") return reopen(db, existing, packet, now, policy);

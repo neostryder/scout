@@ -4,6 +4,9 @@
 
 ### Added
 
+- [Visible] [Services] **Fleet alerts now tell you what happened, whether it looks real, and what to do next.** Each message also says how many times the incident happened in the last 24 hours and who owns it. An optional `components` list in fleet.json adds a description, a false-alarm hint, and a next step for any component.
+- [Visible] [Services] **A flapping service now stays in one incident instead of sending a message on every cycle.** An incident resolves only after several clean checks in a row (three by default, set with `resolveAfterCleanChecks`), and a failing check in between resets the count. Sources keep reporting recovery until the incident resolves.
+- [Visible] [Services] **Recovered warnings now wait for the digest, and one incident sends at most six messages a day.** A warning that recovers sends no message and appears in the next digest marked "(recovered)". Set the daily limit with `maxNoticesPerDay`; the last message before the limit says the incident is muted until tomorrow.
 - [Visible] [Software] **Updates that failed on the Windows administrator prompt now have a Retry with admin prompt button beside Update.** The button opens the confirmation dialog with the administrator checkbox already ticked, and nothing runs until you press Start updates.
 - [Visible] [Software] **You can now uninstall and reinstall Audacity from the Updates dialog when winget cannot update it across a major version.** The Uninstall and reinstall button opens a confirmation that shows both winget commands, and nothing runs until you tick the acknowledgement and confirm. It works only at the computer that runs Scout.
 - [Visible] [Software] **You can now update Flatpak apps from the Updates page.** Scout will not start the update while a Steam game is running on that machine. System installs need passwordless sudo for the account Scout connects as.

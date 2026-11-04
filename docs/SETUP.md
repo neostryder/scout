@@ -368,9 +368,37 @@ To watch a job, run it through the shell wrapper at `tools/fleet/scout-run.sh` o
 scout-run.sh --fleet-host <name> --component <name> [--timeout-seconds N] [--expect-output] [--failure-class C] -- <command>
 ```
 
-A high incident notifies you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. Open incidents are listed at `GET /api/fleet/incidents`.
+A critical incident messages you at once through the notifiers in your config, even during quiet hours (22:00 to 07:00 by default). Warnings and info arrive in a digest at 08:00 and 18:00. An incident resolves after three clean checks in a row, and a critical incident then sends you one recovery message. A warning that recovers sends no message and shows up in the next digest marked "(recovered)". One incident sends at most six messages a day, then goes quiet until the next day while the digest keeps listing it. To change those numbers, set `resolveAfterCleanChecks` and `maxNoticesPerDay` in the `policy` section of fleet.json. Both keys are optional. Open incidents are listed at `GET /api/fleet/incidents`.
 
 The Incidents tab on the Services page lists the fleet incidents the hub collects. It shows counts of open, acknowledged, resolved, and open critical incidents, and a chip per host with its open count that filters the table to that host. You can filter by state (open and acknowledged by default, all, or resolved), host, failure class, and a search over component and summary, and the filters stay in the page address so you can share a view. Open critical incidents sort first, then the newest. Opening a row shows the summary, owner chat, runbook, the packet's evidence as plain text, and the latest 200 events, oldest first. Each row has Investigate, Acknowledge, Snooze for 1, 4, or 24 hours, and Mute, which asks for a reason of 1 to 500 characters and stops future notices for that host, component, and failure class. Investigate reports "No investigator is configured on this hub." when `investigator` is not set in `fleet.json`. The tab refreshes every 30 seconds while it is visible and again when you return to the browser tab. The tab is hidden when the hub has no fleet incidents route.
+
+### Reading an alert
+
+Each alert puts one fact on each line, in this order:
+
+- What happened: the incident's summary, or how many clean checks it took to recover.
+- What it is: what the component does, if you described it in fleet.json.
+- Real or false alarm: why it looks real, whether it keeps clearing and coming back, or why it is probably a false alarm, plus any cause triage left.
+- How often: how many times it opened in the last 24 hours and when it was first seen.
+- Owner: who owns it, or that no owner is assigned.
+- Investigation found: the cause, when an investigation finished with one.
+- Next step: what to do, such as a proposed fix, a runbook, or tapping Investigate, Snooze, or Mute.
+
+Recovery messages leave out the Real or false alarm and Investigation found lines.
+
+The What it is line, the false-alarm sentence, and your own next-step wording come from the optional `components` list in fleet.json. Each entry has a `host` and a `component`, both of which accept `*` as a wildcard, plus a `description` and optional `falseAlarm` and `nextStep` text. Scout uses the first entry that matches. The list holds up to 200 entries, and each text field can be up to 600 characters. Without a matching entry, an alert still carries every other line.
+
+```json
+"components": [
+  {
+    "host": "server",
+    "component": "backup*",
+    "description": "The nightly backup of the documents folder.",
+    "falseAlarm": "the machine was asleep at the scheduled time and the job ran a few minutes later",
+    "nextStep": "Open the backup log and check the last line for an error."
+  }
+]
+```
 
 ### Telegram delivery
 
