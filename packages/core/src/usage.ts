@@ -90,13 +90,16 @@ export function recordUsage(db: Db, machineId: string, result: UsageResult, now:
   const summary: UsageSummary = { signals: 0, unmatched: 0 };
   if (result.status === "failed" || result.status === "skipped") return summary;
   const all = targets(db, machineId);
+  // Matching every reading against every install is the slow part (tens of seconds for a local scan), so it runs before
+  // the write lock is taken. The lock then covers only the deletes and inserts, and the hub's synchronous writes are not
+  // held up behind it.
+  const resolved = result.signals.map((s) => ({ s, ids: resolve(all, s.match) }));
   db.exec("BEGIN IMMEDIATE");
   try {
     const clear = db.prepare("DELETE FROM usage_signals WHERE install_id = ? AND kind = ? AND origin = ?");
     const put = db.prepare("INSERT INTO usage_signals (install_id, kind, value, available, origin, observed_at) VALUES (?, ?, ?, ?, ?, ?)");
     const seen = new Set<string>();
-    for (const s of result.signals) {
-      const ids = resolve(all, s.match);
+    for (const { s, ids } of resolved) {
       if (ids.length === 0) summary.unmatched++;
       for (const id of ids) {
         const k = `${id}|${s.kind}`;
