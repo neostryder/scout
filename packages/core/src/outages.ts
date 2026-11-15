@@ -278,9 +278,22 @@ function staysUp(row: Service | Listener, context: WatchContext): boolean {
   return row.containerName !== null || context.routeListeners.has(row.id) || context.routePorts.has(`${row.machineId}:${row.port}`) || context.services.some((service) => staysUpService(service) && serviceOwnsListener(service, row));
 }
 
+const COGITATOR_ENGINE_PATH = /\/cogitator\/(?:data\/)?engines?\//i;
+const COGITATOR_ENGINE_BINARY = /(?:^|\/)cogitator-asr(?:\.exe)?$/i;
+
+/** An inference engine that Cogitator starts when a request needs it and stops after an idle period, so its port closing is normal. The Cogitator daemon itself is not one. */
+export function cogitatorEngineListener(row: Pick<Listener, "processName" | "processPath" | "scriptPath" | "owner">): boolean {
+  const normal = (path: string | null | undefined): string => (path ?? "").replaceAll("\\", "/");
+  const paths = [normal(row.processPath), normal(row.scriptPath)];
+  if (paths.some((path) => COGITATOR_ENGINE_PATH.test(path) || COGITATOR_ENGINE_BINARY.test(path))) return true;
+  // On Linux the listener table can omit the path, and the owner is the systemd unit that runs Cogitator, so the engine shows as another program under that unit.
+  return (row.owner ?? "").toLowerCase() === "cogitator" && (row.processName ?? "").toLowerCase() !== "cogitator" && row.processName !== null;
+}
+
 /** Whether an item is one Scout watches for outages: visible, not plumbing, not marked as expected to be down, and (given a context) meant to run at all times. */
 export function serviceWatchable(db: Db, row: Service | Listener, context?: WatchContext): boolean {
   if (row.classification.hidden || row.classification.class === "essential" || ephemeral(row)) return false;
+  if ("port" in row && cogitatorEngineListener(row)) return false;
   if ("startMode" in row && row.startMode === "manual") return false;
   if (context && !staysUp(row, context)) return false;
   const table = "port" in row ? "listeners" : "services";
