@@ -329,9 +329,15 @@ Each confirmed outage and each recovery shows a desktop notification on the hub 
 
 To check the setup, press Send a test notice on the Outages tab. The same tab shows the status of each notice channel.
 
+**Cresset notices.** Scout can also post outage and fleet notices to Cresset through the Cresset client kit while `~/.cresset/cresset.json` lists a `scout-notify` sender whose mode is `both` or `cresset`. In `both` mode Discord and desktop stay the delivery path, and the kit spools a post when Cresset cannot be reached. With that sender active, the hub also sends a "Scout hub heartbeat" status event every five minutes so Cresset's silence watch can notice a stopped hub. The heartbeat runs beside the relay-heartbeat post, and starting the hub with `--no-relay` skips it.
+
 ### Switches and maintenance
 
 The Outages tab has an on/off switch for each kind of check, each machine, and each item. Turning an item off closes its open outage without a notice. The switches are saved in `.scout-data/watch.json` on the hub machine. Before planned work, pause the watch for 1 or 8 hours from the same tab.
+
+**On-demand services.** Add a rule to the `onDemand` list in `.scout-data/watch.json` for any service or port that a supervisor starts on demand and stops when idle, and the outage watch stops watching it. Each rule names a `machine` and a `port`, a `name`, or both (both must match), plus an optional `reason`, and a name accepts `*` as a wildcard and ignores case. This rule covers the waker container on gamemaster port 31013: `{"onDemand": [{"machine": "gamemaster", "port": 31013, "reason": "Foundry v13 waker container: stopped when idle, started on the next visit"}]}`. A port rule survives a container rename, so it replaces a per-item switch, and setting the item to true under `items` still forces a watch. Cogitator engine ports need no rule because Scout already skips them.
+
+**Health panel and catalog size.** The Health panel on the Services page has a certificate line that names the next certificate to end and counts how many end within 14 days, and the Services table has Last run and Last result columns, with Windows scheduled task result codes shown as words. Once a listener or service row has been gone for two hours, the hub deletes it if it lasted under an hour or sat on an ephemeral port (49152 and up) without a container. Rows marked expected down, rows an unresolved alert targets, rows the outage watch tracks, and any other row that lasted an hour or more stay in the catalog. A long-gone ephemeral port therefore drops out of the catalog, and the events table keeps its history.
 
 The CLI covers the same ground:
 
