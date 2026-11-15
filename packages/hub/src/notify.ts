@@ -85,17 +85,29 @@ export function cressetKit(env: NodeJS.ProcessEnv = process.env, read: (path: st
   } catch { return null; }
 }
 
-/** Hands one notice to the Cresset client kit. In both mode Scout's own channels have already run, so the kit only posts to Cresset and spools the post when Cresset cannot be reached. */
-export function cressetNotice(notice: OutageNotice, kit: CressetKit | null = cressetKit()): Promise<boolean> {
-  if (kit === null) return Promise.resolve(false);
-  const args = [kit.kit, "send", "--sender", kit.sender, "--title", notice.title, "--description", notice.body, "--severity", CRESSET_SEVERITY[notice.severity], "--component", "scout", "--class", "outage"];
+/** Runs the client kit once. Resolves true when Cresset took the post and false when the kit spooled it for its next run (exit 1); only a usage or config error (2) rejects. */
+function runCressetKit(kit: CressetKit, args: string[]): Promise<boolean> {
   return new Promise((resolve, reject) => {
-    execFile(process.execPath, args, { windowsHide: true, timeout: 30_000 }, (error) => {
-      // Exit 1 means nothing was delivered but the kit spooled the post for its next run; only a usage or config error (2) is lost.
-      if (error && (error as { code?: unknown }).code !== 1) reject(error);
-      else resolve(true);
+    execFile(process.execPath, [kit.kit, ...args], { windowsHide: true, timeout: 30_000 }, (error) => {
+      if (!error) resolve(true);
+      else if ((error as { code?: unknown }).code === 1) resolve(false);
+      else reject(error);
     });
   });
+}
+
+/** Hands one notice to the Cresset client kit. In both mode Scout's own channels have already run, so the kit only posts to Cresset and spools the post when Cresset cannot be reached. */
+export async function cressetNotice(notice: OutageNotice, kit: CressetKit | null = cressetKit()): Promise<boolean> {
+  if (kit === null) return false;
+  await runCressetKit(kit, ["send", "--sender", kit.sender, "--title", notice.title, "--description", notice.body, "--severity", CRESSET_SEVERITY[notice.severity], "--component", "scout", "--class", "outage"]);
+  return true;
+}
+
+/** One quiet status event that Cresset's silence watch counts as the hub being alive. The fixed fingerprint merges the beats into one open event with a count. */
+export async function cressetHeartbeat(kit: CressetKit | null = cressetKit()): Promise<"sent" | "spooled" | "off"> {
+  if (kit === null) return "off";
+  const delivered = await runCressetKit(kit, ["send", "--sender", kit.sender, "--title", "Scout hub heartbeat", "--severity", "info", "--kind", "status", "--component", "scout", "--class", "heartbeat", "--fingerprint", "scout-hub-heartbeat"]);
+  return delivered ? "sent" : "spooled";
 }
 
 export class Notifier {
