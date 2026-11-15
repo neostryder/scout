@@ -8,6 +8,27 @@ export function healthLabel(state) { return HEALTH_LABELS[state] || "Not checked
 export function healthTone(state) { return HEALTH_TONES[state] || "quiet"; }
 export function latencyText(ms) { return ms == null ? "None" : Number(ms) >= 1000 ? `${(Number(ms) / 1000).toFixed(1)} s` : `${Math.round(Number(ms))} ms`; }
 export function tlsText(days) { return days == null ? "" : days < 0 ? "Certificate expired" : days === 0 ? "Certificate ends today" : `Certificate ends in ${days} days`; }
+/** The line above the health table: which public certificate ends first, and how many are inside the alert threshold. */
+export function certificateLine(summary) {
+  if (!summary || !summary.soonest) return "No certificate expiry is known yet.";
+  const { soonest, expiring, warnDays } = summary;
+  const next = `${soonest.label}: ${tlsText(soonest.daysLeft).replace("Certificate ", "")}`;
+  const alert = expiring === 0 ? `None are within ${warnDays} days.` : `${expiring} ${expiring === 1 ? "is" : "are"} within ${warnDays} days and raise${expiring === 1 ? "s" : ""} an alert.`;
+  return `Next certificate to end, ${next}. ${alert}`;
+}
+const TASK_STATUS = { 267008: "Ready", 267009: "Running", 267010: "Disabled", 267011: "Never run", 267012: "No more runs", 267013: "Not scheduled", 267014: "Stopped by the user" };
+
+/** The Last result cell for a scheduled task: its exit code in words, and whether it counts as a failure. Other kinds keep no result, so their cell stays empty. */
+export function taskResult(row) {
+  if (row.kind !== "scheduled-task") return { text: "", tone: "" };
+  if (row.lastResult == null || String(row.lastResult).trim() === "") return { text: "None", tone: "" };
+  const code = Number(String(row.lastResult).trim());
+  if (!Number.isInteger(code)) return { text: String(row.lastResult), tone: "bad" };
+  if (code === 0) return { text: "0, success", tone: "ok" };
+  if (TASK_STATUS[code]) return { text: TASK_STATUS[code], tone: "" };
+  const hex = code >= 0x80000000 ? `0x${code.toString(16).toUpperCase()}` : "";
+  return { text: hex ? `${hex} (${code})` : String(code), tone: "bad" };
+}
 export function sparkPoints(history = [], width = 240, height = 48) {
   const samples = history.slice(-60);
   const latencies = samples.filter((sample) => sample.ok && Number.isFinite(sample.latencyMs)).map((sample) => sample.latencyMs);

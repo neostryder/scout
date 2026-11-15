@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { workspaceKindLabel, phoneDefaultMachine, servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, routeChain, routeConfidence, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, exposureLabel, stateLabel, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertSeverityLabel, alertSeverityTone, alertKindLabel, alertTitle, groupAlerts, alertEventReducer, badgeModel, alertEndpointMissing, muteCoverage, alertFilter, countAlerts, healthLabel, healthTone, latencyText, tlsText, sparkPoints, healthCounts, healthFilter, healthEventReducer, rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, planStepsText, stackFilter, stackEventReducer } = await import(new URL("../public/services-model.js", import.meta.url).href);
+const { workspaceKindLabel, phoneDefaultMachine, servicesQuery, routesQuery, routeRow, routeStateLabel, routeViaLabel, routeChain, routeConfidence, routeChipOrder, edgePillText, edgeProgressReducer, lensQuery, exposureLabel, stateLabel, serviceRow, listenerRow, toggleSort, elapsedTime, probeReducer, probeElapsed, mergeFacets, isExposed, descriptionSourceLabel, descriptionLine, descriptionFilter, descriptionFacet, descriptionEditorState, describeProgress, actionButtons, protectedLabel, planDialogModel, actionLine, actionState, actionEventReducer, controlDialogReducer, ALERT_KINDS, alertSeverityLabel, alertSeverityTone, alertKindLabel, alertTitle, groupAlerts, alertEventReducer, badgeModel, alertEndpointMissing, muteCoverage, alertFilter, countAlerts, healthLabel, healthTone, latencyText, tlsText, certificateLine, taskResult, sparkPoints, healthCounts, healthFilter, healthEventReducer, rangeFill, portsSummary, clashText, stackStateLabel, stackMemberText, planStepsText, stackFilter, stackEventReducer } = await import(new URL("../public/services-model.js", import.meta.url).href);
 
 test("alert labels, tones, titles and sorting cover contract values", () => {
   assert.deepEqual(["info", "warn", "high"].map(alertSeverityLabel), ["Info", "Warning", "High"]);
@@ -20,6 +20,18 @@ test("health labels, tones, latency and certificate text cover every state", () 
   assert.equal(tlsText(41), "Certificate ends in 41 days");
   assert.equal(tlsText(0), "Certificate ends today");
   assert.equal(tlsText(-1), "Certificate expired");
+  const task = (lastResult: string | null) => taskResult({ kind: "scheduled-task", lastResult });
+  assert.deepEqual(task("0"), { text: "0, success", tone: "ok" });
+  assert.deepEqual(task("267009"), { text: "Running", tone: "" });
+  assert.deepEqual(task("267011"), { text: "Never run", tone: "" });
+  assert.deepEqual(task("2147946720"), { text: "0x800710E0 (2147946720)", tone: "bad" });
+  assert.deepEqual(task("1"), { text: "1", tone: "bad" });
+  assert.deepEqual(task(null), { text: "None", tone: "" });
+  assert.deepEqual(taskResult({ kind: "windows-service", lastResult: null }), { text: "", tone: "" });
+  assert.equal(certificateLine(null), "No certificate expiry is known yet.");
+  assert.equal(certificateLine({ warnDays: 14, checked: 3, expiring: 0, soonest: { label: "augur.rpgm.tools", daysLeft: 41, notAfter: "2026-12-26T04:43:00.000Z" } }), "Next certificate to end, augur.rpgm.tools: ends in 41 days. None are within 14 days.");
+  assert.equal(certificateLine({ warnDays: 14, checked: 3, expiring: 1, soonest: { label: "a.example", daysLeft: 0, notAfter: "x" } }), "Next certificate to end, a.example: ends today. 1 is within 14 days and raises an alert.");
+  assert.equal(certificateLine({ warnDays: 14, checked: 3, expiring: 2, soonest: { label: "a.example", daysLeft: -1, notAfter: "x" } }), "Next certificate to end, a.example: expired. 2 are within 14 days and raise an alert.");
 });
 
 test("health sparkline gaps failures and health events update counts and progress", () => {
