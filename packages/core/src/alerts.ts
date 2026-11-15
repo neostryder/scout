@@ -5,7 +5,7 @@ import { listServices, type Service } from "./services.ts";
 import { listRoutes, type RouteRow } from "./cloudflare.ts";
 import { loadDescriptionResolver } from "./descriptions.ts";
 import { formatLocal, sinceLastCheck } from "./time.ts";
-import { buildHealthTargets, healthAlertCandidates, healthTarget, type SharedListings } from "./health.ts";
+import { CERT_WARN_DAYS, buildHealthTargets, healthAlertCandidates, healthTarget, type SharedListings } from "./health.ts";
 import { portClashes, portsFileReader, type PortRegistry, type RegistryFile } from "./ports.ts";
 import { recipesResponse } from "./recipes.ts";
 import { listenerWatchKey, listOutages, serviceWatchable, serviceWatchKey, watchContext } from "./outages.ts";
@@ -246,7 +246,7 @@ export function evaluateAlerts(db: Db, now: string, options: AlertOptions = {}):
         row.kind === "backup-unhealthy" ? backupReading !== undefined && backupAlertState(backupReading) === "clear" :
         row.kind === "port-clash" ? !clashes.some((clash) => `port-clash:${clash.key}` === row.key) :
         row.kind === "unhealthy" ? !health || ["up", "slow", "not-http"].includes(health.state) :
-        row.kind === "cert-expiring" ? !health || health.tlsDaysLeft !== null && health.tlsDaysLeft > 14 :
+        row.kind === "cert-expiring" ? !health || health.tlsDaysLeft !== null && health.tlsDaysLeft > CERT_WARN_DAYS :
         row.kind === "crash-loop" ? !healthCandidates.some((candidate) => candidate.key === row.key) :
         row.kind === "domain-origin-down" ? !route || route.state === "ok" :
         !target || !visible(target) || (row.kind === "service-down" ? !down(target) || expected(row.targetType as "service" | "listener", target.id) : row.kind === "listener-gone" ? target.goneAt === null : target.goneAt !== null || row.kind === "exposure-change" && "bind" in target && WIDTH[target.bind] <= WIDTH[condition.fromBind!]);

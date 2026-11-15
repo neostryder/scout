@@ -1,6 +1,6 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { acknowledgeAlerts, alertsResponse, alertsSummary, buildHealthTargets, evaluateAlerts, healthResponse, healthRow, healthState, healthSummary, healthTarget, listListeners, listRoutes, listServices, openCatalog, recordCloudflare, recordListeners, recordServices, resetHealthFailures, retainHealthSamples, setAlertMute, storeHealthSample, syncHealthTargets, tlsDaysLeft, upsertMachine, type Db, type HealthSample, type ListenerFact, type ServiceFact } from "../src/index.ts";
+import { acknowledgeAlerts, alertsResponse, alertsSummary, buildHealthTargets, certificateSummary, evaluateAlerts, healthResponse, healthRow, healthState, healthSummary, healthTarget, listListeners, listRoutes, listServices, openCatalog, recordCloudflare, recordListeners, recordServices, resetHealthFailures, retainHealthSamples, setAlertMute, storeHealthSample, syncHealthTargets, tlsDaysLeft, upsertMachine, type Db, type HealthSample, type ListenerFact, type ServiceFact } from "../src/index.ts";
 
 const AT = "2026-10-07T00:00:00.000Z";
 const DAY = 86_400_000;
@@ -80,7 +80,7 @@ test("the health response has exact fields, full counts, filters and the newest 
   for (let i = 0; i < 61; i++) storeHealthSample(db, "listener:hub:8080", sample({ at: stamp(i), latencyMs: i }));
   const probe = { running: false, lastRunAt: AT, nextRunAt: stamp(300_000), intervalSeconds: 300 };
   const response = healthResponse(db, new URLSearchParams("kind=listener&state=up"), AT, probe);
-  assert.deepEqual(Object.keys(response), ["targets", "counts", "probe", "generatedAt"]);
+  assert.deepEqual(Object.keys(response), ["targets", "counts", "certificates", "probe", "generatedAt"]);
   assert.deepEqual(response.counts, { up: 1, slow: 0, failing: 0, down: 0, "not-http": 0, unknown: 1 });
   assert.deepEqual(response.probe, probe);
   db.prepare("INSERT INTO meta (key, value) VALUES ('health_last_run', ?)").run(AT);
@@ -203,4 +203,11 @@ test("an on-demand service that starts and stops by design never raises a crash 
   const put = db.prepare("INSERT INTO events (at, machine_id, kind, detail_json) VALUES (?, 'hub', 'service_changed', ?)");
   for (let i = 1; i <= 4; i++) put.run(stamp(-i * 60_000), JSON.stringify({ name: "MedicSvc", kind: "windows-service", domain: "system", old: { state: "running" }, new: { state: "stopped" } }));
   assert.equal(evaluateAlerts(db, AT).filter((change) => change.alert.kind === "crash-loop").length, 0);
+});
+
+test("the certificate summary names the domain that ends first and counts those inside the alert threshold", () => {
+  const row = (label: string, daysLeft: number | null, kind: "domain" | "listener" = "domain") => ({ kind, label, tlsDaysLeft: daysLeft, tlsNotAfter: daysLeft === null ? null : `2027-01-${String(10 + daysLeft).padStart(2, "0")}T00:00:00.000Z` });
+  assert.deepEqual(certificateSummary([]), { warnDays: 14, checked: 0, expiring: 0, soonest: null });
+  const summary = certificateSummary([row("b.example", 41), row("a.example", 12), row("c.example", 3), row("d.example", null), row("port", 1, "listener")]);
+  assert.deepEqual(summary, { warnDays: 14, checked: 3, expiring: 2, soonest: { label: "c.example", daysLeft: 3, notAfter: "2027-01-13T00:00:00.000Z" } });
 });

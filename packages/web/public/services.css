@@ -113,6 +113,10 @@
 #services .health-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; }
 #services .health-controls label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
 #services .health-counts { display: flex; flex-wrap: wrap; gap: 6px; }
+#services .cert-line { margin: 4px 0 10px; font-size: 13px; color: var(--muted); }
+#services .cert-line.warn { color: var(--warn); font-weight: 600; }
+#services .task-ok { color: var(--ok); }
+#services .task-bad { color: var(--danger); font-weight: 600; }
 #services .health-chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-size: 12px; }
 #services .health-chip.ok, #services .health-state.ok { color: var(--ok); }
 #services .health-chip.warn, #services .health-state.warn { color: var(--warn); }

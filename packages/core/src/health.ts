@@ -56,6 +56,8 @@ const SELECT = `SELECT key, kind, label, machine_id AS machineId, port, url, sta
   last_latency_ms AS latencyMs, last_error AS error, tls_not_after AS tlsNotAfter FROM health_targets`;
 const ORDER: Record<HealthState, number> = { down: 0, failing: 1, slow: 2, unknown: 3, up: 4, "not-http": 5 };
 const DAY_MS = 86_400_000;
+/** A public certificate with this many days left or fewer raises an alert and counts as expiring. */
+export const CERT_WARN_DAYS = 14;
 
 export function tlsDaysLeft(notAfter: string | null, now: string): number | null {
   if (notAfter === null || !Number.isFinite(Date.parse(notAfter))) return null;
@@ -165,12 +167,19 @@ export function healthResponse(db: Db, params = new URLSearchParams(), now = new
     .sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.label.localeCompare(b.label))
     .map((row) => ({ ...row, history: (history.all(row.key) as { at: string; ok: number; latencyMs: number | null; status: number | null }[]).reverse().map((sample) => ({ ...sample, ok: sample.ok !== 0 })) }));
   const lastRunAt = (db.prepare("SELECT value FROM meta WHERE key = 'health_last_run'").get() as { value: string } | undefined)?.value ?? null;
-  return { targets, counts, probe: probe ?? { running: false, lastRunAt, nextRunAt: null, intervalSeconds: 300 }, generatedAt: now };
+  return { targets, counts, certificates: certificateSummary(rows), probe: probe ?? { running: false, lastRunAt, nextRunAt: null, intervalSeconds: 300 }, generatedAt: now };
+}
+
+/** The public certificate that ends first, and how many are within the alert threshold. `checked` counts the domains with a known expiry. */
+export function certificateSummary(rows: readonly Pick<HealthTarget, "kind" | "label" | "tlsDaysLeft" | "tlsNotAfter">[]): { warnDays: number; checked: number; expiring: number; soonest: { label: string; daysLeft: number; notAfter: string } | null } {
+  const known = rows.filter((row) => row.kind === "domain" && row.tlsDaysLeft !== null && row.tlsNotAfter !== null).sort((a, b) => a.tlsDaysLeft! - b.tlsDaysLeft! || a.label.localeCompare(b.label));
+  const first = known[0];
+  return { warnDays: CERT_WARN_DAYS, checked: known.length, expiring: known.filter((row) => row.tlsDaysLeft! <= CERT_WARN_DAYS).length, soonest: first ? { label: first.label, daysLeft: first.tlsDaysLeft!, notAfter: first.tlsNotAfter! } : null };
 }
 
 export function healthSummary(db: Db, now = new Date().toISOString(), tunnelHosts: Record<string, string> = {}) {
   const { targets, counts } = healthResponse(db, new URLSearchParams(), now, undefined, tunnelHosts);
-  return { down: counts.down, failing: counts.failing, expiring: targets.filter((target) => target.kind === "domain" && target.tlsDaysLeft !== null && target.tlsDaysLeft <= 14).length };
+  return { down: counts.down, failing: counts.failing, expiring: targets.filter((target) => target.kind === "domain" && target.tlsDaysLeft !== null && target.tlsDaysLeft <= CERT_WARN_DAYS).length };
 }
 
 export type HealthAlertCandidate = Omit<Alert, "id" | "state" | "acknowledgedAt" | "resolvedAt" | "muted"> & { condition: { healthKey?: string; hostname?: string } };
@@ -183,7 +192,7 @@ export function healthAlertCandidates(db: Db, now: string, tunnelHosts: Record<s
     if (!target || target.state === "not-http") continue;
     const base = { at: now, machineId: identity.machineId, machineName: names.get(identity.machineId ?? "") ?? null, target: { type: identity.kind === "domain" ? "route" as const : "listener" as const, id: identity.kind === "listener" ? (db.prepare("SELECT id FROM listeners WHERE machine_id = ? AND port = ? AND gone_at IS NULL ORDER BY id LIMIT 1").get(hubMachineId(), identity.port!) as { id: number } | undefined)?.id ?? null : null }, condition: { healthKey: target.key, ...(identity.kind === "domain" ? { hostname: identity.label } : {}) } };
     if (target.state === "down") candidates.push({ ...base, kind: "unhealthy", key: `unhealthy:${target.key}`, severity: target.kind === "domain" ? "high" : "warn", title: `Unhealthy endpoint: ${target.label}`, detail: `${target.label} has not answered for ${target.failures} checks (${target.error ?? "connection error"}) ${sinceLastCheck(target.lastOkAt, now)}.` });
-    if (target.kind === "domain" && target.tlsDaysLeft !== null && target.tlsDaysLeft <= 14) candidates.push({ ...base, kind: "cert-expiring", key: `cert-expiring:${target.label}`, severity: target.tlsDaysLeft <= 3 ? "high" : "warn", title: `Certificate expiring: ${target.label}`, detail: `The certificate for ${target.label} ends in ${target.tlsDaysLeft} days` });
+    if (target.kind === "domain" && target.tlsDaysLeft !== null && target.tlsDaysLeft <= CERT_WARN_DAYS) candidates.push({ ...base, kind: "cert-expiring", key: `cert-expiring:${target.label}`, severity: target.tlsDaysLeft <= 3 ? "high" : "warn", title: `Certificate expiring: ${target.label}`, detail: `The certificate for ${target.label} ends in ${target.tlsDaysLeft} days` });
   }
   const since = new Date(Date.parse(now) - 30 * 60_000).toISOString();
   const flips = new Map<string, number>();
