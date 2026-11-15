@@ -15,7 +15,7 @@ export const EPHEMERAL_PORT_MIN = 49152;
 
 function gate(table: "listeners" | "services", targetType: "listener" | "service", watchKey: string, ephemeral: string): string {
   return `DELETE FROM ${table}
-     WHERE gone_at IS NOT NULL AND gone_at < ?
+     WHERE gone_at IS NOT NULL AND gone_at < ? AND expected_down = 0
        AND ((julianday(gone_at) - julianday(first_seen_at)) * 86400000 < ?${ephemeral})
        AND id NOT IN (SELECT target_id FROM alerts WHERE state <> 'resolved' AND target_type = '${targetType}' AND target_id IS NOT NULL)
        AND (${watchKey}) NOT IN (SELECT key FROM watch_state)`;
@@ -23,7 +23,7 @@ function gate(table: "listeners" | "services", targetType: "listener" | "service
 
 /**
  * Deletes listener and service rows that were present for under an hour, or that sat on an ephemeral port without a container, and have been gone for two hours. Ephemeral sockets and per-connection launchd jobs
- * otherwise pile up by the tens of thousands, and every live read, tray response and outage pass loads all of them. A row that an unresolved alert targets or that
+ * otherwise pile up by the tens of thousands, and every live read, tray response and outage pass loads all of them. A row marked expected down, one that an unresolved alert targets, or one that
  * the outage watch tracks is kept, and so is any other row that lasted an hour or more: a real service that was removed stays in the catalog.
  */
 export function pruneShortLived(db: Db, now: string = new Date().toISOString()): Pruned {

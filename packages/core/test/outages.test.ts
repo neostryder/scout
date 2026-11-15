@@ -295,3 +295,36 @@ test("a service that stays up owns the listeners its child processes open", () =
   assert.equal(serviceOwnsListener(service, child), true);
   assert.equal(serviceOwnsListener(service, stranger), false);
 });
+
+test("an on-demand rule stops the watch for a service or port by machine and port or name, and a forced switch still wins", (t) => {
+  const db = seed(t);
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [service] }, stamp(0));
+  const listener = (port: number, container: string) => ({ port, protocol: "tcp" as const, address: "0.0.0.0", bind: "all" as const, pid: null, processName: "docker-proxy", processPath: null, container: { name: container, image: "foundry", containerPort: 30000 } });
+  recordListeners(db, "gm", { origin: "listeners", status: "ok", facts: [listener(31013, "foundry-v13"), listener(31014, "foundry-v14"), listener(8005, "web-1")] }, stamp(0));
+  const labels = (config: ReturnType<typeof parseWatchConfig>): string[] => serviceObservations(db, "gm", config, stamp(1)).map((obs) => obs.label).sort();
+  const all = ["Port 31013 (docker-proxy) on Server", "Port 31014 (docker-proxy) on Server", "Port 8005 (docker-proxy) on Server", "Worker on Server"];
+  assert.deepEqual(labels(defaultWatchConfig()), all);
+  // A port rule keeps matching after the container is renamed.
+  assert.deepEqual(labels(parseWatchConfig({ onDemand: [{ machine: "gm", port: 31013 }, { machine: "gm", port: 31014, reason: "Foundry waker" }] })), ["Port 8005 (docker-proxy) on Server", "Worker on Server"]);
+  // A name rule takes a wildcard and matches a container or service name.
+  assert.deepEqual(labels(parseWatchConfig({ onDemand: [{ machine: "gm", name: "foundry-*" }, { machine: "gm", name: "worker" }] })), ["Port 8005 (docker-proxy) on Server"]);
+  // A rule names its machine, and both fields must match when both are given.
+  assert.deepEqual(labels(parseWatchConfig({ onDemand: [{ machine: "other", port: 31013 }, { machine: "gm", port: 8005, name: "foundry-*" }] })), all);
+  assert.ok(labels(parseWatchConfig({ onDemand: [{ machine: "gm", port: 31013 }], items: { "listener:gm:31013:docker-proxy": true } })).includes("Port 31013 (docker-proxy) on Server"));
+});
+
+test("the watch file validates on-demand rules and keeps them when a switch is written", (t) => {
+  assert.throws(() => parseWatchConfig({ onDemand: {} }), /must be a list/);
+  assert.throws(() => parseWatchConfig({ onDemand: [{ machine: "gm" }] }), /needs a port or a name/);
+  assert.throws(() => parseWatchConfig({ onDemand: [{ port: 80 }] }), /machine must be a string/);
+  assert.throws(() => parseWatchConfig({ onDemand: [{ machine: "gm", port: 70000 }] }), /port must be/);
+  assert.throws(() => parseWatchConfig({ onDemand: [{ machine: "gm", port: 80, extra: 1 }] }), /unknown onDemand field/);
+  const dir = mkdtempSync(join(tmpdir(), "scout-watch-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "watch.json");
+  writeFileSync(path, JSON.stringify({ onDemand: [{ machine: "gm", port: 31013, reason: "Foundry waker" }] }));
+  const read = watchFileReader(path);
+  assert.equal(read().onDemand.length, 1);
+  updateWatchFile(path, read(), { machine: "gm", watched: false });
+  assert.deepEqual(JSON.parse(readFileSync(path, "utf8")).onDemand, [{ machine: "gm", port: 31013, reason: "Foundry waker" }]);
+});

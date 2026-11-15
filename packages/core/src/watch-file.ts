@@ -13,13 +13,18 @@ export interface WatchConfig {
   checks: { machine: boolean; url: boolean; service: boolean };
   /** `false` switches off one item by its watch key. */
   items: Record<string, boolean>;
+  /** Services and ports that a supervisor starts on demand and stops when idle, so being down is normal. Each matches by machine and by port or name, so it survives a rename. */
+  onDemand: OnDemandRule[];
   fileError: string | null;
 }
 
-export const DEFAULT_WATCH: WatchConfig = { pausedUntil: null, machines: {}, checks: { machine: true, url: true, service: true }, items: {}, fileError: null };
+/** One on-demand rule. `machine` is required; `port` matches a listener's port and `name` matches a service, process or container name (`*` matches any run of characters). At least one of `port` and `name` is required, and both must match when both are given. */
+export interface OnDemandRule { machine: string; port?: number; name?: string; reason?: string }
+
+export const DEFAULT_WATCH: WatchConfig = { pausedUntil: null, machines: {}, checks: { machine: true, url: true, service: true }, items: {}, onDemand: [], fileError: null };
 
 export function defaultWatchConfig(): WatchConfig {
-  return { ...DEFAULT_WATCH, machines: {}, checks: { ...DEFAULT_WATCH.checks }, items: {} };
+  return { ...DEFAULT_WATCH, machines: {}, checks: { ...DEFAULT_WATCH.checks }, items: {}, onDemand: [] };
 }
 
 export function isPaused(config: WatchConfig, now: string): boolean {
@@ -30,6 +35,39 @@ export function isWatched(config: WatchConfig, kind: "machine" | "url" | "servic
   if (isPaused(config, now) || !config.checks[kind]) return false;
   if (machineId !== null && config.machines[machineId] === false) return false;
   return config.items[key] !== false;
+}
+
+function nameMatches(pattern: string, name: string): boolean {
+  const escaped = pattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(`^${escaped.join(".*")}$`, "i").test(name);
+}
+
+/** The rule that marks a row as on demand, or null. A listener matches on its port and on its process or container name; a service matches on its name. */
+export function onDemandRule(config: WatchConfig, row: { machineId: string; port?: number; name?: string | null; names?: readonly (string | null)[] }): OnDemandRule | null {
+  const names = [row.name, ...(row.names ?? [])].filter((name): name is string => typeof name === "string" && name.length > 0);
+  for (const rule of config.onDemand) {
+    if (rule.machine !== row.machineId) continue;
+    if (rule.port !== undefined && rule.port !== row.port) continue;
+    if (rule.name !== undefined && !names.some((name) => nameMatches(rule.name!, name))) continue;
+    return rule;
+  }
+  return null;
+}
+
+function onDemandList(value: unknown): OnDemandRule[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 200) throw new Error("onDemand must be a list");
+  return value.map((entry): OnDemandRule => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("onDemand entries must be objects");
+    const { machine, port, name, reason, ...rest } = entry as Record<string, unknown>;
+    if (Object.keys(rest).length > 0) throw new Error(`unknown onDemand field ${Object.keys(rest)[0]}`);
+    if (typeof machine !== "string" || machine.length === 0 || machine.length > 100) throw new Error("onDemand machine must be a string");
+    if (port !== undefined && (!Number.isInteger(port) || (port as number) < 1 || (port as number) > 65535)) throw new Error("onDemand port must be 1 to 65535");
+    if (name !== undefined && (typeof name !== "string" || name.length === 0 || name.length > 200)) throw new Error("onDemand name must be a string");
+    if (port === undefined && name === undefined) throw new Error("onDemand needs a port or a name");
+    if (reason !== undefined && (typeof reason !== "string" || reason.length > 500)) throw new Error("onDemand reason must be a string");
+    return { machine, ...(port !== undefined ? { port: port as number } : {}), ...(name !== undefined ? { name: name as string } : {}), ...(reason !== undefined ? { reason: reason as string } : {}) };
+  });
 }
 
 function boolMap(value: unknown, name: string): Record<string, boolean> {
@@ -46,7 +84,7 @@ function boolMap(value: unknown, name: string): Record<string, boolean> {
 /** Checks a parsed file or a page edit and returns the config; throws on anything malformed. */
 export function parseWatchConfig(data: unknown): WatchConfig {
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("invalid watch file");
-  const { pausedUntil = null, machines, checks, items } = data as Record<string, unknown>;
+  const { pausedUntil = null, machines, checks, items, onDemand } = data as Record<string, unknown>;
   if (pausedUntil !== null && (typeof pausedUntil !== "string" || !Number.isFinite(Date.parse(pausedUntil)))) throw new Error("pausedUntil must be a date or null");
   const kinds = checks === undefined ? {} : boolMap(checks, "checks");
   for (const key of Object.keys(kinds)) if (key !== "machine" && key !== "url" && key !== "service") throw new Error(`unknown check kind ${key}`);
@@ -55,6 +93,7 @@ export function parseWatchConfig(data: unknown): WatchConfig {
     machines: boolMap(machines, "machines"),
     checks: { machine: kinds["machine"] ?? true, url: kinds["url"] ?? true, service: kinds["service"] ?? true },
     items: boolMap(items, "items"),
+    onDemand: onDemandList(onDemand),
     fileError: null,
   };
 }
@@ -80,7 +119,7 @@ export function watchFileReader(path: string): () => WatchConfig {
 
 /** Applies a page edit to the file: set or clear a pause, and switch a machine, a kind of check or one item on or off. Writes atomically. */
 export function updateWatchFile(path: string, current: WatchConfig, body: Record<string, unknown>): WatchConfig {
-  const next: WatchConfig = { ...current, machines: { ...current.machines }, checks: { ...current.checks }, items: { ...current.items }, fileError: null };
+  const next: WatchConfig = { ...current, machines: { ...current.machines }, checks: { ...current.checks }, items: { ...current.items }, onDemand: [...current.onDemand], fileError: null };
   const allowed = new Set(["pausedUntil", "machine", "check", "item", "watched"]);
   for (const key of Object.keys(body)) if (!allowed.has(key)) throw new Error(`unknown field ${key}`);
   if ("pausedUntil" in body) {
@@ -104,7 +143,7 @@ export function updateWatchFile(path: string, current: WatchConfig, body: Record
       if (watched) delete map[target]; else map[target] = false;
     }
   }
-  const out = { pausedUntil: next.pausedUntil, machines: next.machines, checks: next.checks, items: next.items };
+  const out = { pausedUntil: next.pausedUntil, machines: next.machines, checks: next.checks, items: next.items, ...(next.onDemand.length > 0 ? { onDemand: next.onDemand } : {}) };
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(out, null, 2)}\n`, "utf8");
