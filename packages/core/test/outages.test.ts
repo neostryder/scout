@@ -239,6 +239,25 @@ test("only items meant to stay up are watched: automatic services, launchd keep-
   assert.ok(serviceObservations(db, "gm", forced, stamp(1)).some((obs) => obs.label === "Port 8004 (helper) on Server"));
 });
 
+test("Cogitator engines that load and unload on demand are not watched, and the Cogitator daemon is", (t) => {
+  const db = seed(t);
+  const keeper: ServiceFact = { ...service, kind: "launchd", name: "tools.example.keeper", displayName: null, domain: "gui", program: "/opt/keeper", pid: 77, startMode: null, keepAlive: true };
+  recordServices(db, "gm", { origin: "services", status: "ok", facts: [keeper] }, stamp(0));
+  const listener = (port: number, processName: string, processPath: string | null, extra: { scriptPath?: string; owner?: string } = {}) => ({ port, protocol: "tcp" as const, address: "0.0.0.0", bind: "all" as const, pid: 78, ppid: 77, processName, processPath, container: null, ...extra });
+  recordListeners(db, "gm", { origin: "listeners", status: "ok", facts: [
+    listener(8470, "cogitator", "/opt/cogitator/bin/cogitator", { owner: "cogitator" }),
+    listener(18112, "llama-server", "/Users/USER/Library/Application Support/Cogitator/data/engines/llama-cpp/b12202-metal/llama-server"),
+    listener(18401, "sd-server", "D:/Cogitator/data/engines/sd-cpp/master-1091-b9d7176-cuda12/sd-server.exe"),
+    listener(18200, "cogitator-asr", "C:/Users/USER/AppData/Local/Cogitator/bin/cogitator-asr.exe"),
+    listener(18110, "python", "C:/Python312/python.exe", { scriptPath: "D:/Cogitator/data/engines/audio8/server.py" }),
+    listener(18121, "llama-server", null, { owner: "cogitator" }),
+    listener(8100, "llama-server", "/opt/other/llama-server"),
+  ] }, stamp(0));
+  const labels = (config = defaultWatchConfig()): string[] => serviceObservations(db, "gm", config, stamp(1)).map((obs) => obs.label).sort();
+  assert.deepEqual(labels(), ["Port 8100 (llama-server) on Server", "Port 8470 (cogitator) on Server", "tools.example.keeper on Server"]);
+  assert.ok(labels(parseWatchConfig({ items: { "listener:gm:18112:llama-server": true } })).includes("Port 18112 (llama-server) on Server"), "a watch switch set to true still forces an engine port");
+});
+
 test("an automatic updater service is not watched because it stops on its own", (t) => {
   const db = seed(t);
   const updater: ServiceFact = { ...service, name: "GoogleUpdaterService157.0.8089.0", displayName: "Google Updater Service (GoogleUpdaterService157.0.8089.0)", program: "C:/Updater/updater.exe", pid: 55 };
