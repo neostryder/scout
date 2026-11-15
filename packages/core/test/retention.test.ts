@@ -62,6 +62,15 @@ test("pruning keeps a row that an unresolved alert targets or that the outage wa
   assert.deepEqual(names(db), ["svc.one", "svc.two"]);
 });
 
+test("pruning keeps a row that is marked expected down", (t) => {
+  const db = seed(t);
+  const marked = listener(db, 50020, "foundry", ago(300), ago(3));
+  listener(db, 50021, "foundry", ago(300), ago(3));
+  db.prepare("UPDATE listeners SET expected_down = 1 WHERE id = ?").run(marked);
+  assert.deepEqual(pruneShortLived(db, NOW), { listeners: 1, services: 0 });
+  assert.deepEqual(ports(db), [50020]);
+});
+
 test("pruning an empty catalog changes nothing", (t) => {
   assert.deepEqual(pruneShortLived(seed(t), NOW), { listeners: 0, services: 0 });
 });

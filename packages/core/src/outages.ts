@@ -2,7 +2,7 @@ import type { Db } from "./db.ts";
 import { loadDescriptionResolver } from "./descriptions.ts";
 import { listListeners, type Listener } from "./listeners.ts";
 import { listServices, type Service } from "./services.ts";
-import type { WatchConfig } from "./watch-file.ts";
+import { onDemandRule, type WatchConfig } from "./watch-file.ts";
 import { isWatched } from "./watch-file.ts";
 import { formatLocal, sinceLastCheck } from "./time.ts";
 
@@ -206,7 +206,7 @@ export function outagesResponse(db: Db, config: WatchConfig, params = new URLSea
     outages: listOutages(db, { state, limit, machineId: machine, now }),
     open: listOutages(db, { state: "open", limit: 500, now }).length,
     items: watchedItems(db, config, now),
-    config: { pausedUntil: config.pausedUntil, machines: config.machines, checks: config.checks, items: config.items, fileError: config.fileError },
+    config: { pausedUntil: config.pausedUntil, machines: config.machines, checks: config.checks, items: config.items, onDemand: config.onDemand, fileError: config.fileError },
     generatedAt: now,
   };
 }
@@ -319,14 +319,14 @@ export function serviceObservations(db: Db, machineId: string, config: WatchConf
   // A watch switch set to true in the watch file names an item that stays up even though the rule would skip it.
   const forced = (key: string): boolean => config.items[key] === true;
   for (const row of services) {
-    if (!forced(serviceWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
+    if (!forced(serviceWatchKey(row)) && (onDemandRule(config, { machineId: row.machineId, name: row.name, names: [row.displayName] }) !== null || !serviceWatchable(db, row, context))) continue;
     add(serviceWatchKey(row), `${row.displayName ?? row.name} on ${row.machineName}`, row.goneAt === null && row.state === "running", row.goneAt ? "The service is gone." : `The service state is ${row.state}.`);
   }
   const listeners = listListeners(db, { machine: machineId }, descriptions);
   // The watch key includes the owner's name, and Windows reports an owner as process 0 ("Idle") now and then, so a row can end while its port keeps listening under another name. Only a port with no live row has gone down.
   const listening = new Set(listeners.filter((row) => row.goneAt === null).map((row) => `${row.port}/${row.protocol}`));
   for (const row of listeners) {
-    if (!forced(listenerWatchKey(row)) && !serviceWatchable(db, row, context)) continue;
+    if (!forced(listenerWatchKey(row)) && (onDemandRule(config, { machineId: row.machineId, port: row.port, names: [row.processName, row.containerName] }) !== null || !serviceWatchable(db, row, context))) continue;
     add(listenerWatchKey(row), `Port ${row.port} (${row.processName ?? row.containerName ?? "unknown"}) on ${row.machineName}`, row.goneAt === null || listening.has(`${row.port}/${row.protocol}`), "Nothing is listening on the port.", listenerEndpoint(row));
   }
   return out;
