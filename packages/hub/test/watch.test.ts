@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { alertsResponse, listOutages, openCatalog, recordListeners, recordServices, upsertMachine, type Db, type OutageNotice, type ServiceFact } from "@scout/core";
 import type { MachineProbe, WatchedMachine } from "@scout/ops";
 import { createHub } from "../src/server.ts";
-import { Notifier, resetStoredWebhook, type ChannelResult } from "../src/notify.ts";
+import { Notifier, cressetKit, cressetNotice, resetStoredWebhook, type ChannelResult } from "../src/notify.ts";
 import { HubWatch, type HubWatchOptions } from "../src/watch.ts";
 
 const WEBHOOK = "https://discord.com/api/webhooks/123456789/abcDEF-ghi_JKL";
@@ -161,6 +161,25 @@ test("the Discord post carries the notice, refuses a non-Discord address and nev
   assert.deepEqual(refused.map((row) => [row.channel, row.ok, row.error]), [["discord", false, "SCOUT_DISCORD_WEBHOOK is not a Discord webhook address"], ["desktop", false, "no display"]]);
   assert.deepEqual(new Notifier({ webhook: () => undefined }).channels(), { discord: false, desktop: true });
   t.after(() => {});
+});
+
+test("Scout posts to Cresset only while the kit config lists an active scout-notify sender, and a Cresset failure never blocks the other channels", async () => {
+  const kitConfig = (config: unknown) => cressetKit({ CRESSET_CONFIG: "C:/cresset/cresset.json" }, () => JSON.stringify(config));
+  assert.equal(kitConfig({ senders: {} }), null, "no sender entry means nothing is sent");
+  assert.equal(kitConfig({ senders: { "scout-notify": { mode: "direct" } } }), null, "direct mode never contacts Cresset");
+  assert.equal(kitConfig({ default_mode: "direct", senders: { "scout-notify": {} } }), null, "a sender with no mode takes the default mode");
+  assert.deepEqual(kitConfig({ senders: { "scout-notify": { mode: "both" } } }), { kit: join("C:/cresset", "cresset-notify.mjs"), sender: "scout-notify" });
+  assert.deepEqual(kitConfig({ default_mode: "both", senders: { "scout-notify": {} } })?.sender, "scout-notify");
+  assert.equal(cressetKit({ CRESSET_CONFIG: "C:/cresset/cresset.json" }, () => { throw new Error("missing"); }), null, "an unreadable config means nothing is sent");
+  assert.equal(await cressetNotice({ title: "t", body: "b", severity: "info" }, null), false);
+  const sent: string[] = [];
+  const results = await new Notifier({ webhook: () => undefined, desktop: async () => {}, log: () => {}, cresset: async (notice) => { sent.push(notice.title); return true; } }).send({ title: "Outage: X", body: "Down.", severity: "high" });
+  assert.deepEqual(results.map((row) => [row.channel, row.ok]), [["desktop", true], ["cresset", true]]);
+  assert.deepEqual(sent, ["Outage: X"]);
+  const skipped = await new Notifier({ webhook: () => undefined, desktop: async () => {}, log: () => {}, cresset: async () => false }).send({ title: "t", body: "b", severity: "info" });
+  assert.deepEqual(skipped.map((row) => row.channel), ["desktop"], "a Scout that is not a Cresset sender reports no Cresset channel");
+  const failed = await new Notifier({ webhook: () => undefined, desktop: async () => {}, log: () => {}, cresset: async () => { throw new Error("kit missing"); } }).send({ title: "t", body: "b", severity: "info" });
+  assert.deepEqual(failed.map((row) => [row.channel, row.ok, row.error]), [["desktop", true, null], ["cresset", false, "kit missing"]]);
 });
 
 for (const value of [undefined, WEBHOOK]) test(`notifiers share one stored webhook read when a value is ${value === undefined ? "absent" : "present"}`, (t) => {

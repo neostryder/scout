@@ -1,5 +1,6 @@
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { execFile, execFileSync, spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OutageNotice } from "@scout/core";
@@ -7,12 +8,14 @@ import type { OutageNotice } from "@scout/core";
 // Notices leave the hub two ways: a Discord webhook whose address lives only in the environment (SCOUT_DISCORD_WEBHOOK), and a desktop
 // notification on the hub machine. Neither address nor text is ever written to a tracked file, and the webhook address is never logged.
 
-export interface ChannelResult { channel: "discord" | "desktop"; ok: boolean; error: string | null }
+export interface ChannelResult { channel: "discord" | "desktop" | "cresset"; ok: boolean; error: string | null }
 export interface NotifierOptions {
   webhook?: () => string | undefined;
   readStored?: () => string | undefined;
   fetch?: typeof fetch;
   desktop?: (notice: OutageNotice) => Promise<void>;
+  /** Sends the notice to Cresset. Resolves false when Scout is not set up as a Cresset sender, so nothing was sent. */
+  cresset?: (notice: OutageNotice) => Promise<boolean>;
   log?: (line: string) => void;
 }
 
@@ -63,6 +66,38 @@ export function resetStoredWebhook(): void {
   storedMemo = undefined;
 }
 
+/** The sender name Scout posts under. Cresset takes notices only from a sender that the client kit config lists for it. */
+export const CRESSET_SENDER = "scout-notify";
+const CRESSET_SEVERITY = { high: "error", warn: "warning", info: "info" } as const;
+
+interface CressetKit { kit: string; sender: string }
+
+/** The client kit and sender to use, or null while the kit config has no active `scout-notify` sender (absent, or mode direct). */
+export function cressetKit(env: NodeJS.ProcessEnv = process.env, read: (path: string) => string = (path) => readFileSync(path, "utf8")): CressetKit | null {
+  const home = env["CRESSET_HOME"] ?? join(homedir(), ".cresset");
+  const configPath = env["CRESSET_CONFIG"] ?? join(home, "cresset.json");
+  try {
+    const config = JSON.parse(read(configPath)) as { default_mode?: unknown; senders?: Record<string, { mode?: unknown }> };
+    const entry = config.senders?.[CRESSET_SENDER];
+    if (!entry) return null;
+    const mode = typeof entry.mode === "string" ? entry.mode : typeof config.default_mode === "string" ? config.default_mode : "direct";
+    return mode === "direct" ? null : { kit: join(dirname(configPath), "cresset-notify.mjs"), sender: CRESSET_SENDER };
+  } catch { return null; }
+}
+
+/** Hands one notice to the Cresset client kit. In both mode Scout's own channels have already run, so the kit only posts to Cresset and spools the post when Cresset cannot be reached. */
+export function cressetNotice(notice: OutageNotice, kit: CressetKit | null = cressetKit()): Promise<boolean> {
+  if (kit === null) return Promise.resolve(false);
+  const args = [kit.kit, "send", "--sender", kit.sender, "--title", notice.title, "--description", notice.body, "--severity", CRESSET_SEVERITY[notice.severity], "--component", "scout", "--class", "outage"];
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, args, { windowsHide: true, timeout: 30_000 }, (error) => {
+      // Exit 1 means nothing was delivered but the kit spooled the post for its next run; only a usage or config error (2) is lost.
+      if (error && (error as { code?: unknown }).code !== 1) reject(error);
+      else resolve(true);
+    });
+  });
+}
+
 export class Notifier {
   private options: NotifierOptions;
 
@@ -98,6 +133,11 @@ export class Notifier {
       await (this.options.desktop ?? desktopNotice)(notice);
       results.push({ channel: "desktop", ok: true, error: null });
     } catch (err) { results.push({ channel: "desktop", ok: false, error: err instanceof Error ? err.message : "notification failed" }); }
+    const cresset = this.options.cresset ?? (this.options.desktop === undefined && this.options.fetch === undefined ? cressetNotice : undefined);
+    if (cresset) {
+      try { if (await cresset(notice)) results.push({ channel: "cresset", ok: true, error: null }); }
+      catch (err) { results.push({ channel: "cresset", ok: false, error: err instanceof Error ? err.message : "cresset send failed" }); }
+    }
     for (const result of results) if (!result.ok) (this.options.log ?? console.error)(`notice not delivered (${result.channel}): ${result.error}`);
     return results;
   }
