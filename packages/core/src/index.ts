@@ -26,6 +26,7 @@ export * from "./breaking-lines.ts";
 export * from "./dependencies.ts";
 export * from "./listeners.ts";
 export * from "./services.ts";
+export * from "./retention.ts";
 export * from "./workspace-installs.ts";
 export * from "./classify.ts";
 export * from "./dependency-risk.ts";

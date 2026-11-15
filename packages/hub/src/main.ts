@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAlertsFileReader, openCatalog, parseCompetitorsFile, readBackupHealthFile } from "@scout/core";
+import { backupHealthSettingsReader, competitorPaths, failCompetitorRun, meterAlertsFileReader, openCatalog, parseCompetitorsFile, pruneShortLived, readBackupHealthFile } from "@scout/core";
 import { certsKeySource, type AccessConfig } from "./access.ts";
 import { CloudflareSchedule } from "./cloudflare.ts";
 import { createHub } from "./server.ts";
@@ -159,9 +159,12 @@ const fleetRemote = new FleetRemoteSource(db, fleet, { machines: () => loadMachi
 const rewrittenFailures = rewriteLegacyFailures(db);
 if (rewrittenFailures > 0) console.log(`rewrote ${rewrittenFailures} stored update failure messages`);
 const server = createHub({ db, lagLog: (line) => console.error(line), fleet, scans, competitors, discovery, semantic: minimaxSemantic(), recipeProjects: () => configuredProjects(resolve(root, "machines.json")), ...(meters ? { meters } : {}), ...(args.includes("--no-claude") ? {} : { claude: claudeMonitor() }), ...(meterAlerts ? { meterAlerts } : {}), ...(backup ? { backup } : {}), webRoot: resolve(root, "packages/web/public"), research, control, protectedPath, minePath: resolve(root, ".scout-data/mine.json"), trayPath: resolve(root, ".scout-data/tray.json"), updateWindowPath: resolve(root, ".scout-data/update-window.json"), updateWindowSchedule: !!scheduled, updateWindowNotifier: new Notifier(), alertNotifier: new Notifier(), portsPath: resolve(root, ".scout-data/ports.json"), stacksPath: resolve(root, ".scout-data/stacks.json"), health, ...(watch ? { watch } : {}), alerts: { alertsPath: resolve(root, ".scout-data/alerts.json"), coalesceMs: 2000 }, ...(model ? { changelog: { summarize: changelogSummarizer(model) }, discoverModel: model } : {}), ...(descriptions ? { descriptions } : {}), ...(access ? { access } : {}), ...(jobs ? { jobs } : {}), ...(live ? { live } : {}), ...(cloudflareSchedule ? { cloudflare: cloudflareSchedule } : {}), tunnelHostsPath: resolve(root, ".scout-data/tunnel-hosts.json") });
+// Ephemeral sockets and per-connection launchd jobs are recorded as gone and would otherwise pile up until every read stalls the hub, so the short-lived ones are pruned soon after start and then every 15 minutes.
+const prune = (): void => { try { const removed = pruneShortLived(db); if (removed.listeners + removed.services > 0) console.log(`pruned ${removed.listeners} listener and ${removed.services} service rows that were short-lived and gone`); } catch (error) { console.error(`prune failed (${error instanceof Error ? error.message : "unknown error"}); the next pass will retry`); } };
+const pruning = [setTimeout(prune, 30_000), setInterval(prune, 900_000)];
 live?.start();
 server.once("listening", () => { fleetCatalog.start(); fleetLocal.start(); fleetRemote.start(); });
 server.once("close", () => { fleetCatalog.stop(); fleetLocal.stop(); fleetRemote.stop(); });
 cloudflareSchedule?.start();
-server.once("close", () => { research.stop(); scans.stop(); competitors.stop(); live?.stop(); cloudflareSchedule?.stop(); for (const timer of summaries) clearTimeout(timer); });
+server.once("close", () => { research.stop(); scans.stop(); competitors.stop(); live?.stop(); cloudflareSchedule?.stop(); for (const timer of [...summaries, ...pruning]) clearTimeout(timer); });
 server.listen(port, "127.0.0.1", () => console.log(`scout hub listening on http://127.0.0.1:${port}/${access ? ` (production, host ${access.config.host})` : ""}`));
