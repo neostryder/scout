@@ -147,6 +147,19 @@ test("Docker retains distinct addresses and mapped container ports and collapses
   assert.deepEqual(parsed.facts.filter((fact) => fact.port === 3310).map((fact) => [fact.address, fact.container!.containerPort]), [["0.0.0.0", 3300], ["::", 3300]]);
 });
 
+test("Docker expands a published port range into one listener per port and rejects a range that does not map port for port", () => {
+  const line = fixture("docker-server")["ports"]!.stdout.split("\n")[0]!;
+  const fields = line.split("|");
+  fields[2] = "0.0.0.0:8787-8788->8787-8788/tcp, [::]:8787-8788->8787-8788/tcp, 8080/tcp";
+  const parsed = dockerPortsAdapter.parse({ ports: output(fields.join("|")) });
+  assert.equal(parsed.status, "ok");
+  assert.deepEqual(parsed.facts.map((fact) => [fact.port, fact.address, fact.container!.containerPort]), [[8787, "0.0.0.0", 8787], [8788, "0.0.0.0", 8788], [8787, "::", 8787], [8788, "::", 8788]]);
+  for (const bad of ["0.0.0.0:8787-8788->8787-8790/tcp", "0.0.0.0:8788-8787->8788-8787/tcp", "0.0.0.0:8787-8788->8787/tcp"]) {
+    fields[2] = bad;
+    assert.equal(dockerPortsAdapter.parse({ ports: output(`${line}\n${fields.join("|")}\n`) }).status, "partial");
+  }
+});
+
 test("Docker ignores unpublished and UDP ports and marks malformed mappings partial", () => {
   const line = fixture("docker-server")["ports"]!.stdout.split("\n")[0]!;
   const fields = line.split("|");

@@ -253,7 +253,7 @@ export function createHub(options: HubOptions): Server {
   }) : undefined;
   const backupWatch = options.backup ? new HubBackupWatch(alerts, { ...options.backup, machineName: hubMachineName }) : undefined;
   options.watch?.attachAlerts(alerts);
-  const unsubscribeWatchLive = options.live?.subscribeStored((read) => { if (read.status === "ok") void options.watch?.observeServices(read.machineId, read.at); });
+  const unsubscribeWatchLive = options.live?.subscribeStored((read) => { /* A partial read still feeds the watch: it proves absence only for the families it read in full, so it cannot invent an outage. */ if (read.status !== "failed") void options.watch?.observeServices(read.machineId, read.at); });
   const unsubscribeStacksLive = options.live?.subscribeStored(() => stacks.evaluate());
   const unsubscribeStacksReads = subscribeServiceReads(db, () => stacks.evaluate());
   const health = options.health === false ? undefined : new HealthSchedule(db, {

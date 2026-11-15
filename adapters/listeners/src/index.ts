@@ -266,13 +266,17 @@ export const dockerPortsAdapter: ListenerAdapter = {
       if (fields.length !== 4 || !name || !image || !status || ports === undefined) { malformed = true; continue; }
       for (const mapping of ports.split(",").map((port) => port.trim()).filter(Boolean)) {
         if (/^\d+(?:-\d+)?\/(tcp|udp)$/.test(mapping)) continue;
-        const match = /^(.+):(\d+)->(\d+)\/(tcp|udp)$/.exec(mapping);
+        // A published range reads 8787-8788->8787-8788/tcp: the two ranges have the same length and map port for port.
+        const match = /^(.+):(\d+)(?:-(\d+))?->(\d+)(?:-(\d+))?\/(tcp|udp)$/.exec(mapping);
         const binding = match ? address(match[1]!) : null;
         const port = Number(match?.[2]);
-        const containerPort = Number(match?.[3]);
-        if (!match || !binding || !portNumber(port) || !portNumber(containerPort)) { malformed = true; continue; }
-        if (match[4] === "udp") continue;
-        facts.push({ port, protocol: "tcp", ...binding, pid: null, processName: null, processPath: null, container: { name, image, containerPort } });
+        const portEnd = match?.[3] === undefined ? port : Number(match[3]);
+        const containerPort = Number(match?.[4]);
+        const containerEnd = match?.[5] === undefined ? containerPort : Number(match[5]);
+        const span = portEnd - port;
+        if (!match || !binding || !portNumber(port) || !portNumber(portEnd) || !portNumber(containerPort) || !portNumber(containerEnd) || span < 0 || span > 1024 || containerEnd - containerPort !== span) { malformed = true; continue; }
+        if (match[6] === "udp") continue;
+        for (let offset = 0; offset <= span; offset++) facts.push({ port: port + offset, protocol: "tcp", ...binding, pid: null, processName: null, processPath: null, container: { name, image, containerPort: containerPort + offset } });
       }
     }
     return finish("docker-ports", probe, facts, malformed);
