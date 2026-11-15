@@ -26,10 +26,11 @@ import { configuredProjects, createProjectDescriptionSource } from "./descriptio
 import { healthOptionsFromArgs } from "./health.ts";
 import { HubWatch, WATCH_INTERVAL_MS } from "./watch.ts";
 import { RELAY_SECRET, RelayBeat } from "./relay.ts";
+import { CRESSET_BEAT_MS, CressetBeat } from "./cresset-beat.ts";
 import { MeterSchedule } from "./meters.ts";
 import { HubMeterAlerts } from "./meter-alerts.ts";
 import { claudeMonitor } from "./claude-processes.ts";
-import { Notifier } from "./notify.ts";
+import { Notifier, cressetHeartbeat } from "./notify.ts";
 import { FleetService } from "./fleet.ts";
 import { FleetCatalogSource } from "./fleet-catalog.ts";
 import { FleetLocalSource } from "./fleet-local.ts";
@@ -162,6 +163,9 @@ const server = createHub({ db, lagLog: (line) => console.error(line), fleet, sca
 // Ephemeral sockets and per-connection launchd jobs are recorded as gone and would otherwise pile up until every read stalls the hub, so the short-lived ones are pruned soon after start and then every 15 minutes.
 const prune = (): void => { try { const removed = pruneShortLived(db); if (removed.listeners + removed.services > 0) console.log(`pruned ${removed.listeners} listener and ${removed.services} service rows that were short-lived and gone`); } catch (error) { console.error(`prune failed (${error instanceof Error ? error.message : "unknown error"}); the next pass will retry`); } };
 const pruning = [setTimeout(prune, 30_000), setInterval(prune, 900_000)];
+// Where Scout is a Cresset sender, a quiet status event every 5 minutes lets Cresset's silence watch notice a stopped hub. The relay-heartbeat post above stays in place.
+const cressetBeat = watch && !args.includes("--no-relay") ? new CressetBeat({ send: () => cressetHeartbeat(), log: (line) => console.error(line) }) : undefined;
+if (cressetBeat) pruning.push(setTimeout(() => cressetBeat.post(), 15_000), setInterval(() => cressetBeat.post(), CRESSET_BEAT_MS));
 live?.start();
 server.once("listening", () => { fleetCatalog.start(); fleetLocal.start(); fleetRemote.start(); });
 server.once("close", () => { fleetCatalog.stop(); fleetLocal.stop(); fleetRemote.stop(); });
